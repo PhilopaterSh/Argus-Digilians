@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Argus-Digilians Project Setup Guide
 
 This project is a comprehensive security analysis and AI Agent system.
@@ -59,3 +60,6 @@ To ensure all team members are working on the latest version and to secure your 
 - **Library_Python_Requirements:** Contains the universal installer and the list of Python dependencies.
 
 For more technical details on the scripts or libraries, refer to the .md files within the respective folders.
+=======
+﻿# Argus-Digilians
+>>>>>>> 7b47230ed69a09443a0250f7ba75fe8c3b652306
