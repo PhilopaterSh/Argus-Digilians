@@ -1,0 +1,11 @@
+langchain
+langchain-ollama
+langchain-huggingface
+langchain-community
+langchain-core
+langchain-text-splitters
+streamlit
+duckduckgo-search
+faiss-cpu
+sentence-transformers
+pypdf
