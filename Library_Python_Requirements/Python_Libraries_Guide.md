@@ -1,63 +1,85 @@
-# AI Agent Python Libraries Guide
+# Argus Security Framework: AI Environment Technical Guide
 
-This document details the Python libraries used in the AI Multi-Agent system, their importance, and how to set up the environment.
-
----
-
-## 1. Core Frameworks
-
-### LangChain
-- **Importance:** The primary orchestration framework. It allows connecting the LLM (Llama 3.2) with tools (Search, Vector DB) and manages the logic between different agents.
-- **Installation:** `pip install langchain`
-
-### Streamlit
-- **Importance:** Used to build the "AI Multi-Agent Studio" GUI. it transforms Python scripts into interactive web apps for a better user experience.
-- **Installation:** `pip install streamlit`
+This document details the Python libraries and intelligence models used in the Argus Security Framework, along with the automated setup procedures.
 
 ---
 
-## 2. LLM & Embedding Integrations
+## 1. Tactical Intelligence Core (LLMs)
 
-### LangChain-Ollama
-- **Importance:** The specific bridge between LangChain and Ollama. It allows the Python code to communicate with your locally running Llama models.
-- **Installation:** `pip install langchain-ollama`
+The framework supports multiple specialized models through Ollama. During setup, you can choose the engine best suited for your current operation:
 
-### LangChain-HuggingFace & Sentence-Transformers
-- **Importance:** These provide the "Semantic Memory". They convert text into mathematical vectors (Embeddings) using the `all-MiniLM-L6-v2` model so the agent can understand the "meaning" of your files.
-- **Installation:** `pip install langchain-huggingface sentence-transformers`
+### WhiteRabbitNeo
+- **Focus:** Offensive Security and Penetration Testing (Uncensored).
+- **Ollama Path:** `WhiteRabbitNeo/WhiteRabbitNeo-V3-7B`
+- **Usage:** Ideal for vulnerability analysis, payload generation, and exploit research. This model is explicitly fine-tuned for cybersecurity tasks and lacks standard AI safety guardrails.
 
----
-
-## 3. Tools & Data Storage
-
-### LangChain-Community
-- **Importance:** Contains a collection of third-party integrations, such as the DuckDuckGo search tool and the FAISS vector store.
-- **Installation:** `pip install langchain-community`
-
-### DuckDuckGo-Search
-- **Importance:** The engine that allows the Researcher Agent to browse the live internet for news and real-time data.
-- **Installation:** `pip install duckduckgo-search`
-
-### FAISS-CPU
-- **Importance:** A high-performance local vector database. It stores the "Embeddings" of your local documents for fast semantic search.
-- **Installation:** `pip install faiss-cpu`
+### Dolphin-Llama3
+- **Focus:** General Purpose and Uncensored Reasoning.
+- **Ollama Path:** `dolphin-llama3`
+- **Usage:** Ideal for broad data analysis, coding assistance, and creative problem-solving without strict safety filters.
 
 ---
 
-## 4. Document Processing
+## 2. Advanced Deployment & External Sources
 
-### PyPDF
-- **Importance:** Necessary for the Local Knowledge Agent to read and analyze PDF files placed in the `knowledge_base` folder.
-- **Installation:** `pip install pypdf`
+For operations requiring specific quantizations or versions not available in the primary Ollama library, the following sources are recommended:
+
+### Hugging Face (GGUF Format)
+If Ollama's automated pull fails or a specific version is needed:
+*   **7B (V3 - Latest):** `bartowski/WhiteRabbitNeo_WhiteRabbitNeo-V3-7B-GGUF`
+*   **70B (High Reasoning):** `bartowski/Llama-3.1-WhiteRabbitNeo-2-70B-GGUF`
+*   **13B (Classic):** `TheBloke/WhiteRabbitNeo-13B-GGUF`
+
+### LM Studio Integration
+The framework can be directed to an LM Studio local server for enhanced monitoring:
+1. Load the GGUF model in LM Studio.
+2. Start the Local Server on port `1234`.
+3. Update framework configurations to point to `http://localhost:1234/v1`.
 
 ---
 
-## Quick Setup Instructions
+## 3. Core Frameworks & Libraries
 
-To install all required libraries at once, you can use the `requirements.txt` file provided in this directory:
+### LangChain Ecosystem
+- **langchain-ollama:** The primary bridge for communication between Python and the Ollama engine.
+- **langchain-community:** Provides integration with external tools like search engines and vector databases.
+- **langchain-huggingface:** Powers the semantic memory and embedding generation.
 
-```bash
-pip install -r requirements.txt
+### Performance & Storage
+- **FAISS-CPU:** High-performance local vector storage for document intelligence.
+- **Sentence-Transformers:** Converts security findings into mathematical vectors for semantic search.
+- **Streamlit:** Powers the graphical user interface for the AI Multi-Agent Studio.
+
+---
+
+## 3. Automated Setup Procedure (Universal_AI_Setup.bat)
+
+The setup script is designed for zero-touch configuration and high reliability:
+
+### Interactive Selection
+Upon execution, the script prompts for a choice between WhiteRabbitNeo and Dolphin-Llama3. This allows you to tailor the environment to your specific mission needs.
+
+### Automated Retry Mechanism (Persistent Download)
+To ensure reliability on unstable networks:
+- The script checks if the selected model is fully present.
+- If the download fails or is interrupted, the script enters a **Retry Loop**, attempting the download again every 5 seconds until success is achieved.
+
+### Environment Isolation
+The script automatically manages a Python virtual environment (`.venv`), ensuring that Argus intelligence libraries do not conflict with other system software.
+
+---
+
+## Quick Start Command
+
+To initialize or update your environment, run the following from the root directory:
+
+```powershell
+# From Library_Python_Requirements folder
+.\Universal_AI_Setup.bat
 ```
 
-*Note: Ensure you have Python 3.12+ installed and Ollama running in the background before executing the agents.*
+*Note: Ensure Ollama is installed on the host. The script will attempt to start the Ollama engine automatically if it is not running.*
+
+---
+Maintained by: Argus Security Framework Team
+Last Documentation Update: May 2026

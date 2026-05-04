@@ -1,145 +1,124 @@
-# Complete Kali Linux Setup and Optimization on WSL 2
+# Argus Security Framework: Kali Linux and AI Foundation Setup on WSL 2
+
+This document provides a comprehensive guide for setting up the technical foundation required for the Argus Security Framework.
 
 ## Requirements
 - Windows 10 (version 2004 or later) or Windows 11.
 - Active internet connection.
-- WSL features enabled on the host system.
+- Administrator privileges on the host system.
 
 ## Phase 1: Windows Host Preparation
 
 Run the following commands in an elevated PowerShell terminal (Run as Administrator):
 
+### 1.1 Enable WSL and Features
 ```powershell
 # Install WSL and update to the latest kernel
 wsl --install
 wsl --update
 wsl --set-default-version 2
 
-# Enable Mandatory Windows Features for WSL 2
+# Enable Mandatory Windows Features
 dism.exe /online /enable-feature /featurename:VirtualMachinePlatform /all /norestart
 dism.exe /online /enable-feature /featurename:Microsoft-Windows-Subsystem-Linux /all /norestart
 dism.exe /online /enable-feature /featurename:Microsoft-Hyper-V-All /all /norestart
 ```
-Note: Restart your computer after running the DISM commands to finalize the feature activation.
+Note: Restart your computer after running the DISM commands to finalize feature activation.
+
+### 1.2 Install Ollama (AI Intelligence Engine)
+The Argus framework requires Ollama to run local LLMs. Install it using the following command:
+```powershell
+irm https://ollama.com/install.ps1 | iex
+```
 
 ## Phase 2: WSL Management Commands
 
-These commands can be executed in PowerShell or Command Prompt to manage your distributions:
+Manage your distributions using these standard commands in PowerShell or Command Prompt:
 
-- **Shut Down All WSL Instances:**
+- Shut Down All WSL Instances:
   ```powershell
   wsl --shutdown
   ```
-- **Terminate a Specific Distribution:**
+- Terminate Kali Distribution:
   ```powershell
   wsl --terminate kali-linux
   ```
-- **Set Kali Linux as Default:**
+- Set Kali Linux as Default:
   ```powershell
   wsl --setdefault kali-linux
   ```
-- **Check Status and Version:**
+- Check Status and Version:
   ```powershell
   wsl -l -v
-  ```
-- **Reset/Reinstall Kali Linux:**
-  ```powershell
-  wsl --unregister kali-linux
-  wsl --install -d kali-linux
   ```
 
 ## Phase 3: Kali Linux Internal Configuration
 
-### 1. Repository Setup
-Open the sources list file within Kali:
+### 3.1 Repository Setup
+Ensure the official Kali rolling repositories are configured:
 ```bash
 sudo nano /etc/apt/sources.list
 ```
-Ensure it contains the following line for the rolling release:
+The file must contain:
 ```text
 deb http://http.kali.org/kali kali-rolling main non-free contrib
 ```
 
-### 2. Post-Install Optimization and Tool Installation
-Run the following script block to update the keyring, fix dependencies, and install essential tools:
+### 3.2 System Optimization and Tool Installation
+Execute the following block to prepare the internal Kali environment:
 
 ```bash
 # Update Keyring
 sudo wget https://archive.kali.org/archive-keyring.gpg -O /usr/share/keyrings/kali-archive-keyring.gpg
 
-# System Cleanup and Repair
+# System Cleanup
 sudo dpkg --configure -a
 sudo apt autoremove -y
-sudo apt autoclean
 sudo apt clean
 sudo rm -rf /var/lib/apt/lists/*
-sudo rm -rf /var/log/*
-
-# Remove conflicting packages
-sudo apt remove --purge python3-jwt -y
 
 # Full System Upgrade
 sudo apt update --allow-releaseinfo-change
-sudo apt upgrade -y
 sudo apt full-upgrade -y
 sudo apt --fix-broken install -y
-sudo apt install -f --fix-missing -y
 
-# Install Core Tools and Win-KeX
+# Install Argus Core Tools
 sudo apt install -y kali-linux-default
 sudo apt install -y kali-linux-headless
 sudo apt install -y kali-tools-top10
-sudo apt install -y kali-win-kex --fix-missing
-sudo apt install -y libclang-cpp19 python3-fs samdump2
-sudo apt install -y openssh-server
-
-# Enable SSH Service
-sudo systemctl enable ssh.service --now
+sudo apt install -y ncat openssh-server
 ```
 
-## Phase 4: Win-KeX GUI Setup
+## Phase 4: GUI Access (Win-KeX)
 
-Win-KeX provides a graphical user interface for Kali Linux on WSL. Use the following commands to launch it:
+If a graphical interface is required, use Win-KeX:
 
-- **Window Mode (with sound support):**
+- Window Mode:
   ```bash
   kex --win -s
   ```
-- **Seamless Mode:**
+- Seamless Mode:
   ```bash
   kex --sl -s
   ```
-- **Enhanced Session Mode (ESM):**
-  ```bash
-  kex --esm --ip -s
-  ```
-- **Launch directly from Windows Command Prompt:**
+- Launch from Windows Command Prompt:
   ```cmd
   wsl -d kali-linux kex --win -s
   ```
 
-## Phase 5: Verification and Maintenance
+## Phase 5: Verification
 
-### Check Installation Integrity
+Verify the installation integrity with these commands:
+
 ```bash
+# Check Version
 lsb_release -a
-grep VERSION /etc/os-release
-cat /etc/apt/sources.list
-```
 
-### System Monitoring
-```bash
+# Check Resource Usage
 free -h
-top
-htop
 df -h
 ```
 
-### Routine Maintenance Script
-```bash
-sudo rm -rf /var/lib/apt/lists/*
-sudo apt update --allow-releaseinfo-change
-sudo apt full-upgrade -y
-sudo apt install -f --fix-missing -y
-sudo apt clean
-```
+---
+Maintained by: Argus Security Framework Team
+Last Update: May 2026
