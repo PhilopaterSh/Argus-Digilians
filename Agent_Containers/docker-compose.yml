@@ -1,0 +1,43 @@
+version: '3.8'
+
+services:
+  # The Brain: Ollama
+  ollama-service:
+    image: ollama/ollama:latest
+    container_name: ollama-brain
+    volumes:
+      - ollama_storage:/root/.ollama
+    ports:
+      - "11434:11434"
+    networks:
+      - lab-net
+
+  # The Target: OWASP Juice Shop
+  juice-shop:
+    image: bkimminich/juice-shop
+    container_name: juice-shop
+    ports:
+      - "3000:3000"
+    networks:
+      - lab-net
+
+  # The Hands: Your Python Agent
+  cyber-agent:
+    build: .
+    container_name: my-agent
+    depends_on:
+      - ollama-service
+      - juice-shop
+    networks:
+      - lab-net
+    environment:
+      - OLLAMA_HOST=http://ollama-service:11434
+
+networks:
+  lab-net:
+    # If the network already exists, keep this. 
+    # If not, remove 'external: true' to let compose create it.
+    external: true  
+
+volumes:
+  ollama_storage:
