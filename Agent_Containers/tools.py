@@ -48,3 +48,29 @@ def run_subfinder(domain: str) -> str:
     except Exception as e:
         # Handle unexpected errors
         return f"An unexpected error occurred: {str(e)}"
+
+@tool
+def run_ffuf_discovery(domain):
+    """
+    Uses FFUF to brute-force subdomains within the internal network.
+    """
+    # FFUF replaces 'FUZZ' with words from your list
+    wordlist_path = "/app/wordlists/common.txt"
+    target_url = f"http://{domain}:3000/FUZZ"
+    
+    cmd = [
+        "ffuf", 
+        "-w", wordlist_path, 
+        "-u", target_url,
+        "-mc", "200,301,302", # Only show successful or redirecting hits
+        "-s" # Silent mode so we can parse the output ourselves
+    ]
+    
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        if result.stdout:
+            return f"FFUF found the following active subdomains:\n{result.stdout}"
+        else:
+            return "FFUF finished scanning. No subdomains responded with 200/301/302."
+    except Exception as e:
+        return f"Error running FFUF: {str(e)}"
