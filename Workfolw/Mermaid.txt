@@ -1,0 +1,15 @@
+flowchart TD
+    Start([Start AI Agent]) --> Input[/Input Scope & Out-of-Scope/]
+    Input --> Filter[Filter Out-of-Scope & Corrupted Data]
+    Filter --> CheckConn{Check Connectivity <br/> Ping, Curl}
+    
+    CheckConn --> Subdomains[Subdomain Recon <br/> Amass, Subfinder, Assetfinder]
+    CheckConn --> Subdirs[Subdirectory Recon <br/> Feroxbuster]
+    CheckConn --> Passive[Passive Recon <br/> VirusTotal, Waybackurls]
+    
+    Subdomains --> Httpx[Httpx Verification <br/> 200, 302, 404]
+    Subdirs --> Httpx
+    Passive --> Httpx
+    
+    Httpx --> Tech[Identify Technology <br/> Whatweb, Curl, Wget]
+    Tech --> Analysis{AI Agent Analysis & <br/> Choose Next Step}

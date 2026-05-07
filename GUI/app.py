@@ -41,7 +41,8 @@ wsl = WSLTools(distro=distro)
 def load_brain(model_name):
     # تعريف الأدوات للذكاء الاصطناعي
     tools = [
-        Tool(name="Recon_Suite", func=wsl.recon_suite, description="Run WhatWeb, Curl, and Wget.")
+        Tool(name="Check_Reachability", func=wsl.check_reachability, description="Verify if a domain is alive via ping or HTTP. MUST be used first."),
+        Tool(name="Recon_Suite", func=wsl.recon_suite, description="Run WhatWeb, Curl, and Wget analysis.")
     ]
     return ArgusBrain(model_name, tools)
 
@@ -53,14 +54,14 @@ if st.button("RUN ANALYSIS"):
         brain = load_brain(model)
         
         with st.status("🕵️ Working...", expanded=True) as status:
-            st.write("Extracting technology fingerprint...")
-            data = wsl.recon_suite(target)
+            st.write("Initializing reconnaissance suite...")
+            report = wsl.recon_suite(target)
             
-            st.markdown("### 📋 Raw Evidence")
-            st.markdown(f"<div class='report-card'><b>WHATWEB:</b><br>{data['whatweb']}</div>", unsafe_allow_html=True)
+            st.markdown("### 📋 Reconnaissance Evidence")
+            st.markdown(f"<div class='report-card'>{report.replace('\n', '<br>')}</div>", unsafe_allow_html=True)
             
-            st.write("AI is analyzing findings...")
-            analysis = brain.ask(f"Analyze this site: {target}. Findings: {data}")
+            st.write("AI is analyzing evidence...")
+            analysis = brain.ask(f"Analyze this reconnaissance report for {target}. Report: {report}")
             
             st.markdown("### 🧠 AI Intelligence Report")
             st.info(analysis["output"])
