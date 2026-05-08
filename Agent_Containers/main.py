@@ -2,58 +2,44 @@ import os
 from langchain_community.llms import Ollama
 from langchain.agents import AgentExecutor, create_react_agent, Tool
 from langchain.prompts import PromptTemplate
-from tools import check_web_headers, run_subfinder, run_ffuf_discovery
+from tools import run_ffuf_discovery # Only importing the relevant tool
 
 # 1. Configuration
 llm = Ollama(model="dolphin-llama3", base_url="http://ollama-service:11434")
 
-# 2. Explicit Tool Integration
-# Note: We wrap the tools in a way that gives the LLM clear "Stop" conditions.
+# 2. Focused Tool Integration
+# We only include FFUF in the list so the agent has no other options.
 tools = [
-    Tool(
-        name="check_web_headers",
-        func=check_web_headers,
-        description="Useful for analyzing HTTP security headers of a URL. Input should be a full URL (e.g., 'http://juice-shop:3000')."
-    ),
-    Tool(
-        name="run_subfinder",
-        func=run_subfinder,
-        description="Passive discovery tool. Use this to find subdomains that are publicly indexed. Input should be a domain name (e.g., 'juice-shop')."
-    ),
     Tool(
         name="run_ffuf_discovery",
         func=run_ffuf_discovery,
-        description="Active discovery tool. Use this to brute-force directories or subdomains for a local domain using a wordlist. Input should be the domain name only (e.g., 'juice-shop')."
+        description="Active discovery tool. Use this to brute-force directories for a local domain. Input: domain name only (e.g., 'juice-shop')."
     )
 ]
 
-# 3. Create an EXPLICIT Prompt Template
-# This replaces hub.pull("hwchase17/react") to give you more control.
-template = """Answer the following questions as best you can. You have access to the following tools:
+# 3. Simplified Prompt Template
+# This forces the agent to use FFUF and then immediately summarize the output.
+template = """You are a Cybersecurity Reconnaissance Tool.
+Your sole task is to run a directory discovery scan and report the findings.
 
-{tools}
+FORMAT:
+Question: the target to scan
+Thought: I will run the directory discovery tool.
+Action: run_ffuf_discovery
+Action Input: the domain name
+Observation: the tool output
+Thought: I have the results.
+Final Answer: [List the discovered paths here]
 
-Use the following format:
-
-Question: the input question you must answer
-Thought: you should always think about what to do
-Action: the action to take, should be one of [{tool_names}]
-Action Input: the input to the action
-Observation: the result of the action
-... (this Thought/Action/Action Input/Observation can repeat N times)
-Thought: I now know the final answer
-Final Answer: the final answer to the original input question
-
-IMPORTANT RULES:
-1. If 'check_web_headers' returns 'No security headers found', do NOT try again. This IS your finding.
-2. If 'run_subfinder' returns 'None' or an error, do not keep trying. 
-3. 'run_subfinder' only works on domains (e.g., example.com), not URLs with ports like :3000.
-4. If you cannot find information, state that clearly in your Final Answer.
+RULES:
+1. ONLY use 'run_ffuf_discovery'.
+2. Do not engage in conversation or ask for context.
+3. If the observation contains file names like '.git' or '.passwd', list them all in the Final Answer.
 
 Begin!
 
 Question: {input}
-Thought:{agent_scratchpad}"""
+Thought: {agent_scratchpad}"""
 
 prompt = PromptTemplate.from_template(template)
 
@@ -64,20 +50,14 @@ agent_executor = AgentExecutor(
     tools=tools, 
     verbose=True, 
     handle_parsing_errors=True,
-    max_iterations=5  # Hard limit to prevent infinite loops
+    max_iterations=3 # Reduced as only one tool run is needed
 )
 
 if __name__ == "__main__":
-    # The URL for header analysis and the target for fuzzing
-    target_url = "http://juice-shop:3000" 
     target_domain = "juice-shop" 
 
-    # The updated task focusing on headers and active fuzzing
-    task = (
-        f"Use the 'run_ffuf_discovery' tool to scan the domain '{target_domain}'. "
-        "This is your primary priority. Do not perform any other actions "
-        "until you have the results from this specific tool."
-    )
+    # Simplified task
+    task = f"Run a directory discovery scan on the target domain: {target_domain}"
 
-    # Invoke the agent with the new instructions
+    # Invoke the agent
     agent_executor.invoke({"input": task})

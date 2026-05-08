@@ -40,7 +40,12 @@ def run_subfinder(domain: str) -> str:
         )
 
         # 4. Return the list of subdomains
-        return result.stdout.strip()
+        # Inside tools.py -> run_ffuf_discovery
+        if result.stdout:
+            # Adding 'Observation:' at the start of the return can sometimes help the parser
+            return f"SUCCESS: FFUF discovered the following paths: {result.stdout.strip()}"
+        else:
+            return "COMPLETED: No hidden paths were found."
 
     except subprocess.CalledProcessError as e:
         # Handle cases where subfinder itself fails
