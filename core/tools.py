@@ -1,75 +1,86 @@
 import subprocess
 import os
-import re
+import paramiko
+from dotenv import load_dotenv
 
-class WSLTools:
-    def __init__(self, distro="kali-linux"):
-        self.distro = distro
+# Load environment variables from .env file
+load_dotenv()
+
+class WSLBridgeTools:
+    def __init__(self):
+        # Configuration from .env or defaults
+        self.host = os.getenv("WSL_HOST", "127.0.0.1")
+        self.user = os.getenv("WSL_USER", "kali")
+        self.password = os.getenv("WSL_PASS", "kali")
+        self.port = int(os.getenv("WSL_PORT", 22))
+        self.distro = os.getenv("WSL_DISTRO", "kali-linux")
+
+    def _ensure_ssh_service(self):
+        """Attempts to start SSH service in WSL if it's not running."""
+        try:
+            # Check if port is open locally
+            import socket
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.settimeout(2)
+                if s.connect_ex((self.host, self.port)) == 0:
+                    return True
+            
+            # If closed, try to start it via WSL command
+            print(f"[*] SSH service appears down. Attempting self-healing on {self.distro}...")
+            start_cmd = f"wsl -d {self.distro} -u root service ssh start"
+            subprocess.run(start_cmd, shell=True, capture_output=True)
+            return True
+        except:
+            return False
 
     def run(self, command):
+        """Executes a command on WSL Kali via SSH with self-healing."""
+        self._ensure_ssh_service()
+        
+        client = paramiko.SSHClient()
+        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        
         try:
-            full_cmd = f"wsl -d {self.distro} bash -c \"{command}\""
-            res = subprocess.run(full_cmd, capture_output=True, text=True, shell=True)
-            output = res.stdout if res.returncode == 0 else f"Error: {res.stderr}"
+            client.connect(self.host, port=self.port, username=self.user, password=self.password, timeout=10)
+            stdin, stdout, stderr = client.exec_command(command)
+            output = stdout.read().decode()
+            error = stderr.read().decode()
+            client.close()
+            
+            if error and not output:
+                return f"SSH Error: {error}"
             return output
         except Exception as e:
-            return f"Exception: {str(e)}"
+            return f"Bridge Exception: {str(e)}\nHint: Try running 'sudo service ssh start' manually in WSL if self-healing failed."
+
 
     def check_reachability(self, domain):
-        """Checks if a domain is reachable via ping or HTTP."""
-        # Ping check
+        """Checks if a domain is reachable via WSL's network."""
         ping_res = self.run(f"ping -c 1 -W 2 {domain}")
-        if "1 packets transmitted, 1 received" in ping_res:
-            return f"[✓] {domain} is reachable (ping)"
+        if "1 received" in ping_res:
+            return f"[✓] {domain} is reachable from WSL (ping)"
         
-        # HTTP fallback check
+        # HTTP fallback using WSL's curl
         code = self.run(f"curl -s -o /dev/null -w '%{{http_code}}' http://{domain}").strip()
         if code.startswith(('2', '3')):
-            return f"[✓] {domain} reachable via HTTP ({code})"
+            return f"[✓] {domain} reachable via WSL HTTP ({code})"
         
-        return f"[✗] {domain} is unreachable"
+        return f"[✗] {domain} is unreachable from WSL"
 
-    def analyze_target(self, domain):
-        """Advanced analysis logic translated from Bash."""
-        reach_status = self.check_reachability(domain)
-        if "[✗]" in reach_status:
-            return reach_status
-
-        results = [reach_status]
-        urls = [f"http://{domain}", f"https://{domain}"]
-
-        for url in urls:
-            proto = "http" if url.startswith("http://") else "https"
-            clean_name = f"{proto}_{domain.replace('/', '').replace(':', '_')}"
-            
-            results.append(f"\n--- Analyzing {url} ---")
-
-            # 1. WhatWeb
-            results.append("[*] Running WhatWeb...")
-            ww_cmd = f"whatweb -v --color=never --no-errors {url} | tee whatweb_{clean_name}.txt"
-            results.append(self.run(ww_cmd))
-
-            # 2. HTTPX
-            results.append("[*] Running HTTPX...")
-            httpx_cmd = f"echo {url} | httpx -silent -title -tech-detect -status-code -location -json -o httpx_{clean_name}.json"
-            self.run(httpx_cmd)
-            results.append(f"HTTPX analysis saved to httpx_{clean_name}.json")
-
-            # 3. Curl headers
-            results.append("[*] Fetching Curl headers...")
-            curl_cmd = f"curl -sI {url} > Curl_{clean_name}.txt"
-            self.run(curl_cmd)
-            results.append(f"Headers saved to Curl_{clean_name}.txt")
-
-            # 4. Wget redirection
-            results.append("[*] Analyzing Wget redirection...")
-            wget_cmd = f"wget --spider --server-response --max-redirect=5 {url} 2>&1 | tee wget_{clean_name}.txt"
-            results.append(self.run(wget_cmd))
-
+    def recon_suite(self, url):
+        """Runs recon using tools already installed in WSL."""
+        # Clean URL
+        target = url.replace("https://", "").replace("http://", "").split("/")[0]
+        
+        results = []
+        results.append(f"--- WSL RECON REPORT FOR {url} ---")
+        
+        # 1. WhatWeb (Installed in WSL)
+        results.append("\n[*] Running WSL WhatWeb...")
+        results.append(self.run(f"whatweb -v {url}"))
+        
+        # 2. HTTPX (Installed in WSL)
+        results.append("\n[*] Running WSL HTTPX...")
+        results.append(self.run(f"echo {url} | httpx -silent -tech-detect"))
+        
         return "\n".join(results)
-
-    def recon_suite(self, url_or_domain):
-        """Wrapper to maintain compatibility while using the new advanced logic."""
-        # Extract domain if a full URL was provided
-        domain = url_or_domain.replace("https://", "").replace("http://", "").split("/")[0]
-        return self.analyze_target(domain)

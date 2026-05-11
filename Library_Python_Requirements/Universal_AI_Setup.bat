@@ -46,17 +46,8 @@ timeout /t 5 >nul
 goto :select_model
 
 :select_model
-:: 4. Interactive Model Selection
-echo.
-echo ------------------------------------------------------------
-echo SELECT INTELLIGENCE CORE:
-echo [1] WhiteRabbitNeo (Security ^& PenTest Focused)
-echo [2] Dolphin-Llama3 (General Purpose ^& Uncensored)
-echo ------------------------------------------------------------
-set /p "model_choice=Choose the model you wish to deploy (1 or 2): "
-
+:: 4. Intelligence Core Selection (Hardcoded)
 set "selected_model=WhiteRabbitNeo/WhiteRabbitNeo-V3-7B"
-if "%model_choice%"=="2" set "selected_model=dolphin-llama3"
 
 echo.
 echo [2/4] Validating Intelligence Model...
@@ -81,11 +72,16 @@ if errorlevel 1 (
 goto :pull_loop
 
 :setup_venv
-:: 5. Setup Virtual Environment
+:: 5. Setup Virtual Environment (Standardized at Root)
 echo.
-echo [3/4] Preparing isolated environment (.venv)...
+echo [3/4] Preparing isolated environment (.venv at Root)...
+cd /d "%~dp0\.."
 if not exist ".venv" (
     python -m venv .venv
+    if errorlevel 1 (
+        echo [ERROR] Failed to create Virtual Environment.
+        pause & exit /b 1
+    )
     echo [OK] Created new virtual environment.
 ) else (
     echo [OK] Using existing virtual environment.
@@ -96,21 +92,27 @@ echo.
 echo [4/4] Synchronizing Intelligence Libraries...
 if not exist ".venv\Scripts\activate.bat" (
     echo [ERROR] Virtual environment activation script not found!
-    pause & exit /b
+    pause & exit /b 1
 )
 call .venv\Scripts\activate.bat
 python -m pip install --upgrade pip --quiet
-if exist "requirements.txt" (
-    pip install -r requirements.txt --quiet
+if exist "Library_Python_Requirements\requirements.txt" (
+    pip install -r Library_Python_Requirements\requirements.txt --quiet
+    if errorlevel 1 (
+        echo [ERROR] Library synchronization failed.
+        pause & exit /b 1
+    )
     echo [OK] All libraries are up to date.
 ) else (
     echo [ERROR] requirements.txt not found!
+    pause & exit /b 1
 )
 
 echo.
 echo ========================================================
 echo [SUCCESS] Argus AI Environment is 100%% Operational!
 echo [INFO] Active Model: %selected_model%
-echo [INFO] To activate: call .venv\Scripts\activate.bat
+echo [INFO] Environment: Root .venv
 echo ========================================================
 pause
+

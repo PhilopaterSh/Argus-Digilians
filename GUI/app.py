@@ -5,12 +5,12 @@ import os
 # إضافة المسار الرئيسي لكي يتمكن البرنامج من قراءة مجلد core
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from core.tools import WSLTools
+from core.tools import WSLBridgeTools
 from core.agent import ArgusBrain
 from langchain_core.tools import Tool
 
 # --- UI Setup ---
-st.set_page_config(page_title="Argus AI Studio", layout="wide")
+st.set_page_config(page_title="Argus AI Studio - WSL Bridge", layout="wide")
 
 # تصميم بسيط واحترافي
 st.markdown("""
@@ -26,23 +26,29 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-st.title("🛡️ Argus AI Professional Studio")
+st.title("🛡️ Argus AI Studio (WSL Bridge)")
 
 # Sidebar
 with st.sidebar:
-    st.header("⚙️ Configuration")
+    st.header("⚙️ Bridge Configuration")
+    st.info("App: Docker Container")
+    st.info("Tools: Local WSL Kali")
     model = st.selectbox("Intelligence Model", ["WhiteRabbitNeo/WhiteRabbitNeo-V3-7B:latest", "llama3.2:3b"])
-    distro = st.text_input("WSL Distro", "kali-linux")
+    
+    st.markdown("---")
+    st.subheader("SSH Credentials")
+    wsl_user = st.text_input("WSL User", os.getenv("WSL_USER", "kali"))
+    wsl_pass = st.text_input("WSL Pass", os.getenv("WSL_PASS", "kali"), type="password")
 
 # Logic Initialization
-wsl = WSLTools(distro=distro)
+# Pass dynamic credentials if needed, or rely on ENV
+bridge = WSLBridgeTools()
 
 @st.cache_resource
 def load_brain(model_name):
-    # تعريف الأدوات للذكاء الاصطناعي
     tools = [
-        Tool(name="Check_Reachability", func=wsl.check_reachability, description="Verify if a domain is alive via ping or HTTP. MUST be used first."),
-        Tool(name="Recon_Suite", func=wsl.recon_suite, description="Run WhatWeb, Curl, and Wget analysis.")
+        Tool(name="Check_Reachability", func=bridge.check_reachability, description="Verify target via WSL network."),
+        Tool(name="Recon_Suite", func=bridge.recon_suite, description="Execute WhatWeb and HTTPX inside WSL Kali.")
     ]
     return ArgusBrain(model_name, tools)
 
@@ -53,15 +59,15 @@ if st.button("RUN ANALYSIS"):
     if target:
         brain = load_brain(model)
         
-        with st.status("🕵️ Working...", expanded=True) as status:
-            st.write("Initializing reconnaissance suite...")
-            report = wsl.recon_suite(target)
+        with st.status("🕵️ Bridging to WSL Kali...", expanded=True) as status:
+            st.write("Executing remote reconnaissance...")
+            report = bridge.recon_suite(target)
             
-            st.markdown("### 📋 Reconnaissance Evidence")
+            st.markdown("### 📋 Evidence from WSL")
             st.markdown(f"<div class='report-card'>{report.replace('\n', '<br>')}</div>", unsafe_allow_html=True)
             
-            st.write("AI is analyzing evidence...")
-            analysis = brain.ask(f"Analyze this reconnaissance report for {target}. Report: {report}")
+            st.write("AI Analysis in progress...")
+            analysis = brain.ask(f"Analyze this reconnaissance report from WSL for {target}. Report: {report}")
             
             st.markdown("### 🧠 AI Intelligence Report")
             st.info(analysis["output"])

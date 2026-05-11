@@ -19,10 +19,10 @@ if errorlevel 1 (
 
 :: 2. Activate Environment and Launch GUI
 echo [*] Activating Python Environment...
-if exist "Library_Python_Requirements\.venv\Scripts\activate.bat" (
-    call "Library_Python_Requirements\.venv\Scripts\activate.bat"
+if exist ".venv\Scripts\activate.bat" (
+    call ".venv\Scripts\activate.bat"
 ) else (
-    echo [ERROR] Virtual Environment not found. Please run Master_Installer.bat first.
+    echo [ERROR] Virtual Environment not found in Root. Please run Master_Installer.bat first.
     pause
     exit
 )

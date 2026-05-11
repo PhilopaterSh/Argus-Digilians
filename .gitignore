@@ -11,9 +11,17 @@ ENV/
 env.bak/
 venv.bak/
 
-# Temporary files
+# Temporary and Sync Files
+.tmp.drivedownload/
+.tmp.driveupload/
+.git_broken_refs/
 *.tmp
 dl_status.tmp
+
+# Logs
+*.log
+streamlit.err.log
+streamlit.out.log
 
 # IDEs
 .vscode/
@@ -22,3 +30,9 @@ dl_status.tmp
 # OS files
 Thumbs.db
 Desktop.ini
+desktop.ini
+*.bak
+
+# Project Specific
+# Argus_Secure_Sync.exe  # Un-comment if you don't want to track the sync tool
+

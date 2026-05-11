@@ -1,0 +1,21 @@
+# Ignore local python virtual environments
+**/ai_env
+**/.venv
+**/venv
+**/__pycache__
+
+# Ignore git data
+.git
+.gitignore
+
+# Ignore temporary and log files
+**/*.log
+.tmp.drivedownload
+.tmp.driveupload
+ollama_data
+reports
+
+# Ignore IDE settings
+.vscode
+.idea
+*.drawio.bkp

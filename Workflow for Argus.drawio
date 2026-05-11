@@ -1,0 +1,92 @@
+<mxfile host="65bd71144e">
+    <diagram id="DockerWorkflow" name="Argus Smart Docker Workflow">
+        <mxGraphModel dx="1200" dy="1500" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1400" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                
+                <!-- PHASE 1: INITIALIZATION -->
+                <mxCell id="2" value="START ARGUS BOOTSTRAPPER" style="ellipse;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+                    <mxGeometry x="340" y="40" width="170" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="3" value="SYSTEM VALIDATION&lt;br&gt;(OS Check, WSL2 Status, Docker Presence)" style="whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;" vertex="1" parent="1">
+                    <mxGeometry x="300" y="170" width="250" height="90" as="geometry"/>
+                </mxCell>
+                <mxCell id="4" value="DEPLOY DEPENDENCIES&lt;br&gt;(Install Docker via Winget, Enable Windows Features)" style="whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;" vertex="1" parent="1">
+                    <mxGeometry x="300" y="310" width="250" height="90" as="geometry"/>
+                </mxCell>
+                
+                <!-- PHASE 2: ORCHESTRATION -->
+                <mxCell id="5" value="INITIALIZE DOCKER COMPOSE&lt;br&gt;ORCHESTRATION" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+                    <mxGeometry x="300" y="450" width="250" height="80" as="geometry"/>
+                </mxCell>
+                
+                <mxCell id="6" value="SERVICE: OLLAMA&lt;br&gt;(GPU Accelerated LLM Engine)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;" vertex="1" parent="1">
+                    <mxGeometry x="80" y="580" width="180" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="7" value="SERVICE: KALI-CORE&lt;br&gt;(Security Toolset Container)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;" vertex="1" parent="1">
+                    <mxGeometry x="335" y="580" width="180" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="8" value="SERVICE: ARGUS-GUI&lt;br&gt;(Streamlit Intelligence Center)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;" vertex="1" parent="1">
+                    <mxGeometry x="590" y="580" width="180" height="80" as="geometry"/>
+                </mxCell>
+                
+                <!-- PHASE 3: INTELLIGENCE -->
+                <mxCell id="9" value="MODEL VALIDATION &amp;amp;&lt;br&gt;AUTOMATED RETRIEVAL (PULL)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+                    <mxGeometry x="315" y="710" width="220" height="80" as="geometry"/>
+                </mxCell>
+                
+                <!-- PHASE 4: EXECUTION -->
+                <mxCell id="10" value="USER TARGET INPUT &amp;amp;&lt;br&gt;REACHABILITY ENFORCEMENT" style="shape=parallelogram;perimeter=parallelogramPerimeter;whiteSpace=wrap;html=1;fixedSize=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+                    <mxGeometry x="275" y="840" width="300" height="90" as="geometry"/>
+                </mxCell>
+                <mxCell id="11" value="AUTOMATED RECONNAISSANCE&lt;br&gt;SUITE (KALI-CORE TOOLS)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+                    <mxGeometry x="325" y="980" width="200" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="12" value="AI COGNITIVE ANALYSIS &amp;amp;&lt;br&gt;VULNERABILITY REASONING" style="shape=trapezoid;perimeter=trapezoidPerimeter;whiteSpace=wrap;html=1;fixedSize=1;rounded=0;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="1">
+                    <mxGeometry x="300" y="1110" width="250" height="110" as="geometry"/>
+                </mxCell>
+                
+                <!-- PHASE 5: PERSISTENCE -->
+                <mxCell id="13" value="PERSISTENT REPORTS &amp;amp;&lt;br&gt;GLOBAL PORTABILITY" style="ellipse;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+                    <mxGeometry x="325" y="1270" width="200" height="90" as="geometry"/>
+                </mxCell>
+                
+                <!-- CONNECTORS -->
+                <mxCell id="20" value="" style="endArrow=classic;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="2" target="3">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="21" value="" style="endArrow=classic;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="3" target="4">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="22" value="" style="endArrow=classic;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="4" target="5">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="23" value="" style="endArrow=classic;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="5" target="7">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="24" value="" style="endArrow=classic;html=1;exitX=0;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="5" target="6">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="25" value="" style="endArrow=classic;html=1;exitX=1;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="5" target="8">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="26" value="" style="endArrow=classic;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="7" target="9">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="27" value="" style="endArrow=classic;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="9" target="10">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="28" value="" style="endArrow=classic;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="10" target="11">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="29" value="" style="endArrow=classic;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="11" target="12">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="30" value="" style="endArrow=classic;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="12" target="13">
+                    <mxGeometry width="50" height="50" relative="1" as="geometry"/>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
+</mxfile>
