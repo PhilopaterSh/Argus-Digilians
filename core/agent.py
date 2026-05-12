@@ -25,7 +25,11 @@ Action: Check_Reachability
 Action Input: (the domain or URL)
 Observation: (result of the reachability check)
 ... (proceed only if reachable)
+
+When you have the final answer, use this format:
 Final Answer: your summary
+
+Available tool names: {tool_names}
 
 Question: {input}
 Thought: {agent_scratchpad}"""

@@ -2,7 +2,7 @@ import streamlit as st
 import sys
 import os
 
-# إضافة المسار الرئيسي لكي يتمكن البرنامج من قراءة مجلد core
+# Ensure project root is in path for core module access
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from core.tools import WSLBridgeTools

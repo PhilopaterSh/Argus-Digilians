@@ -27,11 +27,22 @@ if exist ".venv\Scripts\activate.bat" (
     exit
 )
 
-echo [*] Launching Professional Studio on http://localhost:12189
-echo [*] Opening browser...
-start http://localhost:12189
+echo [*] Verifying Dependencies...
+python -c "import paramiko; print('[OK] Paramiko is verified.')"
+if %errorlevel% neq 0 (
+    echo [ERROR] Dependency verification failed!
+    pause
+    exit
+)
 
-:: Run Streamlit in headless mode to keep it clean
-streamlit run GUI\app.py --server.port 12189 --server.headless true
+echo [*] Launching Professional Studio on http://localhost:12199
+echo [*] Opening browser...
+start http://localhost:12199
+
+:: Set PYTHONPATH to ensure all modules are found correctly
+set "PYTHONPATH=%~dp0;%~dp0.venv\Lib\site-packages;%PYTHONPATH%"
+
+:: Run Streamlit using the specific python from venv to ensure correct package loading
+.venv\Scripts\python.exe -m streamlit run GUI\app.py --server.port 12199 --server.headless true
 
 pause
