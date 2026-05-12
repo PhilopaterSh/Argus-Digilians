@@ -1,6 +1,8 @@
 import subprocess
 import os
 import paramiko
+import re
+from concurrent.futures import ThreadPoolExecutor
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
@@ -14,6 +16,11 @@ class WSLBridgeTools:
         self.password = os.getenv("WSL_PASS", "kali")
         self.port = int(os.getenv("WSL_PORT", 22))
         self.distro = os.getenv("WSL_DISTRO", "kali-linux")
+
+    def _clean_ansi_codes(self, text):
+        """Removes ANSI escape codes (colors, bold, etc.) from terminal output."""
+        ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
+        return ansi_escape.sub('', text)
 
     def _ensure_ssh_service(self):
         """Attempts to start SSH service in WSL if it's not running."""
@@ -33,7 +40,7 @@ class WSLBridgeTools:
         except:
             return False
 
-    def run(self, command):
+    def run(self, command, show_prompt=False):
         """Executes a command on WSL Kali via SSH with self-healing."""
         self._ensure_ssh_service()
         
@@ -47,9 +54,13 @@ class WSLBridgeTools:
             error = stderr.read().decode()
             client.close()
             
-            if error and not output:
-                return f"SSH Error: {error}"
-            return output
+            final_output = output if output else error
+            cleaned = self._clean_ansi_codes(final_output)
+            
+            if show_prompt:
+                prompt = f"┌──(kali㉿{os.getenv('COMPUTERNAME', 'HOST')})-[~]\n└─$ {command}\n"
+                return prompt + cleaned
+            return cleaned
         except Exception as e:
             return f"Bridge Exception: {str(e)}\nHint: Try running 'sudo service ssh start' manually in WSL if self-healing failed."
 
@@ -68,19 +79,41 @@ class WSLBridgeTools:
         return f"[✗] {domain} is unreachable from WSL"
 
     def recon_suite(self, url):
-        """Runs recon using tools already installed in WSL."""
-        # Clean URL
-        target = url.replace("https://", "").replace("http://", "").split("/")[0]
+        """Runs expanded recon using specialized tools in WSL in PARALLEL."""
         
-        results = []
-        results.append(f"--- WSL RECON REPORT FOR {url} ---")
+        # Define tasks for parallel execution (Nikto removed for speed)
+        tasks = [
+            ("WAF Detection", f"wafw00f {url}"),
+            ("Fingerprinting", f"whatweb -v --color=never --no-errors {url}"),
+            ("HTTP Headers", f"curl -sI {url}"),
+            ("Content Spider", f"wget --spider --server-response --max-redirect=5 {url} 2>&1")
+        ]
+
+        results_map = {}
         
-        # 1. WhatWeb (Installed in WSL)
-        results.append("\n[*] Running WSL WhatWeb...")
-        results.append(self.run(f"whatweb -v {url}"))
+        print(f"[*] Starting Parallel Recon for: {url}")
         
-        # 2. HTTPX (Installed in WSL)
-        results.append("\n[*] Running WSL HTTPX...")
-        results.append(self.run(f"echo {url} | httpx -silent -tech-detect"))
+        with ThreadPoolExecutor(max_workers=len(tasks)) as executor:
+            # Map each task name to its future result
+            future_to_task = {
+                executor.submit(self.run, cmd, True): name 
+                for name, cmd in tasks
+            }
+            
+            for future in future_to_task:
+                task_name = future_to_task[future]
+                try:
+                    results_map[task_name] = future.result()
+                except Exception as exc:
+                    results_map[task_name] = f"[!] Task {task_name} generated an exception: {exc}"
+
+        # Build final report in a logical order
+        report = []
+        report.append(f"--- 🛡️ PARALLEL ARGUS RECON REPORT: {url} ---")
         
-        return "\n".join(results)
+        ordered_keys = ["WAF Detection", "Fingerprinting", "HTTP Headers", "Content Spider"]
+        for key in ordered_keys:
+            report.append(f"\n[*] {key}...")
+            report.append(results_map.get(key, "No data collected."))
+            
+        return "\n".join(report)
