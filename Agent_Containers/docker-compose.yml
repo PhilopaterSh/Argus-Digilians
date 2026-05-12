@@ -32,6 +32,9 @@ services:
       - lab-net
     environment:
       - OLLAMA_HOST=http://ollama-service:11434
+      - AGENT_MODEL=WhiteRabbitNeo/WhiteRabbitNeo-V3-7B:latest
+      #- AGENT_MODEL=lazarevtill/WhiteRabbitNeo-2.5-Qwen-2.5-Coder-7B:4b-it-q4_K_M
+      #- AGENT_MODEL=dolphin-llama3
 
 networks:
   lab-net:
