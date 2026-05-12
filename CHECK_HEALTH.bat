@@ -33,17 +33,17 @@ if %errorlevel% neq 0 (
 
 :: 3. Check WSL & Kali
 echo [*] Checking WSL (Kali Linux)...
-powershell -Command "if (wsl --list | Select-String 'kali-linux') { exit 0 } else { exit 1 }" >NUL 2>&1
+wsl -d kali-linux -- echo ok >NUL 2>&1
 if %errorlevel% neq 0 (
-    echo [ERR] Kali Linux distro is NOT detected in WSL.
+    echo [ERR] Kali Linux distro is NOT detected or NOT functional.
     set HEALTHY=NO
 ) else (
-    echo [OK] Kali Linux is detected in WSL.
+    echo [OK] Kali Linux is detected and functional.
 )
 
 :: 4. Check SSH Bridge (New Check)
 echo [*] Checking SSH Bridge to WSL...
-powershell -Command "if ((Test-NetConnection -ComputerName 127.0.0.1 -Port 22).TcpTestSucceeded) { exit 0 } else { exit 1 }" >NUL 2>&1
+powershell -Command "$res = Test-NetConnection -ComputerName 127.0.0.1 -Port 22 -ErrorAction SilentlyContinue; if ($res.TcpTestSucceeded) { exit 0 } else { exit 1 }" >NUL 2>&1
 if %errorlevel% neq 0 (
     echo [ERR] SSH Bridge ^(Port 22^) is NOT accessible.
     set HEALTHY=NO

@@ -33,7 +33,9 @@ with st.sidebar:
     st.header("⚙️ Bridge Configuration")
     st.info("App: Docker Container")
     st.info("Tools: Local WSL Kali")
-    model = st.selectbox("Intelligence Model", ["WhiteRabbitNeo/WhiteRabbitNeo-V3-7B:latest", "llama3.2:3b"])
+    # Only use WhiteRabbitNeo as requested
+    model = "WhiteRabbitNeo/WhiteRabbitNeo-V3-7B:latest"
+    st.write(f"**Intelligence Model:** {model}")
     
     st.markdown("---")
     st.subheader("SSH Credentials")
