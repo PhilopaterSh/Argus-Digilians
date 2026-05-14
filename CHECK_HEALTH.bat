@@ -58,4 +58,4 @@ if "%HEALTHY%"=="YES" echo [RESULT] SYSTEM IS HEALTHY AND READY!
 if "%HEALTHY%"=="NO"  color 0C
 if "%HEALTHY%"=="NO"  echo [RESULT] SYSTEM HAS ISSUES. PLEASE RUN Master_Installer.bat
 echo --------------------------------------------------------
-pause
+if "%ARGUS_SKIP_PAUSE%"=="" pause

@@ -1,6 +1,6 @@
 @echo off
 set "DISTRO_NAME=kali-linux"
-set "LINUX_PATH=/mnt/c/AI_PenTest_Project/Argus/Library_Python_Requirements/setup_python_kali.sh"
+set "LINUX_PATH=/mnt/c/AI_PenTest_Project/Argus/02_AI_Environment/setup_python_kali.sh"
 
 echo ========================================================
 echo     Triggering Python Setup inside %DISTRO_NAME%

@@ -18,10 +18,10 @@ echo [!] Python not found. Installing Python 3.12 via Winget...
 winget install --id Python.Python.3.12 --exact --silent --accept-package-agreements --accept-source-agreements
 if errorlevel 1 (
     echo [ERROR] Automatic Python installation failed. Please install manually.
-    pause & exit /b
+    if "%ARGUS_AUTO_INSTALL%"=="" pause & exit /b
 )
 echo [SUCCESS] Python installed. Please restart this script.
-pause & exit /b
+if "%ARGUS_AUTO_INSTALL%"=="" pause & exit /b
 
 :check_ollama_cmd
 :: 2. Check if Ollama Command Exists
@@ -29,7 +29,7 @@ where ollama >nul 2>&1
 if errorlevel 1 (
     echo [CRITICAL] Ollama is not installed on this system.
     echo [*] Please install it from https://ollama.com/
-    pause & exit /b
+    if "%ARGUS_AUTO_INSTALL%"=="" pause & exit /b
 )
 
 :: 3. Check if Ollama is running
@@ -80,7 +80,7 @@ if not exist ".venv" (
     python -m venv .venv
     if errorlevel 1 (
         echo [ERROR] Failed to create Virtual Environment.
-        pause & exit /b 1
+        if "%ARGUS_AUTO_INSTALL%"=="" pause & exit /b 1
     )
     echo [OK] Created new virtual environment.
 ) else (
@@ -92,20 +92,20 @@ echo.
 echo [4/4] Synchronizing Intelligence Libraries...
 if not exist ".venv\Scripts\activate.bat" (
     echo [ERROR] Virtual environment activation script not found!
-    pause & exit /b 1
+    if "%ARGUS_AUTO_INSTALL%"=="" pause & exit /b 1
 )
 call .venv\Scripts\activate.bat
 python -m pip install --upgrade pip --quiet
-if exist "Library_Python_Requirements\requirements.txt" (
-    pip install -r Library_Python_Requirements\requirements.txt --quiet
+if exist "02_AI_Environment\requirements.txt" (
+    pip install -r 02_AI_Environment\requirements.txt --quiet
     if errorlevel 1 (
         echo [ERROR] Library synchronization failed.
-        pause & exit /b 1
+        if "%ARGUS_AUTO_INSTALL%"=="" pause & exit /b 1
     )
     echo [OK] All libraries are up to date.
 ) else (
     echo [ERROR] requirements.txt not found!
-    pause & exit /b 1
+    if "%ARGUS_AUTO_INSTALL%"=="" pause & exit /b 1
 )
 
 echo.
@@ -114,5 +114,5 @@ echo [SUCCESS] Argus AI Environment is 100%% Operational!
 echo [INFO] Active Model: %selected_model%
 echo [INFO] Environment: Root .venv
 echo ========================================================
-pause
+if "%ARGUS_AUTO_INSTALL%"=="" pause
 

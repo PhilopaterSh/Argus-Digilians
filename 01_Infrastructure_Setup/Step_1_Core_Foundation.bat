@@ -37,4 +37,4 @@ echo ========================================================
 echo Host setup completed successfully.
 echo Note: If you encounter issues, run 'sfc /scannow' and RESTART.
 echo ========================================================
-pause
+if "%ARGUS_AUTO_INSTALL%"=="" pause

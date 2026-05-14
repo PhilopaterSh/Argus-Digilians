@@ -1,64 +1,54 @@
-# 🛡️ Argus-Digilians Project Framework
+# 🛡️ Argus-Digilians Security Framework
 
-This project is a comprehensive security analysis system and an autonomous AI Agent studio.
-
----
-
-## 🚀 THE MASTER BUTTON (Start Here)
-To start the entire system with one click, use the Master Launcher:
-
-**Path:** `START_Argus_AI.bat` (Root Directory)
-- **Action:** Double-click to run.
-- **Purpose:** 
-  1. Checks and starts the AI Engine (Ollama).
-  2. Activates the Python environment.
-  3. Launches the Security Studio in your browser on `http://localhost:12189`.
+Argus is a professional-grade security analysis system and an autonomous AI Agent studio, bridging Windows accessibility with Kali Linux's offensive power.
 
 ---
 
-## 📂 Complete Project Structure (Project Map)
+## 🚀 QUICK START
+If you have just cloned this repository, follow these two steps:
+
+### 1. Full Installation (First Time Only)
+Run the **Master Installer** as Administrator to set up WSL, Kali, Python, and AI Models.
+- **File:** `INSTALL_EVERYTHING.bat`
+- **Note:** A system restart may be required after WSL installation.
+
+### 2. Launch the Studio (Daily Use)
+Start the entire ecosystem with a single click.
+- **File:** `LAUNCH_STUDIO.bat`
+- **Action:** Launches the AI engine, activates the SSH bridge, and opens your browser at `http://localhost:12199`.
+
+---
+
+## 🔍 SYSTEM DIAGNOSTICS
+Not sure if everything is working? Run the health check:
+- **File:** `CHECK_HEALTH.bat`
+- **Verified Components:** Python Environment, Ollama (AI Engine), WSL (Kali Linux), and SSH Bridge.
+
+---
+
+## 📂 Project Structure
 
 ```text
 Argus/
-├── START_Argus_AI.bat          # 🚀 MASTER BUTTON (Single-click Start)
-├── Master_Installer.bat        # 🛠️ Main Setup Utility (Full Installation)
-├── Argus_Secure_Sync.exe       # 🔄 Synchronization & Backup Tool
-├── README.md                   # 📖 Main Project Documentation
-├── core/                       # 🧠 Modular Intelligence (The "Brain")
-├── GUI/                        # 🖥️ Graphical Interfaces & Launchers
-├── AI Agent/                   # 🤖 Original AI Logic & Prototypes
-├── Tools/                      # 🛠️ WSL Bridge & Automation Scripts
-├── How to satup/               # 📖 Documentation & Installation Guides
-└── Library_Python_Requirements/ # 📦 Dependencies & Environment
+├── LAUNCH_STUDIO.bat           # 🚀 One-click system start
+├── INSTALL_EVERYTHING.bat      # 🛠️ Full environment setup
+├── CHECK_HEALTH.bat            # 🔍 System health diagnostics
+├── README.md                   # 📖 Documentation
+├── 01_Infrastructure_Setup/    # 🌐 Host & WSL
+├── 02_AI_Environment/          # 📦 Dependencies
+├── core/                       # 🧠 AI Brain & WSL Bridge Logic
+├── GUI/                        # 🖥️ Streamlit Web Command Center
+├── Tools/                      # 🛠️ Kali Linux Automation Scripts
+└── Workflows/                  # 📊 Mappings & Diagrams
 ```
 
 ---
 
-## 🛠️ Installation & Setup
-If this is your first time, run the **Master Installer** (`Master_Installer.bat`) as Administrator to prepare the system.
-
----
-
-## 🔄 Synchronization
-Use **Argus_Secure_Sync.exe** to keep your work updated with the GitHub repository.
-
----
-
-## 🧩 Component Breakdown
-*   **core/**: Handles AI reasoning (LangChain) and advanced reconnaissance. Now includes an **Advanced Recon Suite**:
-    *   **Reachability Check:** Ping + HTTP fallback verification.
-    *   **Dual Protocol:** Automatic analysis of both HTTP and HTTPS versions.
-    *   **Tooling:** Verbose WhatWeb, HTTPX Tech Detection, and Wget redirection mapping.
-*   **GUI/**: Web-based Command Center for real-time monitoring and AI report generation.
-
----
-
-## 🛡️ Agent Protocols & Safety
-To ensure efficiency and accuracy, the Argus AI Agent follows a strict execution protocol:
-
-1.  **Reachability First (Mandatory):** Before any analysis, the Agent MUST execute the `Check_Reachability` tool. 
-2.  **Conditional Execution:** If the target is unreachable (Ping fails and HTTP status is non-2xx/3xx), the Agent will terminate the mission immediately to save resources.
-3.  **Local Execution:** All tools and LLM inferences are performed on the local host/WSL environment.
+## 🧩 Key Features
+*   **Parallel Reconnaissance:** Executes multiple tools (WhatWeb, Wafw00f, Nikto, etc.) simultaneously for maximum speed.
+*   **AI Intelligence:** Integrated with **WhiteRabbitNeo** for advanced security reasoning.
+*   **WSL Bridge:** Securely executes offensive tools inside a native Linux environment via SSH.
+*   **Report Export:** Download comprehensive security reports in Markdown format with one click.
 
 ---
 *Maintained by: Argus Security Framework Team | May 2026*

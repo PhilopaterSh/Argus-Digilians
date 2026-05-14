@@ -90,9 +90,59 @@ wget --spider --server-response --max-redirect=5 https://example.com
 
 ---
 
-## Execution Summary
-To perform a quick manual analysis of a target, run these commands in sequence:
+## 4. Nmap (Network Mapper)
 
-1. whatweb --no-errors -v http://target.com
-2. curl -v -k http://target.com
-3. wget --spider --server-response http://target.com
+### Technical Description
+Nmap is used for network discovery and security auditing. In Argus, it is employed for service version detection and identifying open ports.
+
+### Usage in Argus
+```bash
+nmap -F --open -sV <target>
+```
+- `-F`: Fast mode (scans top 100 ports).
+- `--open`: Shows only open ports.
+- `-sV`: Probes open ports to determine service/version info.
+
+---
+
+## 5. Wafw00f (WAF Detection)
+
+### Technical Description
+Identifies and fingerprints Web Application Firewalls (WAF) protecting a website. Essential for determining if active exploitation or aggressive scanning is feasible.
+
+### Usage in Argus
+```bash
+wafw00f <url>
+```
+
+---
+
+## 6. Subdomain Discovery (Subfinder & Assetfinder)
+
+### Technical Description
+Mapping the attack surface by discovering sub-domains. Subfinder provides high-speed results using passive sources, while Assetfinder searches for related domains and subdomains.
+
+### Usage in Argus
+```bash
+subfinder -d <domain> -silent && assetfinder --subs-only <domain>
+```
+
+---
+
+## 7. Advanced Reconnaissance Frameworks
+
+Argus integrates several high-impact frameworks for deep intelligence gathering:
+- **FinalRecon:** A multi-purpose reconnaissance tool (Headers, Whois, SSL, Crawling).
+- **Ph.Sh Suite:** Specialized tools for URL extraction and advanced subdomain discovery.
+- **theHarvester:** OSINT tool for gathering emails, subdomains, and names.
+- **SpiderFoot:** Automation tool for OSINT and threat intelligence.
+
+---
+
+## Execution Summary (Argus AI Workflow)
+The Argus AI Agent follows this logical sequence for maximum intelligence:
+
+1.  **Connectivity:** `ping` / `curl` check.
+2.  **Surface Mapping:** `subfinder` & `assetfinder` (Subdomain Enumeration).
+3.  **Deep Discovery:** `wafw00f`, `whatweb`, `nmap -sV`, `curl -sI`, and `wget --spider` (Parallel Recon Suite).
+4.  **Intelligence Analysis:** AI synthesis of all findings into a structured report.

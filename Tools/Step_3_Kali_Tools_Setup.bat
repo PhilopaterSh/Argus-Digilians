@@ -10,4 +10,4 @@ wsl -d %DISTRO_NAME% bash %LINUX_PATH%
 
 echo.
 echo Process finished.
-pause
+if "%ARGUS_AUTO_INSTALL%"=="" pause

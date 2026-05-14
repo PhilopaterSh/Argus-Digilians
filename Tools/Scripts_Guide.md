@@ -6,37 +6,28 @@ This document explains how to manually create and configure the automation scrip
 
 ## 1. Linux Setup Script (check_and_install.sh)
 
-This script runs inside Kali Linux. It checks for the existence of tools and installs them if missing.
+This script is the "Advanced Installer" for the Argus environment inside Kali Linux. It performs system-level optimizations and handles complex dependency management.
 
-### Script Content
+### Key Features
+- **System Fixes:** Optimizes Apt mirrors, fixes SMB protocol compatibility (LANMAN1), and stabilizes the Python pip environment.
+- **Go Environment:** Automatically installs Golang and configures `GOPATH` for modern security tools.
+- **PDTM Integration:** Uses the ProjectDiscovery Tool Manager for robust installation of tools like `subfinder`, `nuclei`, and `katana`.
+- **Hybrid Installation:** Combines `APT`, `Go install`, and `Git` cloning for a complete security arsenal.
+
+### Expanded Toolset
+The script now manages over 15+ specialized tools, including:
+- **Core:** `whatweb`, `nmap`, `wafw00f`, `nikto`, `curl`, `wget`.
+- **Recon:** `subfinder`, `assetfinder`, `theharvester`, `recon-ng`.
+- **Advanced:** `Ph.Sh_url`, `Ph.Sh-Subdomain`, `finalrecon`, `spiderfoot`.
+
+### Script Structure (Simplified)
 ```bash
 #!/bin/bash
-
-# List of core tools to check and install
-TOOLS=("whatweb" "curl" "wget")
-
-echo "Checking core web analysis tools..."
-
-UPDATED=false
-
-for tool in "${TOOLS[@]}"; do
-    if ! command -v "$tool" &> /dev/null; then
-        echo "[!] $tool is not installed. Preparing to install..."
-        
-        if [ "$UPDATED" = false ]; then
-            echo "[*] Updating package lists..."
-            sudo apt update -y
-            UPDATED=true
-        fi
-        
-        echo "[*] Installing $tool..."
-        sudo apt install -y "$tool"
-    else
-        echo "[+] $tool is already installed."
-    fi
-done
-
-echo "Verification complete."
+# 1. System Updates & Base Dependencies
+# 2. Go Environment Configuration
+# 3. PDTM Deployment (subfinder, httpx, nuclei, etc.)
+# 4. Specialized Utilities via APT (nmap, wafw00f, etc.)
+# 5. Manual Tooling via Git/Go (Ph.Sh suite, FinalRecon, etc.)
 ```
 
 ### Important Note on Format
@@ -47,7 +38,7 @@ tr -d '\r' < check_and_install.sh > fixed.sh && mv fixed.sh check_and_install.sh
 
 ---
 
-## 2. Windows Bridge Script (run_check.bat)
+## 2. Windows Bridge Script (Step_3_Kali_Tools_Setup.bat)
 
 This script runs on Windows. It triggers the Linux script inside the WSL environment.
 
@@ -95,6 +86,6 @@ Simply double-click `run_kali_setup.bat`. It will:
 
 ## Manual Creation Steps
 1.  Create a text file and paste the `.sh` content. Save it as `check_and_install.sh`.
-2.  Create another text file and paste the `.bat` content. Save it as `run_check.bat`.
+2.  Create another text file and paste the `.bat` content. Save it as `Step_3_Kali_Tools_Setup.bat`.
 3.  Ensure both files are in the same directory (`C:\AI_PenTest_Project\Argus\Tools`).
 4.  Run the `.bat` file to start the process.

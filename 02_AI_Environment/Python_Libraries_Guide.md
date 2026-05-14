@@ -52,7 +52,7 @@ The framework can be directed to an LM Studio local server for enhanced monitori
 
 ---
 
-## 3. Automated Setup Procedure (Universal_AI_Setup.bat)
+## 3. Automated Setup Procedure (Step_2_AI_Python_Env.bat)
 
 The setup script is designed for zero-touch configuration and high reliability:
 
@@ -75,7 +75,7 @@ To initialize or update your environment, run the following from the root direct
 
 ```powershell
 # From Library_Python_Requirements folder
-.\Universal_AI_Setup.bat
+.\Step_2_AI_Python_Env.bat
 ```
 
 *Note: Ensure Ollama is installed on the host. The script will attempt to start the Ollama engine automatically if it is not running.*

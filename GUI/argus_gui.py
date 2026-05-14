@@ -1,12 +1,18 @@
 import streamlit as st
-import subprocess
 import os
 import sys
 import time
-from langchain_ollama import OllamaLLM
-from langchain_classic.agents import AgentExecutor, create_react_agent
+from dotenv import load_dotenv
+
+# Ensure project root is in path for core module access
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
+from core.tools import WSLBridgeTools
+from core.agent import ArgusBrain
 from langchain_core.tools import Tool
-from langchain_core.prompts import PromptTemplate
+
+# Load environment variables
+load_dotenv()
 
 # --- Page Configuration ---
 st.set_page_config(
@@ -16,7 +22,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# --- Enhanced Custom CSS & HTML ---
+# --- Enhanced Custom CSS ---
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;700&display=swap');
@@ -62,6 +68,8 @@ st.markdown("""
         font-family: 'JetBrains+Mono', monospace;
         margin-top: 10px;
         white-space: pre-wrap;
+        font-size: 0.85rem;
+        border-left: 4px solid #00ff41;
     }
 
     /* Button Styling */
@@ -79,11 +87,6 @@ st.markdown("""
         background-color: #008f11 !important;
         box-shadow: 0 0 15px #00ff41 !important;
     }
-
-    /* Sidebar Styling */
-    .css-1d391kg {
-        background-color: #0a0a0a !important;
-    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -95,93 +98,26 @@ st.markdown("""
     </div>
     """, unsafe_allow_html=True)
 
-# --- Logic Layer ---
-
-DISTRO_NAME = "kali-linux"
-MODEL_NAME = "WhiteRabbitNeo/WhiteRabbitNeo-V3-7B:latest"
-
-def run_wsl_command(command: str) -> str:
-    try:
-        full_command = f"wsl -d {DISTRO_NAME} bash -c \"{command}\""
-        result = subprocess.run(full_command, capture_output=True, text=True, shell=True)
-        return result.stdout if result.returncode == 0 else f"Error: {result.stderr}"
-    except Exception as e:
-        return f"Exception: {str(e)}"
-
-def recon_workflow(url: str) -> str:
-    placeholder = st.empty()
-    with placeholder.container():
-        st.write("📡 **Initializing Recon Subsystem...**")
-        
-        with st.status("Scanning Target...", expanded=True) as status:
-            st.write("Executing WhatWeb Fingerprinting...")
-            ww = run_wsl_command(f"whatweb {url}")
-            
-            st.write("Analyzing Headers (Curl)...")
-            cl = run_wsl_command(f"curl -skI -A 'Mozilla/5.0' {url}")
-            
-            st.write("Fetching Content Structure (Wget)...")
-            wg = run_wsl_command(f"wget -q -O - --no-check-certificate --user-agent='Mozilla/5.0' {url} | head -n 30")
-            
-            status.update(label="Scan Complete!", state="complete", expanded=False)
-    
-    return f"WHATWEB:\n{ww}\n\nCURL:\n{cl}\n\nWGET SNIPPET:\n{wg}"
+# --- Initialization ---
+bridge = WSLBridgeTools()
+MODEL_NAME = os.getenv("SELECTED_MODEL", "WhiteRabbitNeo/WhiteRabbitNeo-V3-7B:latest")
 
 @st.cache_resource
-def get_agent():
-    status_placeholder = st.empty()
-    try:
-        status_placeholder.warning("🧠 Waking up the AI Intelligence Core (this may take 1-2 minutes)...")
-        llm = OllamaLLM(model=MODEL_NAME, timeout=120)
-        
-        # We'll skip the heavy 'Hi' invoke here to avoid blocking too long, 
-        # or do a very short one.
-        
-        tools = [
-            Tool(name="Recon_Workflow", func=recon_workflow, description="Combined recon tool."),
-            Tool(name="WhatWeb", func=lambda u: run_wsl_command(f"whatweb {u}"), description="Fingerprinting."),
-            Tool(name="Curl", func=lambda u: run_wsl_command(f"curl -skI {u}"), description="Headers."),
-        ]
-        template = """You are Argus AI, a senior security researcher.
-Analyze the provided target carefully using your tools.
-Format your final answer in a clear, structured way with emojis for readability.
-
-Tools available:
-{tools}
-
-Use the following format:
-Question: {input}
-Thought: you should always think about what to do
-Action: the action to take, should be one of [{tool_names}]
-Action Input: the input to the action
-Observation: the result of the action
-... (this Thought/Action/Action Input/Observation can repeat N times)
-Thought: I now know the final answer
-Final Answer: the final answer to the original input question
-
-Begin!
-
-Question: {input}
-Thought: {agent_scratchpad}"""
-
-        prompt = PromptTemplate.from_template(template)
-        agent = create_react_agent(llm, tools, prompt)
-        executor = AgentExecutor(agent=agent, tools=tools, verbose=True, handle_parsing_errors=True)
-        
-        status_placeholder.empty()
-        return executor
-    except Exception as e:
-        status_placeholder.error(f"SYSTEM OVERLOAD: {str(e)}")
-        return None
+def get_brain():
+    tools = [
+        Tool(name="Check_Reachability", func=bridge.check_reachability, description="Verify target via WSL network."),
+        Tool(name="Subdomain_Enumeration", func=bridge.enumerate_subdomains, description="Fast subdomain discovery."),
+        Tool(name="Recon_Suite", func=bridge.recon_suite, description="Execute multi-tool parallel recon in WSL Kali.")
+    ]
+    return ArgusBrain(MODEL_NAME, tools)
 
 # --- UI Layout ---
-
 col1, col2 = st.columns([1, 2])
 
 with col1:
     st.subheader("System Status")
-    st.success(f"Kali WSL: ONLINE")
-    st.success(f"LLM: {MODEL_NAME}")
+    st.success(f"WSL Bridge: ACTIVE ({bridge.host})")
+    st.info(f"AI Engine: {MODEL_NAME}")
     
     st.markdown("---")
     url_input = st.text_input("Target URL", "https://example.com")
@@ -191,23 +127,33 @@ with col2:
     st.subheader("Intelligence Output")
     if run_btn:
         if url_input:
-            agent = get_agent()
-            if agent:
-                with st.spinner("Argus AI is processing..."):
-                    # For demo purposes, we will call the recon workflow directly to show results clearly
-                    # In a full app, the agent decides when to call it.
-                    report = recon_workflow(url_input)
-                    st.markdown("#### Found Data:")
-                    st.markdown(f'<div class="terminal-box">{report}</div>', unsafe_allow_html=True)
-                    
-                    st.info("AI Analysis:")
-                    # Simplified agent call for instant feedback
-                    res = agent.invoke({"input": f"Based on this report for {url_input}, give me a security summary."})
-                    st.write(res["output"])
-            else:
-                st.error("Ollama Engine Error. Check Connection.")
+            brain = get_brain()
+            with st.status("📡 Bridging to WSL Kali...", expanded=True) as status:
+                st.write("Initializing Parallel Recon Subsystem...")
+                report = bridge.recon_suite(url_input)
+                
+                st.markdown("#### Technical Evidence:")
+                st.markdown(f'<div class="terminal-box">{report}</div>', unsafe_allow_html=True)
+                
+                st.write("🧠 AI Analyzing technical data...")
+                # We use the agent to analyze the specific report for better precision
+                analysis = brain.ask(f"Analyze this reconnaissance report from WSL for {url_input}. Report: {report}")
+                
+                st.markdown("#### AI Intelligence Report:")
+                st.info(analysis["output"])
+                
+                status.update(label="Analysis Complete!", state="complete")
+                
+                # Report Export
+                full_export = f"# Argus Security Report - {url_input}\n\n## Technical Data\n{report}\n\n## AI Analysis\n{analysis['output']}"
+                st.download_button(
+                    label="📥 DOWNLOAD MARKDOWN REPORT",
+                    data=full_export,
+                    file_name=f"Argus_{url_input.replace('https://', '').replace('/', '_')}.md",
+                    mime="text/markdown"
+                )
         else:
-            st.warning("Input target URL.")
+            st.warning("Please enter a valid target URL.")
 
 st.markdown("""
     <div style="position: fixed; bottom: 10px; right: 10px; color: #555; font-size: 0.8rem;">

@@ -6,7 +6,7 @@ echo ---------------------------------------------------
 echo.
 
 :: Check for virtual environment (updated path)
-if not exist "..\Library_Python_Requirements\.venv" (
+if not exist "..\02_AI_Environment\.venv" (
     echo [ERROR] Virtual Environment not found! Run Master_Installer first.
     pause
     exit
@@ -17,7 +17,7 @@ set PORT=12189
 
 echo [*] Activating environment...
 :: Updated path to activate.bat
-call ..\Library_Python_Requirements\.venv\Scripts\activate.bat
+call ..\02_AI_Environment\.venv\Scripts\activate.bat
 
 echo [*] Starting Studio on http://localhost:%PORT%
 echo [*] Press Ctrl+C to stop.
