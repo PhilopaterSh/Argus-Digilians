@@ -11,7 +11,7 @@ from tools import (
     run_nmap,
     run_nikto,
     run_gobuster,
-    run_wappalyzer,
+    run_whatweb,
 )
 
 # ── Wait for Juice Shop ────────────────────────────────────────────────────────
@@ -65,10 +65,10 @@ tools = [
         ),
     ),
     Tool(
-        name="run_wappalyzer",
-        func=run_wappalyzer.invoke,
+        name="run_whatweb",
+        func=run_whatweb.invoke,
         description=(
-            "Fingerprints the technology stack (frameworks, JS libs, server software) using Wappalyzer. "
+            "Fingerprints the technology stack (frameworks, JS libs, server software) using whatweb. "
             "Input: full URL with port, e.g. 'http://juice-shop:3000'"
         ),
     ),
@@ -162,7 +162,7 @@ if __name__ == "__main__":
         f"1. check_web_headers on '{target_url}'\n"
         f"2. run_nmap on '{target_domain}'\n"
         f"3. run_nikto on '{target_url}'\n"
-        f"4. run_wappalyzer on '{target_url}'\n"
+        f"4. run_whatweb on '{target_url}'\n"
         f"5. run_ffuf_discovery on '{target_domain}'\n"
         f"6. run_gobuster on '{target_domain}'\n"
         f"7. run_subfinder on '{target_domain}'\n"

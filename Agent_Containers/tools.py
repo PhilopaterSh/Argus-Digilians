@@ -182,47 +182,25 @@ def run_gobuster(domain: str) -> str:
         return f"Error running Gobuster: {str(e)}"
  
  
-# ── 7. Wappalyzer CLI Tech-Stack Fingerprinting ───────────────────────────────
+# ── 7. run_whatweb Tech-Stack Fingerprinting ───────────────────────────────
  
 @tool
-def run_wappalyzer(url: str) -> str:
+def run_whatweb(url: str) -> str:
     """
-    Uses the Wappalyzer CLI to fingerprint technologies running on the target web application.
+    Fingerprints the technology stack using WhatWeb.
     Identifies frameworks, CMS, servers, JS libraries, and more.
     Input: full URL with port, e.g. 'http://juice-shop:3000'
     """
-    if shutil.which("wappalyzer") is None:
-        return "Error: wappalyzer CLI not found in PATH. Ensure it is installed via npm in the Dockerfile."
- 
-    cmd = ["wappalyzer", url, "--pretty"]
+    if shutil.which("whatweb") is None:
+        return "Error: whatweb not found in PATH. Ensure it is installed in the Dockerfile."
+
+    cmd = ["whatweb", "--color=never", "-a", "3", url]
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
         output = result.stdout.strip()
-        if not output:
-            return "Wappalyzer produced no output."
-        # Wappalyzer --pretty returns JSON; parse and summarise for the LLM
-        try:
-            data = json.loads(output)
-            techs = data.get("technologies", [])
-            if not techs:
-                return "Wappalyzer found no technologies."
-            lines = []
-            for t in techs:
-                name = t.get("name", "?")
-                cats = ", ".join(c.get("name", "") for c in t.get("categories", []))
-                version = t.get("version", "")
-                entry = f"  - {name}"
-                if version:
-                    entry += f" (v{version})"
-                if cats:
-                    entry += f"  [{cats}]"
-                lines.append(entry)
-            return "Wappalyzer identified technologies:\n" + "\n".join(lines)
-        except json.JSONDecodeError:
-            # Fall back to raw output if not JSON
-            return f"Wappalyzer raw output:\n{output[:1500]}"
+        return f"WhatWeb results:\n{output}" if output else "WhatWeb returned no results."
     except subprocess.TimeoutExpired:
-        return "Error: Wappalyzer timed out after 60 seconds."
+        return "Error: WhatWeb timed out after 60 seconds."
     except Exception as e:
-        return f"Error running Wappalyzer: {str(e)}"
+        return f"Error running WhatWeb: {str(e)}"
  
