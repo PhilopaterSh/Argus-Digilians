@@ -4,7 +4,15 @@ import requests
 from langchain_community.llms import Ollama
 from langchain.agents import AgentExecutor, create_react_agent, Tool
 from langchain.prompts import PromptTemplate
-from tools import check_web_headers, run_subfinder, run_ffuf_discovery
+from tools import (
+    check_web_headers,
+    run_subfinder,
+    run_ffuf_discovery,
+    run_nmap,
+    run_nikto,
+    run_gobuster,
+    run_wappalyzer,
+)
 
 # ── Wait for Juice Shop ────────────────────────────────────────────────────────
 def wait_for_juice_shop(url, timeout=60):
@@ -27,7 +35,7 @@ def wait_for_juice_shop(url, timeout=60):
 llm = Ollama(
     model=os.environ.get("AGENT_MODEL", "dolphin-llama3"),
     base_url=os.environ.get("OLLAMA_HOST", "http://ollama-service:11434"),
-    temperature=0,  # deterministic, less hallucination
+    temperature=0,
 )
 
 # ── 2. Tools ──────────────────────────────────────────────────────────────────
@@ -35,48 +43,92 @@ tools = [
     Tool(
         name="check_web_headers",
         func=check_web_headers.invoke,
-        description="Fetches HTTP security headers. Input: full URL e.g. http://juice-shop:3000",
+        description=(
+            "Fetches HTTP response headers and flags missing/present security headers. "
+            "Input: full URL with port, e.g. 'http://juice-shop:3000'"
+        ),
+    ),
+    Tool(
+        name="run_nmap",
+        func=run_nmap.invoke,
+        description=(
+            "Scans open ports and detects service versions with Nmap. "
+            "Input: bare hostname only (no http://, no port), e.g. 'juice-shop'"
+        ),
+    ),
+    Tool(
+        name="run_nikto",
+        func=run_nikto.invoke,
+        description=(
+            "Scans a web server for known vulnerabilities and misconfigurations with Nikto. "
+            "Input: full URL with port, e.g. 'http://juice-shop:3000'"
+        ),
+    ),
+    Tool(
+        name="run_wappalyzer",
+        func=run_wappalyzer.invoke,
+        description=(
+            "Fingerprints the technology stack (frameworks, JS libs, server software) using Wappalyzer. "
+            "Input: full URL with port, e.g. 'http://juice-shop:3000'"
+        ),
     ),
     Tool(
         name="run_ffuf_discovery",
         func=run_ffuf_discovery.invoke,
-        description="Brute-forces hidden paths using FFUF. Input: bare domain e.g. juice-shop",
+        description=(
+            "Brute-forces hidden paths using FFUF. "
+            "Input: bare hostname only, e.g. 'juice-shop'. Port 3000 is added automatically."
+        ),
+    ),
+    Tool(
+        name="run_gobuster",
+        func=run_gobuster.invoke,
+        description=(
+            "Brute-forces directories using Gobuster (complements FFUF). "
+            "Input: bare hostname only, e.g. 'juice-shop'. Port 3000 is added automatically."
+        ),
     ),
     Tool(
         name="run_subfinder",
         func=run_subfinder.invoke,
-        description="Enumerates subdomains. Input: bare domain e.g. juice-shop",
+        description=(
+            "Enumerates subdomains with Subfinder. "
+            "Input: bare domain name only, e.g. 'juice-shop'"
+        ),
     ),
 ]
 
 # ── 3. Prompt ─────────────────────────────────────────────────────────────────
-template = """You are a security agent. Use tools to recon the target then write a report.
+template = """You are a security reconnaissance agent. Run all tools against the target, then write a structured report.
 
-Tools available:
+Available tools:
 {tools}
 
-Use EXACTLY this format, nothing else:
+Use EXACTLY this format for every step — no deviations:
 
-Thought: <one sentence>
-Action: <tool name from: {tool_names}>
-Action Input: <input>
-Observation: <result>
-Thought: <one sentence>
-Action: <tool name>
-Action Input: <input>
-Observation: <result>
-Thought: <one sentence>
-Action: <tool name>
-Action Input: <input>
-Observation: <result>
-Thought: I have all results.
-Final Answer: <report>
+Thought: <one sentence explaining what you will do next>
+Action: <tool name, must be one of: {tool_names}>
+Action Input: <exact input for the tool>
+Observation: <tool result — filled in automatically>
+... (repeat Thought/Action/Action Input/Observation until all 7 tools have been used)
+Thought: I have collected all reconnaissance data and will now write the final report.
+Final Answer: <structured markdown report>
 
-Rules:
-- Always write Action Input: on the line immediately after Action:
-- Never skip a line between Action: and Action Input:
-- Run all 3 tools exactly once in order: check_web_headers, run_ffuf_discovery, run_subfinder
-- Only write Final Answer: after all 3 tools have run
+STRICT RULES:
+- Run tools in this exact order: check_web_headers → run_nmap → run_nikto → run_wappalyzer → run_ffuf_discovery → run_gobuster → run_subfinder
+- Never repeat a tool.
+- Never skip a tool, even if a previous result was empty.
+- Action Input must be on the very next line after Action, with no blank line between them.
+- Only write Final Answer: after all 7 tools have produced an Observation.
+- The Final Answer must be a structured report with these sections:
+  1. Target Overview
+  2. Open Ports & Services (from Nmap)
+  3. Technology Stack (from Wappalyzer)
+  4. Security Header Analysis (from check_web_headers)
+  5. Vulnerability Findings (from Nikto)
+  6. Discovered Paths (combined FFUF + Gobuster, deduplicated)
+  7. Subdomain Enumeration (from Subfinder)
+  8. Risk Summary & Recommendations
 
 Begin!
 
@@ -92,7 +144,7 @@ agent_executor = AgentExecutor(
     tools=tools,
     verbose=True,
     handle_parsing_errors=True,
-    max_iterations=12,
+    max_iterations=20,          # 7 tools × ~2 steps each + buffer
     early_stopping_method="force",
     return_intermediate_steps=True,
 )
@@ -105,15 +157,21 @@ if __name__ == "__main__":
     wait_for_juice_shop(target_url)
 
     task = (
-        f"Run check_web_headers on '{target_url}', "
-        f"then run_ffuf_discovery on '{target_domain}', "
-        f"then run_subfinder on '{target_domain}', "
-        f"then write a Final Answer report."
+        f"Perform a full reconnaissance of the target. "
+        f"Run all 7 tools in order:\n"
+        f"1. check_web_headers on '{target_url}'\n"
+        f"2. run_nmap on '{target_domain}'\n"
+        f"3. run_nikto on '{target_url}'\n"
+        f"4. run_wappalyzer on '{target_url}'\n"
+        f"5. run_ffuf_discovery on '{target_domain}'\n"
+        f"6. run_gobuster on '{target_domain}'\n"
+        f"7. run_subfinder on '{target_domain}'\n"
+        f"Then write a structured Final Answer report."
     )
 
     result = agent_executor.invoke({"input": task})
 
     print("\n" + "=" * 60)
-    print("FINAL REPORT")
+    print("FINAL RECONNAISSANCE REPORT")
     print("=" * 60)
     print(result.get("output", "No output produced."))

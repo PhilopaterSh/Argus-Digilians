@@ -25,6 +25,9 @@ services:
   cyber-agent:
     build: .
     container_name: my-agent
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
     depends_on:
       - ollama-service
       - juice-shop
