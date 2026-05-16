@@ -15,10 +15,12 @@ This script is the "Advanced Installer" for the Argus environment inside Kali Li
 - **Hybrid Installation:** Combines `APT`, `Go install`, and `Git` cloning for a complete security arsenal.
 
 ### Expanded Toolset
-The script now manages over 15+ specialized tools, including:
+The script now manages over 25+ specialized tools, including:
 - **Core:** `whatweb`, `nmap`, `wafw00f`, `nikto`, `curl`, `wget`.
-- **Recon:** `subfinder`, `assetfinder`, `theharvester`, `recon-ng`.
-- **Advanced:** `Ph.Sh_url`, `Ph.Sh-Subdomain`, `finalrecon`, `spiderfoot`.
+- **Recon:** `subfinder`, `assetfinder`, `theharvester`, `recon-ng`, `findomain`.
+- **Active/DNS:** `massdns`, `puredns`, `ffuf`, `gobuster`, `fierce`, `dnsx`.
+- **Advanced:** `Ph.Sh_url`, `Ph.Sh-Subdomain`, `finalrecon`, `spiderfoot`, `osmedeus`.
+- **Resources:** `SecLists` (located in `/usr/share/seclists`).
 
 ### Script Structure (Simplified)
 ```bash
@@ -26,8 +28,8 @@ The script now manages over 15+ specialized tools, including:
 # 1. System Updates & Base Dependencies
 # 2. Go Environment Configuration
 # 3. PDTM Deployment (subfinder, httpx, nuclei, etc.)
-# 4. Specialized Utilities via APT (nmap, wafw00f, etc.)
-# 5. Manual Tooling via Git/Go (Ph.Sh suite, FinalRecon, etc.)
+# 4. Specialized Utilities via APT (nmap, amass, ffuf, etc.)
+# 5. Manual Tooling via Git/Go (MassDNS, Osmedeus, SecLists, etc.)
 ```
 
 ### Important Note on Format
@@ -40,7 +42,7 @@ tr -d '\r' < check_and_install.sh > fixed.sh && mv fixed.sh check_and_install.sh
 
 ## 2. Windows Bridge Script (Step_3_Kali_Tools_Setup.bat)
 
-This script runs on Windows. It triggers the Linux script inside the WSL environment.
+This script runs on Windows. It triggers the Linux script inside the WSL environment as the **root** user to ensure a silent installation.
 
 ### Script Content
 ```batch
@@ -51,12 +53,12 @@ set "LINUX_PATH=/mnt/c/AI_PenTest_Project/Argus/Tools/check_and_install.sh"
 echo Running Linux Tool Check from Windows...
 echo Target Distro: %DISTRO_NAME%
 
-:: Execute the shell script inside WSL
-wsl -d %DISTRO_NAME% bash %LINUX_PATH%
+:: Execute the shell script inside WSL as root to avoid sudo prompts
+wsl -d %DISTRO_NAME% -u root bash %LINUX_PATH%
 
 echo.
 echo Process finished.
-pause
+if "%ARGUS_AUTO_INSTALL%"=="" pause
 ```
 
 ---

@@ -117,32 +117,39 @@ wafw00f <url>
 
 ---
 
-## 6. Subdomain Discovery (Subfinder & Assetfinder)
+## 6. Subdomain Discovery (Passive & Active)
 
-### Technical Description
-Mapping the attack surface by discovering sub-domains. Subfinder provides high-speed results using passive sources, while Assetfinder searches for related domains and subdomains.
-
-### Usage in Argus
-```bash
-subfinder -d <domain> -silent && assetfinder --subs-only <domain>
-```
+Argus utilizes a multi-layered approach to map the attack surface:
+- **Passive:** `subfinder`, `assetfinder`, `findomain`, `chaos-client`.
+- **Active (Brute-Force):** `gobuster`, `ffuf`, `fierce`, `amass`.
+- **Discovery Tooling:** `theHarvester` for OSINT-based discovery.
 
 ---
 
-## 7. Advanced Reconnaissance Frameworks
+## 7. DNS Resolution & Permutation
 
-Argus integrates several high-impact frameworks for deep intelligence gathering:
-- **FinalRecon:** A multi-purpose reconnaissance tool (Headers, Whois, SSL, Crawling).
-- **Ph.Sh Suite:** Specialized tools for URL extraction and advanced subdomain discovery.
-- **theHarvester:** OSINT tool for gathering emails, subdomains, and names.
-- **SpiderFoot:** Automation tool for OSINT and threat intelligence.
+To ensure maximum accuracy and expansion:
+- **MassDNS:** High-performance DNS stub resolver for mass resolution.
+- **PureDNS:** A powerful resolver that filters out wildcards and dead domains.
+- **DNSGen & AltDNS:** Generate permutations and alterations of discovered subdomains to find hidden assets.
 
 ---
 
-## Execution Summary (Argus AI Workflow)
-The Argus AI Agent follows this logical sequence for maximum intelligence:
+## 8. Advanced Reconnaissance Frameworks
 
-1.  **Connectivity:** `ping` / `curl` check.
-2.  **Surface Mapping:** `subfinder` & `assetfinder` (Subdomain Enumeration).
-3.  **Deep Discovery:** `wafw00f`, `whatweb`, `nmap -sV`, `curl -sI`, and `wget --spider` (Parallel Recon Suite).
-4.  **Intelligence Analysis:** AI synthesis of all findings into a structured report.
+Argus integrates several high-impact frameworks for automated intelligence:
+- **Osmedeus:** A powerful offensive security framework for automated reconnaissance.
+- **SpiderFoot:** The ultimate OSINT automation tool with 100+ data sources.
+- **FinalRecon:** Fast multi-purpose recon (Headers, Whois, SSL).
+- **Ph.Sh Suite:** Advanced URL extraction and subdomain analysis.
+
+---
+
+## Execution Summary (Argus 5-Phase Workflow)
+The Argus AI Agent follows this professional pentesting sequence:
+
+1.  **Phase 1: Passive Recon (OSINT):** Gathering data from third-party sources (Amass, Subfinder).
+2.  **Phase 2: Active Recon (Brute-Force):** Direct probing and wordlist-based guessing (FFuf, Gobuster).
+3.  **Phase 3: Permutation & Expansion:** Generating and testing subdomain variations (DNSGen, AltDNS).
+4.  **Phase 4: DNS Resolution & Validation:** Filtering results and verifying active hosts (MassDNS, PureDNS).
+5.  **Phase 5: Deep Analysis & Verification:** Service fingerprinting and final intelligence gathering (Nmap, WhatWeb, Osmedeus).
