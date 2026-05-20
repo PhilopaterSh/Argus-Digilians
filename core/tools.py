@@ -104,106 +104,105 @@ class WSLBridgeTools:
 
     def check_reachability(self, domain):
         """Checks if a domain is reachable via WSL's network with guided failure analysis."""
-        ping_res = self.run(f"ping -c 1 -W 5 {domain}")
+        # Strip protocol and path for tools that need just the hostname (like ping)
+        clean_host = domain.replace("https://", "").replace("http://", "").split("/")[0].split(":")[0]
+        
+        print(f"[*] Checking reachability for: {clean_host}")
+        ping_res = self.run(f"ping -c 1 -W 5 {clean_host}")
         if "1 received" in ping_res:
-            return f"[✓] {domain} is reachable from WSL (ping)"
+            # Graph Integration: Link Domain to IP
+            ip_match = re.search(r'\((.*?)\)', ping_res)
+            if ip_match:
+                ip = ip_match.group(1)
+                self.memory.upsert_entity("domain", clean_host)
+                self.memory.upsert_entity("ip", ip)
+                self.memory.add_relation(clean_host, ip, "HOSTS")
+            return f"[✓] {clean_host} is reachable from WSL (ping)"
         
         # HTTP fallback using WSL's curl
-        code = self.run(f"curl -s -o /dev/null -w '%{{http_code}}' --connect-timeout 10 http://{domain}").strip()
+        url = domain if domain.startswith(("http://", "https://")) else f"http://{domain}"
+        code = self.run(f"curl -s -o /dev/null -w '%{{http_code}}' --connect-timeout 10 {url}").strip()
         if code.startswith(('2', '3')):
-            return f"[✓] {domain} reachable via WSL HTTP ({code})"
+            self.memory.upsert_entity("domain", clean_host)
+            return f"[✓] {url} reachable via WSL HTTP ({code})"
         
         # Guided Reflection for failure
-        diagnosis = f"[✗] {domain} is unreachable.\n"
+        diagnosis = f"[✗] {clean_host} is unreachable.\n"
         diagnosis += "Reflection & Suggestions:\n"
         diagnosis += "1. Target may block ICMP (Ping). Try 'curl' or 'nmap -Pn'.\n"
         diagnosis += "2. Target may only allow HTTPS. Try prefixing with https://.\n"
         diagnosis += "3. DNS Resolution may be failing inside WSL."
         return diagnosis
 
-    def enumerate_subdomains(self, domain):
-        """Discovers subdomains using the native Argus Recon Engine in WSL."""
-        clean_domain = domain.replace("https://", "").replace("http://", "").replace("*.", "").split("/")[0]
+    def fuzz_sensitive_files(self, url):
+        """Perform smart fuzzing for high-value files (.env, .git, config, etc.) with logic-based selection."""
+        clean_url = url.rstrip('/')
+        print(f"[*] Starting Smart Fuzzing for: {clean_url}")
         
-        print(f"[*] Starting MAXIMIZED Native Discovery for: {clean_domain}")
+        # Define high-impact payloads for Information Disclosure
+        sensitive_paths = [
+            ".env", ".git/config", ".git/index", "phpinfo.php", "config.php.bak", 
+            "wp-config.php.save", ".htaccess", "server-status", ".ssh/id_rsa",
+            "api/.env", "backup.sql", "database.sql", ".aws/credentials",
+            "composer.json", "package.json", ".npmrc"
+        ]
         
-        # Call the native Bash engine created during installation
-        check_engine = self.run("command -v argus_recon")
-        
-        report = ""
-        if "/usr/local/bin/argus_recon" in check_engine or "argus_recon" in check_engine:
-            print("[+] Using native Argus Recon Engine...")
-            report = self.run(f"argus_recon {clean_domain}")
-        else:
-            # Emergency Fallback if engine is missing
-            print("[!] Native engine not found. Running basic discovery...")
-            report = self.run(f"subfinder -d {clean_domain} -silent")
+        results = []
+        def check_path(path):
+            full_url = f"{clean_url}/{path}"
+            # Use curl -I to check headers and -L to follow redirects (smart bypass check)
+            cmd = f"curl -s -L -I -w '%{{http_code}} %{{size_download}}' -o /dev/null {full_url}"
+            res = self.run(cmd).strip()
+            if res.startswith(('200', '206')): # OK or Partial Content
+                return f"[!] FOUND: {full_url} (Status: {res})"
+            elif res.startswith('403'):
+                return f"[?] PROTECTED: {full_url} (403 Forbidden - Potential Bypass Target)"
+            return None
 
-        if "Total Verified Alive (Web): 0" in report:
-            return f"{report}\nReflection: No subdomains found. The target might be using wildcard DNS or hiding behind a strong CDN. Suggestion: Try manual brute-force with a larger wordlist if critical."
+        with ThreadPoolExecutor(max_workers=5) as executor:
+            findings = list(executor.map(check_path, sensitive_paths))
+            results = [f for f in findings if f]
 
-        # Save to memory
-        alive_targets = []
-        capture = False
-        for line in report.split('\n'):
-            if "TOP VERIFIED SUBDOMAINS:" in line:
-                capture = True
-                continue
-            if capture and "INFRASTRUCTURE POINTERS" in line:
-                capture = False
-                break
-            if capture and line.strip() and not line.startswith("["):
-                t = line.strip().replace("https://", "").replace("http://", "")
-                alive_targets.append(t)
-                self.memory.upsert_target(t, parent_domain=clean_domain)
+        if not results:
+            return "No common sensitive files found. Target seems well-configured or using a WAF."
         
+        report = "--- 📁 SENSITIVE FILE DISCOVERY REPORT ---\n"
+        report += "\n".join(results)
         return report
 
-    def prioritize_targets(self, targets):
-        """Sorts targets based on security interest keywords."""
-        priority_keywords = ['api', 'admin', 'portal', 'dev', 'test', 'staging', 'checkout', 'vpn', 'internal', 'v1', 'v2', 'auth', 'login']
+    def analyze_secrets(self, url):
+        """Fetches the page body and JS files to look for leaked secrets using Regex."""
+        print(f"[*] Analyzing for Secrets & PII in: {url}")
         
-        # Scoring system
-        scored_targets = []
-        for target in targets:
-            score = 0
-            # Higher score for sensitive keywords
-            for kw in priority_keywords:
-                if kw in target.lower():
-                    score += 10
-            # Lower score for common static/cdn assets
-            if any(static in target.lower() for static in ['cdn', 'static', 'assets', 'images']):
-                score -= 5
-            scored_targets.append((score, target))
-            
-            # Update priority in memory
-            self.memory.upsert_target(target, priority=score)
-            
-        # Sort by score descending
-        scored_targets.sort(key=lambda x: x[0], reverse=True)
-        return [t[1] for t in scored_targets]
+        # Fetch body
+        body = self.run(f"curl -s -L {url} | head -c 50000") # Limit to 50k for context safety
+        clean_target = url.replace("https://", "").replace("http://", "").split("/")[0]
 
-    def save_json_report(self, domain, data):
-        """Saves findings to a structured JSON file in the Reports directory."""
-        import json
-        from datetime import datetime
-        
-        report_dir = "Reports"
-        if not os.path.exists(report_dir):
-            os.makedirs(report_dir)
-            
-        clean_name = domain.replace(".", "_").replace("/", "_")
-        file_path = os.path.join(report_dir, f"{clean_name}.json")
-        
-        report_data = {
-            "domain": domain,
-            "scan_time": datetime.now().isoformat(),
-            "results": data
+        patterns = {
+            "Email": r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}',
+            "API Key (Generic)": r'(?:key|api|token|secret|auth)[-_=:]+([a-zA-Z0-9]{20,})',
+            "Google API Key": r'AIza[0-9A-Za-z-_]{35}',
+            "AWS Access Key": r'AKIA[0-9A-Z]{16}',
+            "S3 Bucket": r'[a-z0-9.-]+\.s3\.amazonaws\.com',
+            "Firebase URL": r'[a-z0-9-]+\.firebaseio\.com'
         }
         
-        with open(file_path, "w") as f:
-            json.dump(report_data, f, indent=4)
-        return file_path
+        found = []
+        for name, regex in patterns.items():
+            matches = re.findall(regex, body, re.IGNORECASE)
+            if matches:
+                # Deduplicate and limit
+                unique_matches = list(set(matches))[:5]
+                found.append(f"[!] {name}: {', '.join(unique_matches)}")
+                # Graph Integration: Link Target to Secret
+                for m in unique_matches:
+                    self.memory.upsert_entity("secret", m, metadata={"category": name})
+                    self.memory.add_relation(clean_target, m, "EXPOSES")
+
+        if not found:
+            return "No obvious secrets or credentials leaked in the landing page HTML."
+        
+        return "--- 🔍 LEAKED SECRETS ANALYSIS ---\n" + "\n".join(found)
 
     def recon_suite(self, url, selected_targets=None):
         """Runs expanded recon with smart target prioritization and parallel execution."""
@@ -235,8 +234,8 @@ class WSLBridgeTools:
                     alive_targets.append(t)
             
             # Smart Heuristic Prioritization
-            process_targets = self.prioritize_targets(list(set(alive_targets)))[:5]
-            # Ensure base target is always there if not in top 5
+            process_targets = self.prioritize_targets(list(set(alive_targets)))[:3] # Reduced for deeper analysis
+            # Ensure base target is always there
             if base_target not in process_targets:
                 process_targets.append(base_target)
         else:
@@ -255,9 +254,9 @@ class WSLBridgeTools:
             fingerprint_res = self.run(f"whatweb -v --color=never --no-errors {target_url}")
             services_res = self.run(f"nmap -F --open -sV {target}")
             
-            # Reflection for Nmap
-            if "No open ports found" in services_res or "0 hosts up" in services_res:
-                services_res += "\nReflection: Nmap found no open ports. This could be due to a firewall blocking pings. Suggestion: Try scanning again with the -Pn flag to skip host discovery."
+            # Advanced Analysis: Sensitive Files & Secrets
+            fuzz_res = self.fuzz_sensitive_files(target_url)
+            secrets_res = self.analyze_secrets(target_url)
 
             headers_res = self.run(f"curl -sI {target_url}")
             
@@ -265,6 +264,8 @@ class WSLBridgeTools:
                 "waf": waf_res,
                 "fingerprint": fingerprint_res,
                 "services": services_res,
+                "fuzzing": fuzz_res,
+                "secrets": secrets_res,
                 "headers": headers_res
             }
             
@@ -273,20 +274,49 @@ class WSLBridgeTools:
             waf_sum = waf_sum[0] if waf_sum else "Not detected"
             self.memory.add_finding(target, "wafw00f", "waf", waf_res, waf_sum)
             
+            # Graph Integration: WAF
+            if "detected" in waf_sum.lower() and "[" in waf_sum:
+                waf_match = re.search(r'\[(.*?)\]', waf_sum)
+                if waf_match:
+                    waf_name = waf_match.group(1)
+                    self.memory.upsert_entity("waf", waf_name)
+                    self.memory.add_relation(target, waf_name, "PROTECTED_BY")
+
             tech_sum = [l for l in fingerprint_res.split('\n') if "Summary :" in l or "Detected Plugins:" in l]
             tech_sum = " ".join(tech_sum[:2]) if tech_sum else "Unknown"
             self.memory.add_finding(target, "whatweb", "tech", fingerprint_res, tech_sum)
             
+            # Graph Integration: Tech
+            tech_matches = re.findall(r'\[ (.*?) \]', fingerprint_res)
+            if tech_matches:
+                for tech_item in tech_matches[0].split(','):
+                    t_name = tech_item.strip().split('[')[0].strip()
+                    if t_name:
+                        self.memory.upsert_entity("tech", t_name)
+                        self.memory.add_relation(target, t_name, "USES_TECH")
+
             ports_sum = [l for l in services_res.split('\n') if "/tcp" in l and "open" in l]
             ports_sum = ", ".join(ports_sum) if ports_sum else "No open ports found"
             self.memory.add_finding(target, "nmap", "ports", services_res, ports_sum)
             
+            if "FOUND:" in fuzz_res:
+                self.memory.add_finding(target, "fuzzer", "leak", fuzz_res, "Sensitive files found!")
+                # Graph Integration: Files
+                file_matches = re.findall(r'FOUND: (.*?)\s\(', fuzz_res)
+                for f_url in file_matches:
+                    f_name = f_url.split('/')[-1]
+                    self.memory.upsert_entity("file", f_name, metadata={"url": f_url})
+                    self.memory.add_relation(target, f_name, "HAS_FILE")
+            
+            if "[!]" in secrets_res:
+                self.memory.add_finding(target, "analyzer", "secrets", secrets_res, "Secrets leaked in HTML")
+
             self.memory.add_finding(target, "curl", "headers", headers_res, "HTTP Headers captured")
             
             report_section = [f"\n=== 🎯 TARGET: {target} ==="]
-            report_section.append(f"\n[*] WAF Analysis...\n{waf_res}")
-            report_section.append(f"\n[*] Fingerprinting...\n{fingerprint_res}")
-            report_section.append(f"\n[*] Service Scan...\n{services_res}")
+            report_section.append(f"\n[*] WAF Analysis...\n{waf_sum}")
+            report_section.append(f"\n[*] Deep Fuzzing & Secrets...\n{fuzz_res}\n{secrets_res}")
+            report_section.append(f"\n[*] Fingerprinting...\n{tech_sum}")
             
             return target, target_intel, "\n".join(report_section)
 
@@ -308,6 +338,11 @@ class WSLBridgeTools:
     def get_intelligence_summary(self, _=None):
         """Retrieves the current state of knowledge from the Blackboard (Shared Memory)."""
         return self.memory.get_blackboard_summary()
+
+    def query_knowledge_graph(self, _=None):
+        """Returns complex relationships and commonalities across targets (Knowledge Graph)."""
+        print("[*] Querying Knowledge Graph for cross-target insights...")
+        return self.memory.get_graph_insights()
 
     def suggest_payloads(self, vulnerability_type):
         """Searches PayloadsAllTheThings for relevant payloads based on the vulnerability type."""

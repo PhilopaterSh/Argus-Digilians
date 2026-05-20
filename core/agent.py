@@ -29,9 +29,10 @@ CRITICAL OPERATIONAL RULES:
 1. PHASE 1 (Connectivity): Always verify if the target is reachable using 'Check_Reachability'.
 2. PHASE 2 (Subdomains): If reachable, execute 'Subdomain_Enumeration' to map the attack surface.
 3. PHASE 3 (Discovery): Perform 'Recon_Suite' on the target for deep intelligence.
-4. PHASE 4 (Memory): Use 'Query_Memory' to get a consolidated view of all discovered data.
-5. PHASE 5 (Exploitation): For each identified vulnerability type, use 'Exploit_Suggester' to find relevant test payloads from PayloadsAllTheThings.
+4. PHASE 4 (Memory): Use 'Query_Memory' to get a consolidated view of all discovered data. Use 'Query_Knowledge_Graph' to identify high-value links between targets (e.g., shared IPs, shared secrets, or common tech stacks).
+5. PHASE 5 (Exploitation): For each identified vulnerability type, use 'Exploit_Suggester' to find relevant test payloads.
 6. PHASE 6 (Analysis): Analyze the findings. Look for:
+   - Lateral Movement opportunities discovered via 'Query_Knowledge_Graph'.
    - Server Fingerprints & Version vulnerabilities.
    - WAF presence and bypass potential.
    - Exposed headers (missing security headers like HSTS, CSP, etc.).

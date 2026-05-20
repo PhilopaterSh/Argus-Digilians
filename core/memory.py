@@ -38,6 +38,32 @@ class ArgusMemory:
             )
         ''')
 
+        # [NEW] Knowledge Graph Nodes (Entities)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS entities (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                type TEXT, -- 'domain', 'ip', 'email', 'key', 'tech', 'software', 'vulnerability'
+                value TEXT UNIQUE,
+                metadata TEXT, -- JSON storage for extra details
+                first_seen DATETIME
+            )
+        ''')
+
+        # [NEW] Knowledge Graph Edges (Relationships)
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS relations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                source_id INTEGER,
+                target_id INTEGER,
+                type TEXT, -- 'HOSTS', 'USES_TECH', 'HAS_FILE', 'SHARED_CREDENTIAL', 'LINKED_TO'
+                strength FLOAT DEFAULT 1.0,
+                timestamp DATETIME,
+                FOREIGN KEY (source_id) REFERENCES entities(id),
+                FOREIGN KEY (target_id) REFERENCES entities(id),
+                UNIQUE(source_id, target_id, type)
+            )
+        ''')
+
         # Table for global AI-ready summaries
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS global_state (
@@ -49,6 +75,79 @@ class ArgusMemory:
 
         conn.commit()
         conn.close()
+
+    def upsert_entity(self, entity_type, value, metadata=None):
+        """Adds or updates a node in the Knowledge Graph."""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        now = datetime.now().isoformat()
+        meta_json = json.dumps(metadata) if metadata else None
+        
+        cursor.execute('''
+            INSERT INTO entities (type, value, metadata, first_seen)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(value) DO UPDATE SET
+                metadata = COALESCE(excluded.metadata, entities.metadata)
+        ''', (entity_type, value, meta_json, now))
+        
+        cursor.execute('SELECT id FROM entities WHERE value = ?', (value,))
+        entity_id = cursor.fetchone()[0]
+        
+        conn.commit()
+        conn.close()
+        return entity_id
+
+    def add_relation(self, source_val, target_val, rel_type, strength=1.0):
+        """Creates a link (Edge) between two entities in the Graph."""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        now = datetime.now().isoformat()
+        
+        try:
+            # Ensure entities exist
+            cursor.execute('SELECT id FROM entities WHERE value = ?', (source_val,))
+            s_row = cursor.fetchone()
+            cursor.execute('SELECT id FROM entities WHERE value = ?', (target_val,))
+            t_row = cursor.fetchone()
+            
+            if s_row and t_row:
+                cursor.execute('''
+                    INSERT INTO relations (source_id, target_id, type, strength, timestamp)
+                    VALUES (?, ?, ?, ?, ?)
+                    ON CONFLICT(source_id, target_id, type) DO UPDATE SET
+                        strength = MAX(relations.strength, excluded.strength),
+                        timestamp = excluded.timestamp
+                ''', (s_row[0], t_row[0], rel_type, strength, now))
+        except Exception as e:
+            print(f"[!] Graph Error: {e}")
+        finally:
+            conn.commit()
+            conn.close()
+
+    def get_graph_insights(self):
+        """Returns a high-level overview of entity relationships for AI reasoning."""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        # Query for cross-target commonalities
+        cursor.execute('''
+            SELECT e1.value, r.type, e2.value
+            FROM relations r
+            JOIN entities e1 ON r.source_id = e1.id
+            JOIN entities e2 ON r.target_id = e2.id
+            ORDER BY r.timestamp DESC
+            LIMIT 100
+        ''')
+        
+        rows = cursor.fetchall()
+        conn.close()
+        
+        insights = []
+        for s, t, o in rows:
+            insights.append(f"({s}) --[{t}]--> ({o})")
+            
+        return "\n".join(insights)
+
 
     def upsert_target(self, domain, parent_domain=None, priority=0):
         conn = sqlite3.connect(self.db_path)
