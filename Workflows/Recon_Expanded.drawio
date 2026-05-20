@@ -1,0 +1,79 @@
+<mxfile host="65bd71144e">
+    <diagram id="hw0ANjKr0fZ8bpzP9VN6" name="Recon Phase">
+        <mxGraphModel dx="1157" dy="779" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="nbvoFIbavPUpmuXw4qMX-1" value="PHASE 3B: ACTIVE RECONNAISSANCE (Direct Interaction)" style="swimlane;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;startSize=30;fontStyle=1;fontSize=14;" vertex="1" parent="1">
+                    <mxGeometry x="40" y="320" width="520" height="400" as="geometry"/>
+                </mxCell>
+                <mxCell id="nbvoFIbavPUpmuXw4qMX-2" value="&lt;b&gt;Port Scanning&lt;/b&gt;&lt;br/&gt;Nmap, Masscan&lt;br/&gt;&lt;font color=&#39;#ff0000&#39;&gt;Risk: HIGH&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#b85450;" vertex="1" parent="nbvoFIbavPUpmuXw4qMX-1">
+                    <mxGeometry x="20" y="50" width="140" height="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="nbvoFIbavPUpmuXw4qMX-3" value="&lt;b&gt;Vuln Scanning&lt;/b&gt;&lt;br/&gt;Nuclei, Nikto, Nessus&lt;br/&gt;&lt;font color=&#39;#ff0000&#39;&gt;Risk: HIGH&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#b85450;" vertex="1" parent="nbvoFIbavPUpmuXw4qMX-1">
+                    <mxGeometry x="190" y="50" width="140" height="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="nbvoFIbavPUpmuXw4qMX-4" value="&lt;b&gt;Network Mapping&lt;/b&gt;&lt;br/&gt;Traceroute, Nmap&lt;br/&gt;&lt;font color=&#39;#cc6600&#39;&gt;Risk: MED/HIGH&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#b85450;" vertex="1" parent="nbvoFIbavPUpmuXw4qMX-1">
+                    <mxGeometry x="360" y="50" width="140" height="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="nbvoFIbavPUpmuXw4qMX-5" value="&lt;b&gt;Web Spidering&lt;/b&gt;&lt;br/&gt;Katana, Gospider, Burp&lt;br/&gt;&lt;font color=&#39;#009900&#39;&gt;Risk: LOW/MED&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#b85450;" vertex="1" parent="nbvoFIbavPUpmuXw4qMX-1">
+                    <mxGeometry x="20" y="160" width="140" height="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="nbvoFIbavPUpmuXw4qMX-6" value="&lt;b&gt;OS Fingerprinting&lt;/b&gt;&lt;br/&gt;Nmap -O, Xprobe2&lt;br/&gt;&lt;font color=&#39;#009900&#39;&gt;Risk: LOW&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#b85450;" vertex="1" parent="nbvoFIbavPUpmuXw4qMX-1">
+                    <mxGeometry x="190" y="160" width="140" height="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="nbvoFIbavPUpmuXw4qMX-7" value="&lt;b&gt;Service Enum&lt;/b&gt;&lt;br/&gt;Nmap -sV, Netcat&lt;br/&gt;&lt;font color=&#39;#009900&#39;&gt;Risk: LOW&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#b85450;" vertex="1" parent="nbvoFIbavPUpmuXw4qMX-1">
+                    <mxGeometry x="360" y="160" width="140" height="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="nbvoFIbavPUpmuXw4qMX-8" value="&lt;b&gt;Active Subdomain&lt;/b&gt;&lt;br/&gt;ffuf, feroxbuster, dirsearch&lt;br/&gt;&lt;font color=&#39;#cc6600&#39;&gt;Risk: MED&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#b85450;" vertex="1" parent="nbvoFIbavPUpmuXw4qMX-1">
+                    <mxGeometry x="150" y="270" width="220" height="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="nbvoFIbavPUpmuXw4qMX-9" value="PHASE 3A: PASSIVE RECONNAISSANCE (No Contact)" style="swimlane;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;startSize=30;fontStyle=1;fontSize=14;" vertex="1" parent="1">
+                    <mxGeometry x="610" y="320" width="520" height="400" as="geometry"/>
+                </mxCell>
+                <mxCell id="nbvoFIbavPUpmuXw4qMX-10" value="&lt;b&gt;Search Engines&lt;/b&gt;&lt;br/&gt;Google, Shodan, Censys&lt;br/&gt;&lt;font color=&#39;#009900&#39;&gt;Risk: VERY LOW&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;" vertex="1" parent="nbvoFIbavPUpmuXw4qMX-9">
+                    <mxGeometry x="20" y="50" width="140" height="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="nbvoFIbavPUpmuXw4qMX-11" value="&lt;b&gt;WHOIS Lookup&lt;/b&gt;&lt;br/&gt;whois, WhoisFreaks&lt;br/&gt;&lt;font color=&#39;#009900&#39;&gt;Risk: VERY LOW&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;" vertex="1" parent="nbvoFIbavPUpmuXw4qMX-9">
+                    <mxGeometry x="190" y="50" width="140" height="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="nbvoFIbavPUpmuXw4qMX-12" value="&lt;b&gt;DNS Recon (Full Suite)&lt;/b&gt;&lt;br/&gt;dig, nslookup, host, dnsenum, fierce, dnsrecon&lt;br/&gt;&lt;font color=&#39;#009900&#39;&gt;Risk: VERY LOW&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;" vertex="1" parent="nbvoFIbavPUpmuXw4qMX-9">
+                    <mxGeometry x="360" y="40" width="140" height="90" as="geometry"/>
+                </mxCell>
+                <mxCell id="nbvoFIbavPUpmuXw4qMX-13" value="&lt;b&gt;Web Archive&lt;/b&gt;&lt;br/&gt;Wayback, Gau, Waybackurls&lt;br/&gt;&lt;font color=&#39;#009900&#39;&gt;Risk: VERY LOW&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;" vertex="1" parent="nbvoFIbavPUpmuXw4qMX-9">
+                    <mxGeometry x="20" y="160" width="140" height="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="nbvoFIbavPUpmuXw4qMX-14" value="&lt;b&gt;Social Media / OSINT&lt;/b&gt;&lt;br/&gt;theHarvester, LinkedIn&lt;br/&gt;&lt;font color=&#39;#009900&#39;&gt;Risk: VERY LOW&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;" vertex="1" parent="nbvoFIbavPUpmuXw4qMX-9">
+                    <mxGeometry x="190" y="160" width="140" height="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="nbvoFIbavPUpmuXw4qMX-15" value="&lt;b&gt;Code Repos&lt;/b&gt;&lt;br/&gt;GitHub, GitLab, Trufflehog&lt;br/&gt;&lt;font color=&#39;#009900&#39;&gt;Risk: VERY LOW&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;" vertex="1" parent="nbvoFIbavPUpmuXw4qMX-9">
+                    <mxGeometry x="360" y="160" width="140" height="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="nbvoFIbavPUpmuXw4qMX-16" value="&lt;b&gt;Cloud &amp; Bucket Recon&lt;/b&gt;&lt;br/&gt;CloudEnum, S3Scanner&lt;br/&gt;&lt;font color=&#39;#009900&#39;&gt;Risk: VERY LOW&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;" vertex="1" parent="nbvoFIbavPUpmuXw4qMX-9">
+                    <mxGeometry x="150" y="270" width="220" height="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="nbvoFIbavPUpmuXw4qMX-17" value="STEP 1: START&lt;br/&gt;Initialize AI Agent" style="ellipse;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontStyle=1;shadow=1;" vertex="1" parent="1">
+                    <mxGeometry x="515" y="10" width="140" height="70" as="geometry"/>
+                </mxCell>
+                <mxCell id="nbvoFIbavPUpmuXw4qMX-18" value="STEP 2: SCOPE DEFINITION&lt;br/&gt;In-Scope vs Out-of-Scope" style="shape=parallelogram;perimeter=parallelogramPerimeter;whiteSpace=wrap;html=1;fixedSize=1;fillColor=#dae8fc;strokeColor=#6c8ebf;shadow=1;fontStyle=1;" vertex="1" parent="1">
+                    <mxGeometry x="460" y="100" width="250" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="nbvoFIbavPUpmuXw4qMX-19" value="STEP 3: DATA SANITIZATION&lt;br/&gt;Clean &amp; Filter Wildcards" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;shadow=1;fontStyle=1;" vertex="1" parent="1">
+                    <mxGeometry x="485" y="180" width="200" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="nbvoFIbavPUpmuXw4qMX-20" value="STEP 4: LIVE CHECK&lt;br/&gt;Initial Connectivity (Ping/Curl)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;shadow=1;fontStyle=1;" vertex="1" parent="1">
+                    <mxGeometry x="485" y="250" width="200" height="50" as="geometry"/>
+                </mxCell>
+                <mxCell id="nbvoFIbavPUpmuXw4qMX-21" value="STEP 5: SERVICE VERIFICATION&lt;br/&gt;Httpx &amp; Gowitness Screenshots" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontStyle=1;" vertex="1" parent="1">
+                    <mxGeometry x="460" y="750" width="250" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="nbvoFIbavPUpmuXw4qMX-22" value="STEP 6: TECH FINGERPRINTING&lt;br/&gt;WhatWeb &amp; Wappalyzer Analysis" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontStyle=1;" vertex="1" parent="1">
+                    <mxGeometry x="460" y="830" width="250" height="60" as="geometry"/>
+                </mxCell>
+                <mxCell id="nbvoFIbavPUpmuXw4qMX-23" value="STEP 7: FINAL AI ANALYSIS&lt;br&gt;STRATEGY SELECTION" style="shape=trapezoid;perimeter=trapezoidPerimeter;whiteSpace=wrap;html=1;fixedSize=1;rounded=0;fillColor=#e1d5e7;strokeColor=#9673a6;fontStyle=1;shadow=1;" vertex="1" parent="1">
+                    <mxGeometry x="435" y="910" width="300" height="90" as="geometry"/>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
+</mxfile>
