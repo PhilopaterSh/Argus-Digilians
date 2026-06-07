@@ -6,6 +6,8 @@ Argus_venv/
 .env
 
 # Temporary and Sync Files
+.tmp.driveupload/
+.tmp.drivedownload/
 *.tmp
 *.log
 wsl_output.txt
