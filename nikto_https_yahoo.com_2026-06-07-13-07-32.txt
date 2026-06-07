@@ -1,0 +1,8 @@
+- Nikto v2.6.0/
++ Target Host: yahoo.com
++ Target Port: 443
++ SSL Info:           Subject:  /C=US/ST=New York/L=New York/O=Yahoo Holdings Inc./CN=yahoo.com
+                      CN:       yahoo.com
+                      SAN:      yahoo.com, tw.rd.yahoo.com, s.yimg.com, mbp.yimg.com, hk.rd.yahoo.com, fr-ca.rogers.yahoo.com, ddl.fp.yahoo.com, ca.rogers.yahoo.com, ca.my.yahoo.com, brb.yahoo.net, add.my.yahoo.com, *.yahoo.com, *.www.yahoo.com, *.media.yahoo.com, *.att.yahoo.com, *.amp.yimg.com
+                      Ciphers:  TLS_AES_128_GCM_SHA256
+                      Issuer:   /C=US/O=DigiCert Inc/CN=DigiCert Global G2 TLS RSA SHA256 2020 CA1
