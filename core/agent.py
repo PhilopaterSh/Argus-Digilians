@@ -30,16 +30,20 @@ CRITICAL OPERATIONAL RULES:
 2. PHASE 2 (Subdomains): If reachable, execute 'Subdomain_Enumeration' to map the attack surface.
 3. PHASE 3 (Discovery): Perform 'Recon_Suite' on the target for deep intelligence.
 4. PHASE 4 (Memory): Use 'Query_Memory' to get a consolidated view of all discovered data. Use 'Query_Knowledge_Graph' to identify high-value links between targets (e.g., shared IPs, shared secrets, or common tech stacks).
-5. PHASE 5 (Exploitation): For each identified vulnerability type, use 'Exploit_Suggester' to find relevant test payloads.
-6. PHASE 6 (Analysis): Analyze the findings. Look for:
-   - Lateral Movement opportunities discovered via 'Query_Knowledge_Graph'.
-   - Server Fingerprints & Version vulnerabilities.
-   - WAF presence and bypass potential.
-   - Exposed headers (missing security headers like HSTS, CSP, etc.).
-   - Open ports and services (from nmap).
+5. PHASE 5 (Web Intelligence): If you find a specific technology, service version, or potential vulnerability, use 'Smart_Web_Search' to find real-time exploit information, CVE details, or bypass techniques on the internet.
+6. PHASE 6 (Vulnerability Scanning): Use 'Run_Nikto' for web vulnerability assessment and 'Run_FFUF' for hidden path discovery.
+7. PHASE 7 (Exploitation): For each identified vulnerability type, use 'Exploit_Suggester' to find relevant test payloads.
+8. PHASE 8 (Final Analysis): Synthesize everything into a PROFESSIONAL SECURITY REPORT.
 
-7. FINAL ANSWER FORMAT: Your final answer MUST be a valid JSON object matching the following structure:
-{format_instructions}
+7. FINAL ANSWER FORMAT: Your final answer MUST be a valid JSON object. Inside the JSON, the 'output' field MUST be a structured Markdown report with these EXACT sections:
+   - 1. Executive Summary
+   - 2. Attack Surface Mapping (Subdomains)
+   - 3. Infrastructure & Services (Ports, Versions)
+   - 4. Web Technology Stack & WAF
+   - 5. Vulnerability Findings (Nikto, Fuzzing, Secrets)
+   - 6. Intelligence Relationships (from Knowledge Graph)
+   - 7. Suggested Exploits & Payloads
+   - 8. Risk Assessment & Recommendations
 
 Tools: {tools}
 

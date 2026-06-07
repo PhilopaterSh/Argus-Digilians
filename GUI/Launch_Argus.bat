@@ -6,7 +6,7 @@ echo ---------------------------------------------------
 echo.
 
 :: Check for virtual environment (updated path)
-if not exist "..\02_AI_Environment\.venv" (
+if not exist "..\Argus_venv" (
     echo [ERROR] Virtual Environment not found! Run Master_Installer first.
     pause
     exit
@@ -17,7 +17,7 @@ set PORT=12189
 
 echo [*] Activating environment...
 :: Updated path to activate.bat
-call ..\02_AI_Environment\.venv\Scripts\activate.bat
+call ..\Argus_venv\Scripts\activate.bat
 
 echo [*] Starting Studio on http://localhost:%PORT%
 echo [*] Press Ctrl+C to stop.

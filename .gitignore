@@ -1,6 +1,6 @@
 # Python
 __pycache__/
-.venv/
+Argus_venv/
 *.py[cod]
 *$py.class
 .env

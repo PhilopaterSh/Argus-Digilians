@@ -13,10 +13,10 @@ set HEALTHY=YES
 
 :: 1. Check Python & Venv
 echo [*] Checking Python Environment...
-if exist ".venv\Scripts\python.exe" (
+if exist "Argus_venv\Scripts\python.exe" (
     echo [OK] Virtual Environment found at Root.
 ) else (
-    echo [ERR] Virtual Environment ^(.venv^) MISSING at Root.
+    echo [ERR] Virtual Environment ^(Argus_venv^) MISSING at Root.
     set HEALTHY=NO
 )
 

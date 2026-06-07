@@ -15,3 +15,4 @@ class SecurityReport(BaseModel):
     findings: List[Finding] = Field(description="List of specific technical security findings")
     overall_risk_score: int = Field(description="Overall risk score from 1 to 10", ge=1, le=10)
     next_steps: List[str] = Field(description="Recommended actions for further deep testing")
+    output: Optional[str] = Field(description="The full professional structured Markdown report")

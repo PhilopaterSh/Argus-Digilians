@@ -4,11 +4,10 @@
 
 echo Testing for Admin Privileges...
 net session >nul 2>&1
-if %errorLevel% neq 0 (
+if errorlevel 1 (
     echo [!] This script MUST be run as Administrator.
-    echo [!] Attempting to elevate...
-    powershell -Command "Start-Process -FilePath '%0' -Verb RunAs"
-    exit /b
+    echo [!] Open PowerShell as Administrator and run INSTALL_EVERYTHING.ps1 again.
+    exit /b 1
 )
 
 echo ========================================================
@@ -25,16 +24,28 @@ echo [2/5] Checking WSL and Virtual Machine Platform...
 powershell -Command "if ((Get-WindowsOptionalFeature -Online -FeatureName Microsoft-Windows-Subsystem-Linux).State -ne 'Enabled') { Enable-WindowsOptionalFeature -Online -FeatureName Microsoft-Windows-Subsystem-Linux -All -NoRestart } else { Write-Host '[OK] WSL is already enabled.' -ForegroundColor Green }"
 powershell -Command "if ((Get-WindowsOptionalFeature -Online -FeatureName VirtualMachinePlatform).State -ne 'Enabled') { Enable-WindowsOptionalFeature -Online -FeatureName VirtualMachinePlatform -All -NoRestart } else { Write-Host '[OK] Virtual Machine Platform is already enabled.' -ForegroundColor Green }"
 
+:: Validate WSL command availability before proceeding to distro checks
+where wsl >nul 2>&1
+if errorlevel 1 (
+    echo [ERROR] WSL command not available after enabling features. Please reboot and rerun the installer.
+    exit /b 1
+)
+
 echo [3/5] Checking Kali Linux Installation...
 powershell -NoProfile -Command "wsl -l -q | Where-Object { $_ -like '*kali-linux*' }" >nul 2>&1
-if %errorlevel% equ 0 (
+if not errorlevel 1 (
     echo [OK] Kali Linux is already installed.
 ) else (
     echo [!] Kali Linux not found. Installing...
-    :: Check if it's already registered but not installed (rare)
+    :: Check if it's available for installation
     powershell -NoProfile -Command "wsl --list --online | Where-Object { $_ -like '*kali-linux*' }" >nul 2>&1
-    if %errorlevel% equ 0 (
+    if not errorlevel 1 (
         wsl --install -d kali-linux --web-download
+        if errorlevel 1 (
+            echo [ERROR] Kali Linux installation failed.
+            exit /b 1
+        )
+        echo [OK] Kali Linux has been installed.
     ) else (
         echo [ERROR] Kali Linux is not available for installation.
         exit /b 1

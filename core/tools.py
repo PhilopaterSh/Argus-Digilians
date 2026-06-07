@@ -2,8 +2,12 @@ import subprocess
 import os
 import paramiko
 import re
+import json
+from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor
 from dotenv import load_dotenv
+from langchain_community.tools import DuckDuckGoSearchRun
+from langchain_community.utilities import DuckDuckGoSearchAPIWrapper
 
 import threading
 
@@ -335,6 +339,44 @@ class WSLBridgeTools:
         
         return full_text_report_str
 
+    def prioritize_targets(self, targets):
+        """Sorts targets by potential value (shorter domains, root domains first)."""
+        return sorted(targets, key=len)
+
+    def enumerate_subdomains(self, domain):
+        """Fast subdomain discovery using the internal 5-phase pipeline."""
+        print(f"[*] Starting deep subdomain enumeration for: {domain}")
+        # Call the native argus_recon command inside Kali
+        res = self.run(f"argus_recon {domain}")
+        
+        # Integration: Save discovered subdomains to targets table
+        if "TOP VERIFIED SUBDOMAINS:" in res:
+            try:
+                # Simple parser to find domains in the report
+                capture = False
+                for line in res.split('\n'):
+                    if "TOP VERIFIED SUBDOMAINS:" in line:
+                        capture = True
+                        continue
+                    if capture and "INFRASTRUCTURE POINTERS" in line:
+                        break
+                    if capture and line.strip() and not line.startswith("["):
+                        sub = line.strip().replace("https://", "").replace("http://", "")
+                        self.memory.upsert_target(sub, parent_domain=domain)
+            except Exception as e:
+                print(f"[!] Error parsing/saving subdomains: {e}")
+
+        return res
+
+    def save_json_report(self, domain, data):
+        """Saves structured intel to a JSON file for persistence."""
+        os.makedirs("reports", exist_ok=True)
+        path = f"reports/intel_{domain}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+        with open(path, "w") as f:
+            json.dump(data, f, indent=4)
+        print(f"[+] Structured intelligence saved to: {path}")
+        return path
+
     def get_intelligence_summary(self, _=None):
         """Retrieves the current state of knowledge from the Blackboard (Shared Memory)."""
         return self.memory.get_blackboard_summary()
@@ -393,4 +435,58 @@ class WSLBridgeTools:
         reflection += f"\nSource: PayloadsAllTheThings/{matched_dir}"
         
         return reflection
+
+    def smart_web_search(self, query):
+        """Performs a real-time web search for security intelligence (CVEs, exploits, tech info)."""
+        print(f"[*] Searching the web for: {query}...")
+        try:
+            wrapper = DuckDuckGoSearchAPIWrapper(max_results=10)
+            search = DuckDuckGoSearchRun(api_wrapper=wrapper)
+            results = search.run(query)
+            
+            if not results:
+                return "No search results found on the web."
+            
+            # Save to memory for potential future use
+            self.memory.upsert_entity("web_intelligence", query, metadata={"results": results[:500]}) # Truncated for meta
+            
+            return f"--- 🌐 WEB INTELLIGENCE REPORT ---\n\n{results}"
+        except Exception as e:
+            return f"Web Search Error: {str(e)}"
+
+    def run_nikto(self, url):
+        """Runs Nikto vulnerability scanner inside Kali against a web target."""
+        print(f"[*] Starting Nikto Vulnerability Scan for: {url}")
+        # -nointeractive: no prompts, -maxtime: safety cap
+        cmd = f"nikto -h {url} -nointeractive -maxtime 120s -Format txt"
+        res = self.run(cmd)
+        
+        # Parse and save findings
+        findings = [l for l in res.split('\n') if l.strip().startswith("+")]
+        if findings:
+            clean_target = url.replace("https://", "").replace("http://", "").split("/")[0]
+            for f in findings:
+                self.memory.add_finding(clean_target, "nikto", "vulnerability", f, "Potential vulnerability detected")
+        
+        return f"--- 🛠️ NIKTO VULNERABILITY REPORT ---\n{res}"
+
+    def run_ffuf_discovery(self, url):
+        """Runs FFUF for fast directory discovery inside Kali."""
+        clean_url = url.rstrip('/')
+        # Ensure we have a wordlist, default to one in Kali's SecLists
+        wordlist = "/usr/share/seclists/Discovery/Web-Content/common.txt"
+        
+        print(f"[*] Starting FFUF Path Discovery for: {clean_url}")
+        # -mc 200,301,302: status codes, -s: silent/quiet
+        cmd = f"ffuf -w {wordlist} -u {clean_url}/FUZZ -mc 200,301,302,403 -s"
+        res = self.run(cmd)
+        
+        if res.strip():
+            paths = res.strip().splitlines()
+            clean_target = url.replace("https://", "").replace("http://", "").split("/")[0]
+            for p in paths[:20]: # Limit saving to memory
+                self.memory.add_finding(clean_target, "ffuf", "path", p, "Hidden path discovered")
+            return f"--- 📁 FFUF DISCOVERY REPORT ---\nDiscovered {len(paths)} paths. Top findings:\n" + "\n".join(paths[:40])
+        
+        return "FFUF completed. No notable paths found."
 

@@ -53,6 +53,7 @@ powershell -Command "Get-AppExecutionAlias | Where-Object { $_.Name -match 'pyth
 ```
 
 ### 3.3 Core Libraries
+- **Argus_venv:** The framework uses an isolated Python virtual environment named `Argus_venv` at the project root.
 - **LangChain:** Communicates with Ollama.
 - **FAISS-CPU:** Local vector storage for intelligence findings.
 - **Streamlit:** Powers the graphical Multi-Agent Studio.

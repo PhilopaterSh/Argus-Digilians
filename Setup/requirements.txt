@@ -13,4 +13,3 @@ pypdf
 python-dotenv
 paramiko
 torchvision
-streamlit

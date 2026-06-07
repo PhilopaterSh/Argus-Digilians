@@ -8,13 +8,13 @@ title Argus AI - Intelligence CLI
 cls
 
 :: 1. Environment Check
-if not exist "venv\" (
+if not exist "Argus_venv\" (
     echo [!] Virtual environment not found. Running setup...
     call INSTALL_EVERYTHING.bat
 )
 
 :: 2. Activate Venv
-call venv\Scripts\activate.bat
+call Argus_venv\Scripts\activate.bat
 
 :: 3. Run CLI Analysis
 echo [!] Starting Argus Autonomous Agent...

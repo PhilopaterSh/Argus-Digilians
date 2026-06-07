@@ -1,323 +1,382 @@
-#!/bin/bash
-
-# --- ARGUS ADVANCED KALI INSTALLER ---
-# Inspired by PhilopaterSh's Tools_Install.sh
-# Optimized for WSL Kali environment
+#!/usr/bin/env bash
+set -u
 
 echo "--------------------------------------------------------"
-echo "🛡️  ARGUS KALI ADVANCED ENVIRONMENT SETUP"
+echo "ARGUS KALI ADVANCED ENVIRONMENT SETUP"
 echo "--------------------------------------------------------"
 
-# 1. System Update & Base Dependencies
-echo "[*] Checking for base dependencies..."
-BASE_DEPS=("curl" "wget" "git" "python3-pip" "python3-venv" "golang" "nodejs" "npm" "build-essential" "libpcap-dev" "pipx" "jq" "sshd" "unzip")
-MISSING_DEPS=()
-for dep in "${BASE_DEPS[@]}"; do
-    if ! command -v "$dep" &> /dev/null && [ "$dep" != "sshd" ] && [ "$dep" != "golang" ] && [ "$dep" != "nodejs" ]; then
-        MISSING_DEPS+=("$dep")
-    elif [ "$dep" == "golang" ] && ! command -v go &> /dev/null; then
-        MISSING_DEPS+=("golang")
-    elif [ "$dep" == "nodejs" ] && ! command -v node &> /dev/null; then
-        MISSING_DEPS+=("nodejs")
-    elif [ "$dep" == "sshd" ] && ! [ -f "/usr/sbin/sshd" ]; then
-        MISSING_DEPS+=("openssh-server")
-    else
-        ((ALREADY_COUNT++))
-    fi
-done
+INSTALLED_COUNT=0
+ALREADY_COUNT=0
+FAILED_OPTIONAL=()
 
-if [ ${#MISSING_DEPS[@]} -gt 0 ]; then
-    echo "[*] Missing dependencies: ${MISSING_DEPS[*]}. Updating repositories..."
-    sudo apt update -y
-    sudo apt install -y "${MISSING_DEPS[@]}"
-    ((INSTALLED_COUNT+=${#MISSING_DEPS[@]}))
-else
-    echo "[OK] All base dependencies are present."
-fi
+retry() {
+    local max_attempts="$1"
+    local delay_seconds="$2"
+    shift 2
 
-# 1.5. Configure SSH for WSL Bridge (Self-Healing)
-if ! [ -f "/etc/ssh/ssh_host_rsa_key" ]; then
-    echo "[*] Configuring SSH Server for Argus Bridge..."
-    sudo mkdir -p /run/sshd
-    sudo ssh-keygen -A 2>/dev/null
-    # Enable Password Authentication and ensure Port 22 is explicitly listening
-    sudo sed -i 's/^#PasswordAuthentication yes/PasswordAuthentication yes/' /etc/ssh/sshd_config
-    sudo sed -i 's/^#Port 22/Port 22/' /etc/ssh/sshd_config
-    sudo sed -i 's/^#ListenAddress 0.0.0.0/ListenAddress 0.0.0.0/' /etc/ssh/sshd_config
-    ((INSTALLED_COUNT++))
-else
-    echo "[OK] SSH Server already configured."
-    ((ALREADY_COUNT++))
-fi
+    local attempt=1
+    while true; do
+        "$@"
+        local rc=$?
+        if [ "$rc" -eq 0 ]; then
+            return 0
+        fi
+        if [ "$attempt" -ge "$max_attempts" ]; then
+            return "$rc"
+        fi
+        echo "[WARN] Command failed with exit code $rc. Retrying in ${delay_seconds}s ($attempt/$max_attempts)..."
+        sleep "$delay_seconds"
+        attempt=$((attempt + 1))
+    done
+}
 
-# 2. Go Environment Configuration
-# ... (existing code for GOPATH)
-# 3. PDTM (ProjectDiscovery Tool Manager) Setup
-if ! command -v pdtm &> /dev/null; then
-    echo "[*] Installing PDTM for automated tool management..."
-    go install -v github.com/projectdiscovery/pdtm/cmd/pdtm@latest
-    # Move binary to a global location
-    if [ -f "$HOME/go/bin/pdtm" ]; then
-        sudo cp "$HOME/go/bin/pdtm" /usr/local/bin/pdtm
-    elif [ -f "/root/go/bin/pdtm" ]; then
-        sudo cp "/root/go/bin/pdtm" /usr/local/bin/pdtm
-    fi
-    echo "[*] Deploying ALL ProjectDiscovery tools via PDTM..."
-    /usr/local/bin/pdtm -ia
-else
-    echo "[OK] PDTM is already installed. Skipping tool deployment."
-fi
+fail() {
+    echo "[ERROR] $*"
+    exit 1
+}
 
-# Link all installed PDTM tools to /usr/local/bin for system-wide access
-# We use /root/.pdtm/go/bin because that's where pdtm -ia installs them when run as root
-echo "[*] Ensuring ProjectDiscovery tools are linked..."
-if [ -d "/root/.pdtm/go/bin" ]; then
-    for tool_path in "/root/.pdtm/go/bin"/*; do
-        if [ -f "$tool_path" ]; then
-            tool_name=$(basename "$tool_path")
-            if [ ! -f "/usr/local/bin/$tool_name" ]; then
-                sudo ln -sf "$tool_path" /usr/local/bin/"$tool_name"
-            fi
+warn_optional() {
+    echo "[WARN] Optional install failed: $*"
+    FAILED_OPTIONAL+=("$*")
+}
+
+have_cmd() {
+    command -v "$1" >/dev/null 2>&1
+}
+
+apt_install_missing() {
+    local packages=("$@")
+    local missing=()
+
+    for package in "${packages[@]}"; do
+        if ! dpkg -s "$package" >/dev/null 2>&1; then
+            missing+=("$package")
+        else
+            ALREADY_COUNT=$((ALREADY_COUNT + 1))
         fi
     done
-fi
 
-# 4. Specialized Tools (APT)
-echo "[*] Installing core security utilities via APT..."
-APT_TOOLS=("nmap" "whatweb" "wafw00f" "whois" "nikto" "theharvester" "recon-ng" "spiderfoot" "amass" "gobuster" "ffuf" "fierce" "dnsenum" "dnsrecon" "dnsutils")
-for tool in "${APT_TOOLS[@]}"; do
-    if ! command -v "$tool" &> /dev/null; then
-        echo "[+] Installing $tool..."
-        sudo apt install -y "$tool"
-        ((INSTALLED_COUNT++))
-    else
-        echo "[OK] $tool is already installed."
-        ((ALREADY_COUNT++))
+    if [ "${#missing[@]}" -eq 0 ]; then
+        echo "[OK] APT packages already present: ${packages[*]}"
+        return 0
     fi
+
+    echo "[INFO] Installing APT packages: ${missing[*]}"
+    retry 3 10 apt-get install -y "${missing[@]}" || return 1
+    INSTALLED_COUNT=$((INSTALLED_COUNT + ${#missing[@]}))
+}
+
+install_go_tool() {
+    local binary="$1"
+    local module="$2"
+
+    if have_cmd "$binary"; then
+        echo "[OK] $binary already installed."
+        ALREADY_COUNT=$((ALREADY_COUNT + 1))
+        return 0
+    fi
+
+    echo "[INFO] Installing Go tool: $binary"
+    retry 3 10 go install "$module" || return 1
+
+    local go_bin
+    go_bin="$(go env GOPATH 2>/dev/null)/bin/$binary"
+    if [ -x "$go_bin" ]; then
+        ln -sf "$go_bin" "/usr/local/bin/$binary"
+    elif [ -x "/root/go/bin/$binary" ]; then
+        ln -sf "/root/go/bin/$binary" "/usr/local/bin/$binary"
+    else
+        return 1
+    fi
+
+    INSTALLED_COUNT=$((INSTALLED_COUNT + 1))
+}
+
+install_pipx_tool() {
+    local binary="$1"
+    local package="$2"
+
+    if have_cmd "$binary"; then
+        echo "[OK] $binary already installed."
+        ALREADY_COUNT=$((ALREADY_COUNT + 1))
+        return 0
+    fi
+
+    echo "[INFO] Installing Python tool with pipx: $package"
+    retry 3 10 pipx install "$package" || return 1
+    if [ -d "/root/.local/bin" ]; then
+        find /root/.local/bin -maxdepth 1 -type f -executable -exec ln -sf {} /usr/local/bin/ \;
+    fi
+    have_cmd "$binary" || return 1
+    INSTALLED_COUNT=$((INSTALLED_COUNT + 1))
+}
+
+install_git_repo() {
+    local name="$1"
+    local repo="$2"
+    local target="$3"
+
+    if [ -d "$target/.git" ] || [ -d "$target" ]; then
+        echo "[OK] $name already present at $target."
+        ALREADY_COUNT=$((ALREADY_COUNT + 1))
+        return 0
+    fi
+
+    echo "[INFO] Cloning $name..."
+    mkdir -p "$(dirname "$target")"
+    retry 3 10 git clone --depth 1 "$repo" "$target" || return 1
+    INSTALLED_COUNT=$((INSTALLED_COUNT + 1))
+}
+
+echo "[INFO] Running preflight checks..."
+[ "$(id -u)" -eq 0 ] || fail "Run this script as root inside Kali/WSL."
+have_cmd apt-get || fail "apt-get is not available. This installer expects Kali/Debian."
+
+echo "[INFO] Waiting for APT/dpkg locks..."
+while fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 || fuser /var/lib/dpkg/lock >/dev/null 2>&1; do
+    echo "[WARN] Another package manager is running. Waiting..."
+    sleep 3
 done
 
-# 5. Manual & Custom Tooling (Git / Go / Python)
-echo "[*] Checking Go-based utilities..."
-GO_TOOLS=("assetfinder" "anew" "puredns" "goaltdns")
-GO_REPOS=("github.com/tomnomnom/assetfinder@latest" "github.com/tomnomnom/anew@latest" "github.com/d3mondev/puredns/v2@latest" "github.com/subfinder/goaltdns@latest")
+# Optimized: Only run apt update if it hasn't been run in the last 24 hours
+UPDATE_MARKER="/var/lib/apt/periodic/update-success-stamp"
+SHOULD_UPDATE=true
+if [ -f "$UPDATE_MARKER" ]; then
+    last_update=$(stat -c %Y "$UPDATE_MARKER")
+    now=$(date +%s)
+    if [ $((now - last_update)) -lt 86400 ]; then
+        SHOULD_UPDATE=false
+    fi
+fi
 
-for i in "${!GO_TOOLS[@]}"; do
-    if ! command -v "${GO_TOOLS[$i]}" &> /dev/null; then
-        echo "[+] Installing ${GO_TOOLS[$i]}..."
-        go install "${GO_REPOS[$i]}"
-        sudo ln -sf $GOPATH/bin/"${GO_TOOLS[$i]}" /usr/local/bin/"${GO_TOOLS[$i]}"
-        ((INSTALLED_COUNT++))
+if [ "$SHOULD_UPDATE" = true ]; then
+    echo "[INFO] Updating APT metadata..."
+    retry 3 10 apt-get update -y || fail "apt-get update failed."
+else
+    echo "[OK] APT metadata is fresh (skip update)."
+fi
+
+CRITICAL_APT=(
+    ca-certificates curl wget git python3 python3-pip python3-venv pipx
+    golang nodejs npm build-essential make libpcap-dev jq unzip openssh-server
+    dnsutils nmap gobuster ffuf whois
+)
+
+OPTIONAL_APT=(
+    whatweb wafw00f nikto theharvester recon-ng spiderfoot amass fierce dnsenum dnsrecon
+)
+
+apt_install_missing "${CRITICAL_APT[@]}" || fail "Failed to install critical APT dependencies."
+apt_install_missing "${OPTIONAL_APT[@]}" || warn_optional "some optional APT tools"
+
+export PIPX_HOME="${PIPX_HOME:-/opt/pipx}"
+export PIPX_BIN_DIR="${PIPX_BIN_DIR:-/usr/local/bin}"
+pipx ensurepath --global >/dev/null 2>&1 || true
+
+echo "[INFO] Configuring SSH for WSL bridge..."
+mkdir -p /run/sshd
+ssh-keygen -A >/dev/null 2>&1 || true
+if [ -f /etc/ssh/sshd_config ]; then
+    sed -i 's/^#PasswordAuthentication .*/PasswordAuthentication yes/' /etc/ssh/sshd_config
+    sed -i 's/^#Port .*/Port 22/' /etc/ssh/sshd_config
+fi
+
+echo "[INFO] Installing ProjectDiscovery tool manager..."
+if ! have_cmd pdtm; then
+    install_go_tool pdtm github.com/projectdiscovery/pdtm/cmd/pdtm@latest || warn_optional "pdtm"
+fi
+if have_cmd pdtm; then
+    PDTM_MARKER="/root/.pdtm_last_sync"
+    SHOULD_PDTM=true
+    if [ -f "$PDTM_MARKER" ]; then
+        last_pdtm=$(cat "$PDTM_MARKER")
+        now=$(date +%s)
+        if [ $((now - last_pdtm)) -lt 604800 ]; then
+            SHOULD_PDTM=false
+        fi
+    fi
+
+    if [ "$SHOULD_PDTM" = true ]; then
+        echo "[INFO] Installing/Updating ProjectDiscovery tools via pdtm..."
+        PDTM_LOG="/tmp/argus_pdtm_install.log"
+        if ! retry 2 10 pdtm -ia > "$PDTM_LOG" 2>&1; then
+            warn_optional "ProjectDiscovery tool bundle"
+            tail -n 25 "$PDTM_LOG" 2>/dev/null || true
+        else
+            date +%s > "$PDTM_MARKER"
+        fi
     else
-        echo "[OK] ${GO_TOOLS[$i]} is already installed."
-        ((ALREADY_COUNT++))
+        echo "[OK] ProjectDiscovery tools are recently synced (skip)."
     fi
-done
 
-# Findomain (Binary)
-if ! command -v findomain &> /dev/null; then
-    echo "[+] Installing Findomain..."
-    curl -LO https://github.com/Findomain/Findomain/releases/latest/download/findomain-linux.zip
-    unzip findomain-linux.zip
-    chmod +x findomain
-    sudo mv findomain /usr/local/bin/findomain
-    rm findomain-linux.zip
-    ((INSTALLED_COUNT++))
-else
-    echo "[OK] Findomain is already installed."
-    ((ALREADY_COUNT++))
+    if [ -d "/root/.pdtm/go/bin" ]; then
+        find /root/.pdtm/go/bin -maxdepth 1 -type f -executable -exec ln -sf {} /usr/local/bin/ \;
+    fi
 fi
 
-# Python-based Tools (Permutations & OSINT)
-echo "[+] Checking Python-based permutation tools..."
-PY_TOOLS=("dnsgen" "alterx") # pyaltdns doesn't always have a direct binary, or might be used as module
-for tool in "${PY_TOOLS[@]}"; do
-    if ! command -v "$tool" &> /dev/null; then
-        echo "[+] Installing $tool..."
-        sudo pip3 install "$tool" --break-system-packages
-        ((INSTALLED_COUNT++))
+echo "[INFO] Installing Go utilities..."
+install_go_tool assetfinder github.com/tomnomnom/assetfinder@latest || warn_optional "assetfinder"
+install_go_tool anew github.com/tomnomnom/anew@latest || warn_optional "anew"
+install_go_tool puredns github.com/d3mondev/puredns/v2@latest || warn_optional "puredns"
+install_go_tool goaltdns github.com/subfinder/goaltdns@latest || warn_optional "goaltdns"
+install_go_tool Ph.Sh_url github.com/PhilopaterSh/Ph.Sh_url@latest || warn_optional "Ph.Sh_url"
+install_go_tool alterx github.com/projectdiscovery/alterx/cmd/alterx@latest || warn_optional "alterx"
+
+echo "[INFO] Installing Python utilities with pipx..."
+install_pipx_tool dnsgen dnsgen || warn_optional "dnsgen"
+install_pipx_tool altdns py-altdns || warn_optional "py-altdns"
+
+echo "[INFO] Installing Findomain..."
+if ! have_cmd findomain; then
+    tmp_dir="$(mktemp -d)"
+    if retry 3 10 curl -fsSL -o "$tmp_dir/findomain-linux.zip" https://github.com/Findomain/Findomain/releases/latest/download/findomain-linux.zip &&
+       unzip -q "$tmp_dir/findomain-linux.zip" -d "$tmp_dir" &&
+       [ -f "$tmp_dir/findomain" ]; then
+        chmod +x "$tmp_dir/findomain"
+        mv "$tmp_dir/findomain" /usr/local/bin/findomain
+        INSTALLED_COUNT=$((INSTALLED_COUNT + 1))
     else
-        echo "[OK] $tool is already installed."
-        ((ALREADY_COUNT++))
+        warn_optional "findomain"
     fi
-done
-# pyaltdns check
-if ! python3 -c "import altdns" &> /dev/null; then
-    echo "[+] Installing altdns..."
-    sudo pip3 install py-altdns --break-system-packages
-    ((INSTALLED_COUNT++))
+    rm -rf "$tmp_dir"
 else
-    echo "[OK] altdns is already installed."
-    ((ALREADY_COUNT++))
+    echo "[OK] findomain already installed."
+    ALREADY_COUNT=$((ALREADY_COUNT + 1))
 fi
 
-# MassDNS (Build from Source)
-if [ ! -f "/usr/local/bin/massdns" ]; then
-    echo "[+] Installing MassDNS (High-performance DNS resolver)..."
-    if [ ! -d "/opt/massdns" ]; then
-        sudo git clone https://github.com/blechschmidt/massdns.git /opt/massdns
+echo "[INFO] Installing MassDNS..."
+if [ ! -x "/usr/local/bin/massdns" ]; then
+    if install_git_repo MassDNS https://github.com/blechschmidt/massdns.git /opt/massdns &&
+       make -C /opt/massdns &&
+       ln -sf /opt/massdns/bin/massdns /usr/local/bin/massdns; then
+        echo "[OK] massdns installed."
+    else
+        warn_optional "massdns"
     fi
-    cd /opt/massdns
-    sudo make
-    sudo ln -sf /opt/massdns/bin/massdns /usr/local/bin/massdns
-    cd - >/dev/null
-    ((INSTALLED_COUNT++))
 else
-    echo "[OK] MassDNS is already installed."
-    ((ALREADY_COUNT++))
+    echo "[OK] massdns already installed."
+    ALREADY_COUNT=$((ALREADY_COUNT + 1))
 fi
 
-# Ph.Sh_URL
-if ! command -v Ph.Sh_url &> /dev/null; then
-    echo "[+] Installing Ph.Sh_url via Go..."
-    go install github.com/PhilopaterSh/Ph.Sh_url@latest
-    sudo ln -sf $GOPATH/bin/Ph.Sh_url /usr/local/bin/Ph.Sh_url
-fi
-
-# Ph.Sh-Subdomain
+echo "[INFO] Installing optional repositories..."
 if [ ! -d "/opt/Ph.Sh-Subdomain" ]; then
-    echo "[+] Installing Ph.Sh-Subdomain..."
-    sudo git clone https://github.com/PhilopaterSh/Ph.Sh-Subdomain.git /opt/Ph.Sh-Subdomain
-    cd /opt/Ph.Sh-Subdomain
-    sudo pip3 install -r requirements.txt --break-system-packages
-    sudo go build
-    sudo ln -sf /opt/Ph.Sh-Subdomain/Ph.Sh-Subdomain /usr/local/bin/Ph.Sh-Subdomain
-    cd - >/dev/null
-fi
-
-# FinalRecon
-if ! command -v finalrecon &> /dev/null; then
-    echo "[+] Installing FinalRecon..."
-    sudo git clone https://github.com/thewhiteh4t/FinalRecon.git /opt/finalrecon
-    cd /opt/finalrecon
-    sudo pip3 install -r requirements.txt --break-system-packages
-    echo -e '#!/bin/bash\npython3 /opt/finalrecon/finalrecon.py "$@"' | sudo tee /usr/local/bin/finalrecon > /dev/null
-    sudo chmod +x /usr/local/bin/finalrecon
-    cd - >/dev/null
-fi
-
-# Osmedeus
-# if ! command -v osmedeus &> /dev/null; then
-#     echo "[+] Installing Osmedeus (Offensive Framework)..."
-#     # Basic installation steps for Osmedeus
-#     curl -fsSL https://raw.githubusercontent.com/osmedeus/osmedeus-base/master/install.sh | bash
-#     # Osmedeus binary is usually installed in ~/osmedeus-base/ or similar, link it if found
-#     if [ -f "$HOME/osmedeus-base/osmedeus" ]; then
-#         sudo ln -sf "$HOME/osmedeus-base/osmedeus" /usr/local/bin/osmedeus
-#     fi
-# fi
-
-# PayloadsAllTheThings
-if [ ! -d "/opt/payloads/PayloadsAllTheThings" ]; then
-    echo "[+] Deploying PayloadsAllTheThings (The ultimate exploit payloads)..."
-    sudo mkdir -p /opt/payloads
-    sudo git clone --depth 1 https://github.com/swisskyrepo/PayloadsAllTheThings.git /opt/payloads/PayloadsAllTheThings
-    echo "[OK] PayloadsAllTheThings deployed to /opt/payloads/PayloadsAllTheThings"
-fi
-
-# SecLists
-if [ ! -d "/usr/share/seclists" ]; then
-    echo "[+] Deploying SecLists (The ultimate security wordlists)..."
-    sudo git clone --depth 1 https://github.com/danielmiessler/SecLists.git /usr/share/seclists
-    # Create a symlink in home for quick access
-    ln -sf /usr/share/seclists ~/seclists
-    echo "[OK] SecLists deployed to /usr/share/seclists and linked to ~/seclists"
-fi
-
-# --- 6. Argus Native Recon Engine ---
-echo "[*] Creating Argus Native Recon Engine..."
-sudo bash -c 'cat << "EOF" > /usr/local/bin/argus_recon
-#!/bin/bash
-# Argus Professional Recon Engine (Native Linux)
-DOMAIN=$1
-[ -z "$DOMAIN" ] && echo "Usage: argus_recon <domain>" && exit 1
-
-RAW_FILE="/tmp/argus_raw_$DOMAIN.txt"
-ALIVE_FILE="/tmp/argus_alive_$DOMAIN.txt"
-WORDLIST="/usr/share/seclists/Discovery/DNS/subdomains-top1million-5000.txt"
-[ ! -f "$WORDLIST" ] && echo "www" > /tmp/mini.txt && WORDLIST="/tmp/mini.txt"
-
-echo "[*] Phase 1: Passive OSINT..."
-subfinder -d $DOMAIN -silent > $RAW_FILE
-assetfinder --subs-only $DOMAIN >> $RAW_FILE
-findomain -t $DOMAIN -q >> $RAW_FILE
-amass enum -passive -d $DOMAIN >> $RAW_FILE
-
-echo "[*] Phase 2: Active Brute-Force..."
-gobuster dns -d $DOMAIN -w $WORDLIST -z --quiet | grep "Found:" | awk "{print \$2}" >> $RAW_FILE
-
-echo "[*] Phase 3: Permutations..."
-sort -u $RAW_FILE -o $RAW_FILE
-if command -v dnsgen &>/dev/null; then
-    dnsgen $RAW_FILE >> $RAW_FILE
-fi
-
-echo "[*] Phase 4: Resolution & Validation (anew + httpx)..."
-sort -u $RAW_FILE -o $RAW_FILE
-
-# Use anew to keep only unique entries
-cat $RAW_FILE | /usr/local/bin/anew /tmp/unique_$DOMAIN.txt > /dev/null
-
-# Use httpx to find truly ALIVE web servers (the most critical part)
-if [ -f "/usr/local/bin/httpx" ]; then
-    cat /tmp/unique_$DOMAIN.txt | /usr/local/bin/httpx -silent -fc 404,500,502 -threads 50 > $ALIVE_FILE
-else
-    # Fallback to puredns or host if httpx is missing
-    if command -v puredns &>/dev/null; then
-        puredns resolve /tmp/unique_$DOMAIN.txt --quiet > $ALIVE_FILE
+    if install_git_repo Ph.Sh-Subdomain https://github.com/PhilopaterSh/Ph.Sh-Subdomain.git /opt/Ph.Sh-Subdomain; then
+        python3 -m venv /opt/Ph.Sh-Subdomain/.venv || warn_optional "Ph.Sh-Subdomain venv"
+        if [ -x /opt/Ph.Sh-Subdomain/.venv/bin/pip ] && [ -f /opt/Ph.Sh-Subdomain/requirements.txt ]; then
+            /opt/Ph.Sh-Subdomain/.venv/bin/pip install -r /opt/Ph.Sh-Subdomain/requirements.txt || warn_optional "Ph.Sh-Subdomain Python requirements"
+        fi
+        (cd /opt/Ph.Sh-Subdomain && go build) && ln -sf /opt/Ph.Sh-Subdomain/Ph.Sh-Subdomain /usr/local/bin/Ph.Sh-Subdomain || warn_optional "Ph.Sh-Subdomain build"
     else
-        cat /tmp/unique_$DOMAIN.txt | xargs -I{} host -W 2 {} | grep "has address" | awk "{print \$1}" > $ALIVE_FILE
+        warn_optional "Ph.Sh-Subdomain"
     fi
 fi
 
-echo "[*] Phase 5: Deep DNS Analysis..."
-ALIVE_COUNT=$(wc -l < $ALIVE_FILE)
-echo "--- 🛡️ MAXIMIZED SUBDOMAIN DISCOVERY: $DOMAIN ---"
-echo "[+] Total Potential: $(wc -l < $RAW_FILE)"
-echo "[+] Total Verified Alive (Web): $ALIVE_COUNT"
-rm /tmp/unique_$DOMAIN.txt 2>/dev/null
+if [ ! -d "/opt/finalrecon" ]; then
+    if install_git_repo FinalRecon https://github.com/thewhiteh4t/FinalRecon.git /opt/finalrecon; then
+        python3 -m venv /opt/finalrecon/.venv || warn_optional "FinalRecon venv"
+        if [ -x /opt/finalrecon/.venv/bin/pip ] && [ -f /opt/finalrecon/requirements.txt ]; then
+            /opt/finalrecon/.venv/bin/pip install -r /opt/finalrecon/requirements.txt || warn_optional "FinalRecon Python requirements"
+        fi
+        cat > /usr/local/bin/finalrecon <<'EOF'
+#!/usr/bin/env bash
+exec /opt/finalrecon/.venv/bin/python /opt/finalrecon/finalrecon.py "$@"
+EOF
+        chmod +x /usr/local/bin/finalrecon
+    else
+        warn_optional "FinalRecon"
+    fi
+fi
+
+install_git_repo PayloadsAllTheThings https://github.com/swisskyrepo/PayloadsAllTheThings.git /opt/payloads/PayloadsAllTheThings || warn_optional "PayloadsAllTheThings"
+install_git_repo SecLists https://github.com/danielmiessler/SecLists.git /usr/share/seclists || warn_optional "SecLists"
+[ -d /usr/share/seclists ] && ln -sf /usr/share/seclists "$HOME/seclists"
+
+echo "[INFO] Creating Argus native recon command..."
+cat > /usr/local/bin/argus_recon <<'EOF'
+#!/usr/bin/env bash
+set -u
+
+DOMAIN="${1:-}"
+if [ -z "$DOMAIN" ]; then
+    echo "Usage: argus_recon <domain>"
+    exit 1
+fi
+
+RAW_FILE="/tmp/argus_raw_${DOMAIN}.txt"
+ALIVE_FILE="/tmp/argus_alive_${DOMAIN}.txt"
+UNIQUE_FILE="/tmp/argus_unique_${DOMAIN}.txt"
+WORDLIST="/usr/share/seclists/Discovery/DNS/subdomains-top1million-5000.txt"
+if [ ! -f "$WORDLIST" ]; then
+    WORDLIST="/tmp/argus_mini_wordlist.txt"
+    echo "www" > "$WORDLIST"
+fi
+
+: > "$RAW_FILE"
+
+echo "[INFO] Phase 1: Passive OSINT..."
+command -v subfinder >/dev/null 2>&1 && subfinder -d "$DOMAIN" -silent >> "$RAW_FILE" || true
+command -v assetfinder >/dev/null 2>&1 && assetfinder --subs-only "$DOMAIN" >> "$RAW_FILE" || true
+command -v findomain >/dev/null 2>&1 && findomain -t "$DOMAIN" -q >> "$RAW_FILE" || true
+command -v amass >/dev/null 2>&1 && amass enum -passive -d "$DOMAIN" >> "$RAW_FILE" || true
+
+echo "[INFO] Phase 2: Active brute force..."
+command -v gobuster >/dev/null 2>&1 && gobuster dns -d "$DOMAIN" -w "$WORDLIST" -z --quiet | awk '/Found:/ {print $2}' >> "$RAW_FILE" || true
+
+sort -u "$RAW_FILE" -o "$RAW_FILE"
+
+echo "[INFO] Phase 3: Permutations..."
+if command -v dnsgen >/dev/null 2>&1; then
+    dnsgen "$RAW_FILE" >> "$RAW_FILE" || true
+    sort -u "$RAW_FILE" -o "$RAW_FILE"
+fi
+
+echo "[INFO] Phase 4: Resolution and validation..."
+if command -v anew >/dev/null 2>&1; then
+    anew "$UNIQUE_FILE" < "$RAW_FILE" >/dev/null
+else
+    cp "$RAW_FILE" "$UNIQUE_FILE"
+fi
+
+if command -v httpx >/dev/null 2>&1; then
+    httpx -silent -fc 404,500,502 -threads 50 < "$UNIQUE_FILE" > "$ALIVE_FILE"
+elif command -v puredns >/dev/null 2>&1; then
+    puredns resolve "$UNIQUE_FILE" --quiet > "$ALIVE_FILE"
+else
+    xargs -r -I{} host -W 2 {} < "$UNIQUE_FILE" | awk '/has address/ {print $1}' > "$ALIVE_FILE"
+fi
+
+ALIVE_COUNT="$(wc -l < "$ALIVE_FILE" 2>/dev/null || echo 0)"
+echo "--- ARGUS SUBDOMAIN DISCOVERY: $DOMAIN ---"
+echo "[INFO] Total potential: $(wc -l < "$RAW_FILE" 2>/dev/null || echo 0)"
+echo "[INFO] Total verified alive: $ALIVE_COUNT"
 echo ""
-echo "[*] TOP VERIFIED SUBDOMAINS:"
-head -n 50 $ALIVE_FILE
+echo "[INFO] Top verified subdomains:"
+head -n 50 "$ALIVE_FILE" 2>/dev/null || true
 echo ""
-echo "[*] INFRASTRUCTURE POINTERS (CNAME/MX):"
-head -n 10 $ALIVE_FILE | while read sub; do
-    # Clean domain: remove http/https and trailing slash
-    clean_sub=$(echo "$sub" | sed -E '"'s|https?://||; s|/.*$||'"')
-    cname=$(dig CNAME +short +time=3 +tries=2 "$clean_sub")
+echo "[INFO] Infrastructure pointers:"
+head -n 10 "$ALIVE_FILE" 2>/dev/null | while read -r sub; do
+    clean_sub="$(echo "$sub" | sed -E 's|https?://||; s|/.*$||')"
+    cname="$(dig CNAME +short +time=3 +tries=2 "$clean_sub")"
     [ -n "$cname" ] && echo "[CNAME] $sub -> $cname"
-    mx=$(dig MX +short +time=3 +tries=2 "$clean_sub")
+    mx="$(dig MX +short +time=3 +tries=2 "$clean_sub")"
     [ -n "$mx" ] && echo "[MX] $sub -> $mx"
 done
 
-rm $RAW_FILE $ALIVE_FILE 2>/dev/null
-EOF'
+rm -f "$RAW_FILE" "$ALIVE_FILE" "$UNIQUE_FILE"
+EOF
+chmod +x /usr/local/bin/argus_recon
 
-sudo chmod +x /usr/local/bin/argus_recon
-
-# --- 0. Pre-Flight Checks ---
-echo "[*] Ensuring package manager is available..."
-while sudo fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 ; do
-    echo "[!] Waiting for other package managers to finish..."
-    sleep 2
-done
-
-# Initialize counters
-INSTALLED_COUNT=0
-ALREADY_COUNT=0
-
-# ... (inside loops or installation blocks)
-# Update counters as needed
-# For example:
-# if ... installed; then ((INSTALLED_COUNT++)); else ((ALREADY_COUNT++)); fi
-
-# --- 7. Final Verification & Summary ---
 echo ""
 echo "========================================================"
-echo "📊 INSTALLATION SUMMARY (KALI TOOLS)"
+echo "INSTALLATION SUMMARY (KALI TOOLS)"
 echo "========================================================"
-echo "✅ Tools Already Present: $ALREADY_COUNT"
-echo "🚀 New Tools Installed:   $INSTALLED_COUNT"
-echo "--------------------------------------------------------"
-echo "✅ Argus Environment is now Synchronized & Optimized."
-echo "[INFO] All tools are linked to /usr/local/bin."
+echo "[OK] Tools already present: $ALREADY_COUNT"
+echo "[OK] New tools installed:   $INSTALLED_COUNT"
+if [ "${#FAILED_OPTIONAL[@]}" -gt 0 ]; then
+    echo "[WARN] Optional failures:"
+    printf ' - %s\n' "${FAILED_OPTIONAL[@]}"
+else
+    echo "[OK] Optional tools completed without recorded failures."
+fi
+echo "[OK] Argus environment is synchronized."
 echo "========================================================"
