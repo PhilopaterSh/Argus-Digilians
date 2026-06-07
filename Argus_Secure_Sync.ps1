@@ -1,150 +1,111 @@
 param (
     [string]$Remote = "origin",
-    [string]$MainBranch = "main"
+    [string]$MainBranch = "main",
+    [switch]$Detailed # New flag for deep visibility
 )
 
 # Identify device and setup branch name
 $ComputerName = $env:COMPUTERNAME.Replace(" ", "-")
 $DeviceBranch = "argus/$ComputerName"
 
-function Show-Header {
-    Clear-Host
-    Write-Host "============================================================" -ForegroundColor Cyan
-    Write-Host "     ARGUS SECURITY FRAMEWORK: AUTOMATED LOOP V9.0          " -ForegroundColor Cyan
-    Write-Host "============================================================" -ForegroundColor Cyan
-    Write-Host " Device Identity : $ComputerName" -ForegroundColor Yellow
-    Write-Host " Secure Branch   : $DeviceBranch" -ForegroundColor Yellow
-    Write-Host " Workflow        : PUSH to Branch -> PULL from Main" -ForegroundColor Green
-    Write-Host "------------------------------------------------------------" -ForegroundColor Gray
-}
-
 function Show-Help {
     Clear-Host
     Write-Host "============================================================" -ForegroundColor Cyan
     Write-Host "        ARGUS SECURITY FRAMEWORK | SYNC ENGINE              " -ForegroundColor Cyan
     Write-Host "============================================================" -ForegroundColor Cyan
-    Write-Host " [Identity] : $ComputerName" -ForegroundColor Yellow
-    Write-Host " [Branch]   : $DeviceBranch" -ForegroundColor Yellow
+    Write-Host ""
+    Write-Host "   [>] USAGE" -ForegroundColor Black -BackgroundColor Yellow
+    Write-Host "     .\Argus_Secure_Sync.ps1 [-Detailed] [-Remote name]"
+    Write-Host ""
+    Write-Host "   [+] OPTIONS" -ForegroundColor White -BackgroundColor DarkGray
+    Write-Host "     -Detailed     Shows raw Git output for debugging."
+    Write-Host "     -Remote       Git remote target (Default: origin)."
+    Write-Host ""
+    Write-Host "   [!] DIAGNOSTICS" -ForegroundColor White -BackgroundColor Blue
+    Write-Host "     If a step fails, the script will automatically display"
+    Write-Host "     the specific error returned by the system."
     Write-Host "------------------------------------------------------------" -ForegroundColor Gray
-    Write-Host ""
-    Write-Host "   DESCRIPTION" -ForegroundColor White -BackgroundColor Blue
-    Write-Host "     Automated synchronization bridge for Argus Intelligence."
-    Write-Host "     Protects local findings and pulls global project updates."
-    Write-Host ""
-    Write-Host "   USAGE" -ForegroundColor White -BackgroundColor DarkGreen
-    Write-Host "     .\Argus_Secure_Sync.ps1 [-Remote name] [-MainBranch name]"
-    Write-Host "     .\Argus_Secure_Sync.ps1 --help"
-    Write-Host ""
-    Write-Host "   OPTIONS" -ForegroundColor White -BackgroundColor DarkGray
-    Write-Host "     -Remote       Git remote target (Default: origin)" -ForegroundColor Gray
-    Write-Host "     -MainBranch   Source for updates (Default: main)" -ForegroundColor Gray
-    Write-Host "     --help, -h    Display this technical reference" -ForegroundColor Gray
-    Write-Host ""
-    Write-Host "   WORKFLOW STEPS" -ForegroundColor Black -BackgroundColor Yellow
-    Write-Host "     1. [SECURE]     Commit findings to local branch" -ForegroundColor Yellow
-    Write-Host "     2. [TRANSMIT]   Push intelligence to private cloud" -ForegroundColor Cyan
-    Write-Host "     3. [INTEGRATE]  Merge latest changes from main team" -ForegroundColor Green
-    Write-Host ""
-    Write-Host "------------------------------------------------------------" -ForegroundColor Gray
-    Write-Host " Press any key to return to terminal..." -ForegroundColor White
+    Write-Host " Press any key to return..." -ForegroundColor White
     [void]$Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
 }
 
-# Check for help arguments
-foreach ($arg in $args) {
-    if ($arg -match '^(-h|--help|help|--h|-\?|/h|/\?)$') {
-        Show-Help
-        exit 0
-    }
+# Help Check
+$HelpFlags = @('-h', '--help', 'help', '-?', '/?', '-H')
+if ($HelpFlags -contains $Remote) { Show-Help; exit 0 }
+
+function Show-Header {
+    Clear-Host
+    Write-Host ">>> ARGUS SYNC ENGINE | $ComputerName | $DeviceBranch" -ForegroundColor Cyan
+    if ($Detailed) { Write-Host "!!! DETAILED LOGGING ENABLED !!!" -ForegroundColor Magenta }
+    Write-Host "------------------------------------------------------------" -ForegroundColor Gray
 }
 
-# Initial Setup - Dependency Check (Git)
-if (!(Get-Command git -ErrorAction SilentlyContinue)) {
-    Show-Header
-    Write-Host "[!] Git is missing. Attempting automated installation via Winget..." -ForegroundColor Yellow
-    
-    # Check if Winget is available
-    if (Get-Command winget -ErrorAction SilentlyContinue) {
-        Write-Host "[*] Installing Git... Please wait." -ForegroundColor Cyan
-        winget install --id Git.Git --exact --silent --accept-package-agreements --accept-source-agreements
-        
-        if ($LASTEXITCODE -eq 0) {
-            Write-Host "[SUCCESS] Git installed. You MUST restart this terminal/script to apply changes." -ForegroundColor Green
-        } else {
-            Write-Host "[ERROR] Winget failed to install Git. Please install it manually from https://git-scm.com/" -ForegroundColor Red
-        }
+# Helper to run Git with error capturing
+function Invoke-Git {
+    param([string]$Command, [string]$StepName)
+    if ($Detailed) {
+        Invoke-Expression $Command
     } else {
-        Write-Host "[ERROR] Winget not found. Please install Git manually from https://git-scm.com/" -ForegroundColor Red
+        $output = Invoke-Expression "$Command 2>&1"
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host "`n[!] ERROR IN ${StepName}:" -ForegroundColor Red
+            Write-Host $output -ForegroundColor Gray
+            throw "Git command failed."
+        }
+        return $output
     }
-    
-    Write-Host "`nPress any key to exit..." -ForegroundColor Gray
-    [void]$Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown"); exit 1
-}
-
-# Initial Setup - Repo Check
-$isGit = git rev-parse --is-inside-work-tree 2>$null
-if ($LASTEXITCODE -ne 0) {
-    Show-Header
-    Write-Host "CRITICAL ERROR: Argus repository not found." -ForegroundColor Red
-    Write-Host "`nPress any key to exit..." -ForegroundColor Gray
-    [void]$Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown"); exit 1
 }
 
 Show-Header
 
-# MAINTENANCE: Clean up problematic Windows system files in .git folder
+# Fix Git corruption
 if (Test-Path ".git") {
-    # Remove desktop.ini files that can corrupt Git's internal references
     Get-ChildItem -Path ".git" -Filter "desktop.ini" -Recurse -Force -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
 }
 
 try {
-    # Ensure we are on the Device Branch
+    # 1. Branch Management
     $currentBranch = git rev-parse --abbrev-ref HEAD
     if ($currentBranch -ne $DeviceBranch) {
-        Write-Host "[1/4] INITIALIZING: Switching to secure device branch..." -ForegroundColor Gray
-        git checkout -b $DeviceBranch 2>$null
-        git checkout $DeviceBranch 2>$null
+        Write-Host "[1/3] Switching to branch: $DeviceBranch" -ForegroundColor Gray
+        Invoke-Git "git checkout -b $DeviceBranch 2>$null; git checkout $DeviceBranch" "Branch Setup"
     }
 
-    # PHASE 1: SECURE & TRANSMIT (Push to Device Branch)
-    Write-Host "[2/4] SECURING: Transmitting findings to $DeviceBranch..." -ForegroundColor Cyan
+    # 2. Secure & Transmit
+    Write-Host "[2/3] Securing intelligence..." -ForegroundColor Cyan
     git add .
-    $status = git status --porcelain
-    if (![string]::IsNullOrEmpty($status)) {
-        $timeStr = Get-Date -Format "yyyy-MM-dd HH:mm"
-        git commit -m "[Argus-$ComputerName] Intelligence Captured"
+    $changes = git status --porcelain
+    if (![string]::IsNullOrEmpty($changes)) {
+        $count = ($changes -split "`n").Length
+        Invoke-Git "git commit -m '[Argus-$ComputerName] Intelligence Captured' --quiet" "Local Commit"
+        Write-Host "      > Captured $count modified files." -ForegroundColor Green
+    } else {
+        Write-Host "      > No new findings to secure." -ForegroundColor Gray
     }
     
-    # Sync with cloud version of THIS branch first to avoid push rejection
-    git pull $Remote $DeviceBranch --no-edit -s recursive -X ours 2>$null
-    git push $Remote $DeviceBranch
+    Write-Host "      > Transmitting to cloud..." -ForegroundColor Cyan
+    Invoke-Git "git pull $Remote $DeviceBranch --no-rebase --no-edit --quiet" "Cloud Pull"
+    Invoke-Git "git push $Remote $DeviceBranch --quiet" "Cloud Push"
+    Write-Host "      > Sync with private cloud successful." -ForegroundColor Green
+
+    # 3. Integrate Team Updates
+    Write-Host "[3/3] Integrating team updates ($MainBranch)..." -ForegroundColor Cyan
+    Invoke-Git "git fetch $Remote $MainBranch --quiet" "Fetch Updates"
     
-    if ($LASTEXITCODE -eq 0) {
-        Write-Host "SUCCESS: Data secured on private branch." -ForegroundColor Green
+    $preMerge = git rev-parse HEAD
+    Invoke-Git "git merge $Remote/$MainBranch --no-edit -X ours --quiet" "Merge Updates"
+    $postMerge = git rev-parse HEAD
+
+    if ($preMerge -ne $postMerge) {
+        Write-Host "      > NEW UPDATES INTEGRATED." -ForegroundColor Green
     } else {
-        Write-Host "WARNING: Private sync failed. Check cloud connectivity." -ForegroundColor Yellow
+        Write-Host "      > Workspace is already up to date." -ForegroundColor Gray
     }
 
-    # PHASE 2: INTEGRATE (Pull from Main)
-    Write-Host "`n[3/4] INTEGRATING: Fetching global updates from $MainBranch..." -ForegroundColor Cyan
-    git fetch $Remote $MainBranch --quiet
-    
-    # Merge Main into Device Branch
-    # Using -X ours to ensure that if there's a conflict, the local work (which was just pushed) is preserved
-    git merge "$Remote/$MainBranch" --no-edit -s recursive -X ours
-    
-    if ($LASTEXITCODE -eq 0) {
-        Write-Host "SUCCESS: Global updates integrated into workspace." -ForegroundColor Green
-    } else {
-        Write-Host "INFO: Local findings are already ahead or unified with Main." -ForegroundColor Gray
-    }
-
-    # PHASE 3: FINAL STATUS
-    Write-Host "`n[4/4] COMPLETED: Your workspace is now fully synchronized." -ForegroundColor Green
+    Write-Host "`n[SUCCESS] Argus Intelligence Synchronized." -ForegroundColor Black -BackgroundColor Green
 
 } catch {
-    Write-Host "`nCRITICAL ERROR during automated loop: $($_.Exception.Message)" -ForegroundColor Red
+    Write-Host "`n[TERMINATED] Sync stopped due to the error above." -ForegroundColor Red
 }
 
 Write-Host "------------------------------------------------------------" -ForegroundColor Gray
