@@ -1,7 +1,14 @@
 param (
+    [Parameter(Position=0)]
     [string]$Remote = "origin",
+    
+    [Parameter(Position=1)]
     [string]$MainBranch = "main",
-    [switch]$Detailed 
+    
+    [switch]$Detailed,
+
+    [Alias("h", "?")]
+    [switch]$Help
 )
 
 # Identify device and setup branch name
@@ -41,16 +48,15 @@ function Show-Help {
     Write-Host ""
     Write-Host " [!] USAGE EXAMPLES" -ForegroundColor Black -BackgroundColor Yellow
     Write-Host "     Standard Sync : .\Argus_Secure_Sync.ps1"
+    Write-Host "     Show Help     : .\Argus_Secure_Sync.ps1 -h"
     Write-Host "     Debug Sync    : .\Argus_Secure_Sync.ps1 -Detailed"
-    Write-Host "     Custom Remote : .\Argus_Secure_Sync.ps1 -Remote 'github'"
     Write-Host "------------------------------------------------------------" -ForegroundColor Gray
     Write-Host " Press any key to exit help..." -ForegroundColor White
     [void]$Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
 }
 
-# Help Check - Robust detection for any help signal
-$HelpFlags = @('-h', '--help', 'help', '-?', '/?', '-H', '--HELP')
-if ($HelpFlags -contains $Remote -or $HelpFlags -contains $MainBranch) {
+# Explicit Help Trigger
+if ($Help) {
     Show-Help
     exit 0
 }
@@ -60,6 +66,28 @@ function Show-Header {
     Write-Host ">>> ARGUS SYNC ENGINE | $ComputerName | $DeviceBranch" -ForegroundColor Cyan
     if ($Detailed) { Write-Host "!!! DETAILED LOGGING ENABLED !!!" -ForegroundColor Magenta }
     Write-Host "------------------------------------------------------------" -ForegroundColor Gray
+}
+
+# --- Restored Automated Git Installer ---
+if (!(Get-Command git -ErrorAction SilentlyContinue)) {
+    Show-Header
+    Write-Host "[!] Git is missing. Attempting automated installation via Winget..." -ForegroundColor Yellow
+    
+    if (Get-Command winget -ErrorAction SilentlyContinue) {
+        Write-Host "[*] Installing Git... Please wait." -ForegroundColor Cyan
+        winget install --id Git.Git --exact --silent --accept-package-agreements --accept-source-agreements
+        
+        if ($LASTEXITCODE -eq 0) {
+            Write-Host "[SUCCESS] Git installed. You MUST restart this terminal to apply changes." -ForegroundColor Green
+        } else {
+            Write-Host "[ERROR] Winget failed to install Git. Please install it manually from https://git-scm.com/" -ForegroundColor Red
+        }
+    } else {
+        Write-Host "[ERROR] Winget not found. Please install Git manually from https://git-scm.com/" -ForegroundColor Red
+    }
+    
+    Write-Host "`nPress any key to exit..." -ForegroundColor Gray
+    [void]$Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown"); exit 1
 }
 
 # Helper to run Git with error capturing
