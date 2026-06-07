@@ -148,7 +148,7 @@ if not exist "Argus_venv\Scripts\activate.bat" (
     echo [ERROR] Virtual environment activation script not found!
     exit /b 1
 )
-call Argus_venv\Scripts\activate.bat
+call "Argus_venv\Scripts\activate.bat"
 
 :: Optimized: Only run pip install if requirements.txt is newer than our marker
 set "MARKER=Argus_venv\.requirements_installed"
@@ -159,16 +159,16 @@ if exist "%REQ%" (
     if not exist "%MARKER%" (
         set "RUN_PIP=YES"
     ) else (
-        for /f "usebackq" %%A in ('%REQ%') do set "REQ_TIME=%%~tA"
-        for /f "usebackq" %%A in ('%MARKER%') do set "MARKER_TIME=%%~tA"
+        for %%A in ("%REQ%") do set "REQ_TIME=%%~tA"
+        for %%A in ("%MARKER%") do set "MARKER_TIME=%%~tA"
         if "!REQ_TIME!" NEQ "!MARKER_TIME!" set "RUN_PIP=YES"
     )
 
     if "!RUN_PIP!"=="YES" (
-        echo [INFO] Updating libraries (this may take a moment)...
+        echo [INFO] Updating libraries ^(this may take a moment^)...
         python -m pip install --upgrade pip --quiet
-        pip install -r "%REQ%" --quiet
-        if %errorlevel% equ 0 (
+        python -m pip install -r "%REQ%" --quiet
+        if !errorlevel! equ 0 (
             echo. > "%MARKER%"
             echo [OK] All libraries are up to date.
         ) else (
@@ -176,10 +176,10 @@ if exist "%REQ%" (
             exit /b 1
         )
     ) else (
-        echo [OK] Libraries already satisfied (skip).
+        echo [OK] Libraries already satisfied ^(skip^).
     )
 ) else (
-    echo [ERROR] requirements.txt not found at %~dp0requirements.txt!
+    echo [ERROR] requirements.txt not found at "%~dp0requirements.txt"!
     exit /b 1
 )
 
