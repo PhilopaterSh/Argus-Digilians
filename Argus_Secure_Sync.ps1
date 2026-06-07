@@ -1,7 +1,7 @@
 param (
     [string]$Remote = "origin",
     [string]$MainBranch = "main",
-    [switch]$Detailed # New flag for deep visibility
+    [switch]$Detailed 
 )
 
 # Identify device and setup branch name
@@ -11,27 +11,49 @@ $DeviceBranch = "argus/$ComputerName"
 function Show-Help {
     Clear-Host
     Write-Host "============================================================" -ForegroundColor Cyan
-    Write-Host "        ARGUS SECURITY FRAMEWORK | SYNC ENGINE              " -ForegroundColor Cyan
+    Write-Host "        ARGUS SECURITY FRAMEWORK | SYNC ENGINE GUIDE        " -ForegroundColor Cyan
     Write-Host "============================================================" -ForegroundColor Cyan
     Write-Host ""
-    Write-Host "   [>] USAGE" -ForegroundColor Black -BackgroundColor Yellow
-    Write-Host "     .\Argus_Secure_Sync.ps1 [-Detailed] [-Remote name]"
+    Write-Host " [?] MISSION OBJECTIVE" -ForegroundColor White -BackgroundColor Blue
+    Write-Host "     This engine acts as a secure bridge between your local "
+    Write-Host "     intelligence (findings) and the global Argus repository."
     Write-Host ""
-    Write-Host "   [+] OPTIONS" -ForegroundColor White -BackgroundColor DarkGray
-    Write-Host "     -Detailed     Shows raw Git output for debugging."
-    Write-Host "     -Remote       Git remote target (Default: origin)."
+    Write-Host " [1] THE WORKFLOW SIGNALS (What happens and why?)" -ForegroundColor Yellow
+    Write-Host "     - SECURE    : Captures your current work and creates a "
+    Write-Host "                   local 'Save Point' (Git Commit)."
+    Write-Host "     - TRANSMIT  : Encrypts/Uploads your findings to your   "
+    Write-Host "                   private branch '$DeviceBranch'."
+    Write-Host "     - INTEGRATE : Carefully merges global updates from the "
+    Write-Host "                   '$MainBranch' branch into your workspace."
     Write-Host ""
-    Write-Host "   [!] DIAGNOSTICS" -ForegroundColor White -BackgroundColor Blue
-    Write-Host "     If a step fails, the script will automatically display"
-    Write-Host "     the specific error returned by the system."
+    Write-Host " [2] COMMAND SIGNALS (Flags & Options)" -ForegroundColor Yellow
+    Write-Host "     -h, --help    : Shows this comprehensive guide."
+    Write-Host "     -Detailed     : PRO MODE. Shows every raw Git command "
+    Write-Host "                     and its full output (Transparent Mode)."
+    Write-Host "     -Remote       : Specify a custom Git remote (Def: origin)."
+    Write-Host "     -MainBranch   : Target branch for updates (Def: main)."
+    Write-Host ""
+    Write-Host " [3] SAFETY & INTEGRITY" -ForegroundColor Yellow
+    Write-Host "     - Anti-Corruption: Automatically detects and removes   "
+    Write-Host "       problematic 'desktop.ini' files in the .git folder."
+    Write-Host "     - Conflict Shield: Uses 'ours' strategy to ensure YOUR "
+    Write-Host "       code is NEVER overwritten by global updates."
+    Write-Host ""
+    Write-Host " [!] USAGE EXAMPLES" -ForegroundColor Black -BackgroundColor Yellow
+    Write-Host "     Standard Sync : .\Argus_Secure_Sync.ps1"
+    Write-Host "     Debug Sync    : .\Argus_Secure_Sync.ps1 -Detailed"
+    Write-Host "     Custom Remote : .\Argus_Secure_Sync.ps1 -Remote 'github'"
     Write-Host "------------------------------------------------------------" -ForegroundColor Gray
-    Write-Host " Press any key to return..." -ForegroundColor White
+    Write-Host " Press any key to exit help..." -ForegroundColor White
     [void]$Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
 }
 
-# Help Check
-$HelpFlags = @('-h', '--help', 'help', '-?', '/?', '-H')
-if ($HelpFlags -contains $Remote) { Show-Help; exit 0 }
+# Help Check - Robust detection for any help signal
+$HelpFlags = @('-h', '--help', 'help', '-?', '/?', '-H', '--HELP')
+if ($HelpFlags -contains $Remote -or $HelpFlags -contains $MainBranch) {
+    Show-Help
+    exit 0
+}
 
 function Show-Header {
     Clear-Host
@@ -58,7 +80,7 @@ function Invoke-Git {
 
 Show-Header
 
-# Fix Git corruption
+# Fix Git corruption (desktop.ini)
 if (Test-Path ".git") {
     Get-ChildItem -Path ".git" -Filter "desktop.ini" -Recurse -Force -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
 }
