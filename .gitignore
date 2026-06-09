@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+Argus_venv/
+*.py[cod]
+*$py.class
+.env
+
+# Temporary and Sync Files
+*.tmp
+*.log
+wsl_output.txt
+
+# Databases
+*.db
+!argus_intelligence.db  # Keep the skeleton DB if essential, or ignore all if user prefers
+
+# Logs
+ARGUS_INSTALLATION.log
+streamlit.err.log
+streamlit.out.log
+
+# IDEs
+.vscode/
+.idea/
+
+# OS files
+[Dd]esktop.ini
+[Tt]humbs.db
+*.bak
+.DS_Store
+
+# Project Specific
+Reports/
+Discovery_*.txt
+Setup/Archive/

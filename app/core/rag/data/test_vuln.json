@@ -1,0 +1,7 @@
+{
+  "target": "example.com",
+  "vulnerability": "Cross-Site Scripting (XSS)",
+  "severity": "High",
+  "description": "The search parameter reflects user input directly into the HTML DOM without sanitization.",
+  "remediation": "Encode all user-supplied data before rendering it in the browser."
+}

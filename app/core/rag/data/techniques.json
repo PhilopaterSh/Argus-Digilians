@@ -1,0 +1,102 @@
+[
+  {
+    "id": "T1190",
+    "name": "Exploit Public-Facing Application",
+    "description": "Adversaries may attempt to exploit a weakness in an Internet-facing host or system to initially access a network. The weakness in the system can be a software bug, a temporary glitch, or a misconfiguration. Exploited applications are often websites or web services, but databases, standard services, network device management and many others have been targeted.",
+    "platforms": ["Windows", "Linux", "macOS", "Network", "IaaS", "Containers"],
+    "detection": "Monitor application logs for abnormal behavior that may indicate attempted or successful exploitation. Use web application firewalls to detect common exploit traffic.",
+    "url": "https://attack.mitre.org/techniques/T1190/",
+    "source": "MITRE ATT&CK",
+    "tactic": "Initial Access"
+  },
+  {
+    "id": "T1059",
+    "name": "Command and Scripting Interpreter",
+    "description": "Adversaries may abuse command and script interpreters to execute commands, scripts, or binaries. These interfaces and languages provide ways of interacting with computer systems and are a common feature across many different platforms. Common scripting languages include Unix/Linux shell, Windows command shell, PowerShell, VBScript, Python, JavaScript, and more.",
+    "platforms": ["Linux", "Windows", "macOS"],
+    "detection": "Monitor for abnormal process creation and command-line arguments. Look for commands that download code and execute it.",
+    "url": "https://attack.mitre.org/techniques/T1059/",
+    "source": "MITRE ATT&CK",
+    "tactic": "Execution"
+  },
+  {
+    "id": "T1110",
+    "name": "Brute Force",
+    "description": "Adversaries may use brute force techniques to gain access to accounts when passwords are unknown or when password hashes are obtained. Without knowledge of the password for an account or set of accounts, an adversary may systematically guess the password using a repetitive or iterative mechanism. Brute forcing passwords can take place via interaction with a service that checks credential validity such as RDP, Telnet, SSH, LDAP, Kerberos, web applications, SNMP, and others.",
+    "platforms": ["Windows", "Linux", "macOS", "Network", "IaaS", "Containers"],
+    "detection": "Monitor authentication logs for failed and abnormal login attempts. Detect account enumeration via large quantities of password spraying.",
+    "url": "https://attack.mitre.org/techniques/T1110/",
+    "source": "MITRE ATT&CK",
+    "tactic": "Credential Access"
+  },
+  {
+    "id": "T1552",
+    "name": "Unsecured Credentials",
+    "description": "Adversaries may search compromised systems to find and obtain insecurely stored credentials. These credentials can be stored and/or misplaced in many locations on a system, including plaintext files, operating system or application-specific repositories, or other specialized files such as web config files.",
+    "platforms": ["Windows", "Linux", "macOS", "IaaS", "Containers"],
+    "detection": "Monitor for access to credential files. Look for common credential locations like .env files, config files, and credential stores.",
+    "url": "https://attack.mitre.org/techniques/T1552/",
+    "source": "MITRE ATT&CK",
+    "tactic": "Credential Access"
+  },
+  {
+    "id": "T1083",
+    "name": "File and Directory Discovery",
+    "description": "Adversaries may enumerate files and directories or may search in specific locations of a host or network share for certain information within a file system. Adversaries may use the information from File and Directory Discovery during automated discovery to shape follow-on behaviors, including whether or not the adversary fully infects the target.",
+    "platforms": ["Linux", "macOS", "Windows"],
+    "detection": "System and network discovery techniques normally occur throughout an operation as an adversary learns the environment. Monitor processes and command-line arguments for actions that could be taken to gather system and network information.",
+    "url": "https://attack.mitre.org/techniques/T1083/",
+    "source": "MITRE ATT&CK",
+    "tactic": "Discovery"
+  },
+  {
+    "id": "T1005",
+    "name": "Data from Local System",
+    "description": "Adversaries may search local system sources, such as file systems and configuration files or local databases, to find files of interest and sensitive data prior to Exfiltration. Adversaries may do this using a Command and Scripting Interpreter, such as cmd as well as a Network Device CLI, which have functionality to interact with the file system to gather information.",
+    "platforms": ["Linux", "macOS", "Windows", "Network"],
+    "detection": "Monitor processes and command-line arguments for actions that could be taken to collect files from a system. Remote access tools with built-in features may interact directly with the Windows API to gather data.",
+    "url": "https://attack.mitre.org/techniques/T1005/",
+    "source": "MITRE ATT&CK",
+    "tactic": "Collection"
+  },
+  {
+    "id": "T1027",
+    "name": "Obfuscated Files or Information",
+    "description": "Adversaries may attempt to make an executable or file difficult to discover or analyze by encrypting, encoding, or otherwise obfuscating its contents on the system or in transit. This is common behavior that can be used across different platforms and the network to evade defenses.",
+    "platforms": ["Linux", "macOS", "Windows"],
+    "detection": "Detect files that are encoded or encrypted. Look for use of encoding utilities like base64. Monitor for obfuscated scripts in web application directories.",
+    "url": "https://attack.mitre.org/techniques/T1027/",
+    "source": "MITRE ATT&CK",
+    "tactic": "Defense Evasion"
+  },
+  {
+    "id": "T1071",
+    "name": "Application Layer Protocol",
+    "description": "Adversaries may communicate using OSI application layer protocols to avoid detection/network filtering by blending in with existing traffic. Commands to the remote system, and often the results of those commands, will be embedded within the protocol traffic between the client and server.",
+    "platforms": ["Linux", "macOS", "Windows", "Network"],
+    "detection": "Analyze network data for uncommon data flows. Monitor for protocols over unexpected ports. Analyze packet contents to detect application layer protocols that do not follow the expected protocol standards.",
+    "url": "https://attack.mitre.org/techniques/T1071/",
+    "source": "MITRE ATT&CK",
+    "tactic": "Command and Control"
+  },
+  {
+    "id": "T1595",
+    "name": "Active Scanning",
+    "description": "Adversaries may execute active reconnaissance scans to gather information that can be used during targeting. Active scans are those where the adversary probes victim infrastructure via network traffic, as opposed to other forms of reconnaissance that do not involve direct interaction.",
+    "platforms": ["PRE"],
+    "detection": "Monitor for suspicious network traffic that could be indicative of scanning. Unexpected network traffic patterns, such as port scanning or service enumeration.",
+    "url": "https://attack.mitre.org/techniques/T1595/",
+    "source": "MITRE ATT&CK",
+    "tactic": "Reconnaissance"
+  },
+  {
+    "id": "T1592",
+    "name": "Gather Victim Host Information",
+    "description": "Adversaries may gather information about the victim's hosts that can be used during targeting. Information about hosts may include a variety of details, including administrative data as well as specifics regarding its configuration.",
+    "platforms": ["PRE"],
+    "detection": "Monitor for suspicious queries to public resources that may reveal information about the organization's infrastructure.",
+    "url": "https://attack.mitre.org/techniques/T1592/",
+    "source": "MITRE ATT&CK",
+    "tactic": "Reconnaissance"
+  }
+]

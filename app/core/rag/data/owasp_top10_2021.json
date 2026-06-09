@@ -1,0 +1,106 @@
+[
+  {
+    "id": "A01:2021",
+    "name": "Broken Access Control",
+    "description": "Access control enforces policy such that users cannot act outside of their intended permissions. Failures typically lead to unauthorized information disclosure, modification, or destruction of all data, or performing a business function outside the user limits.",
+    "cwe_ids": ["CWE-200", "CWE-201", "CWE-352"],
+    "payloads": ["../../../etc/passwd", "?id=1 OR 1=1", "../../admin", "/admin", "?user_id=2"],
+    "source": "OWASP Top 10 2021",
+    "url": "https://owasp.org/Top10/A01_2021-Broken_Access_Control/"
+  },
+  {
+    "id": "A02:2021",
+    "name": "Cryptographic Failures",
+    "description": "Failures related to cryptography which often leads to exposure of sensitive data including passwords, credit card numbers, health records, personal information, and business secrets.",
+    "cwe_ids": ["CWE-259", "CWE-327", "CWE-331"],
+    "payloads": [],
+    "source": "OWASP Top 10 2021",
+    "url": "https://owasp.org/Top10/A02_2021-Cryptographic_Failures/"
+  },
+  {
+    "id": "A03:2021",
+    "name": "Injection",
+    "description": "Injection flaws such as SQL, NoSQL, OS, and LDAP injection occur when untrusted data is sent to an interpreter as part of a command or query. The attacker hostile data can trick the interpreter into executing unintended commands or accessing data without proper authorization.",
+    "cwe_ids": ["CWE-79", "CWE-89", "CWE-73"],
+    "payloads": [
+      "' OR '1'='1", "'; DROP TABLE users; --", "1' ORDER BY 1--",
+      "<script>alert(document.cookie)</script>",
+      "<img src=x onerror=alert(1)>",
+      "{{7*7}}", "${7*7}", "<%= 7*7 %>",
+      "; ls -la", "| cat /etc/passwd", "`id`"
+    ],
+    "source": "OWASP Top 10 2021",
+    "url": "https://owasp.org/Top10/A03_2021-Injection/"
+  },
+  {
+    "id": "A04:2021",
+    "name": "Insecure Design",
+    "description": "Insecure design is a broad category representing different weaknesses expressed as missing or ineffective control design. Insecure design is not the source for all other Top 10 risk categories.",
+    "cwe_ids": ["CWE-209", "CWE-256", "CWE-501", "CWE-522"],
+    "payloads": [],
+    "source": "OWASP Top 10 2021",
+    "url": "https://owasp.org/Top10/A04_2021-Insecure_Design/"
+  },
+  {
+    "id": "A05:2021",
+    "name": "Security Misconfiguration",
+    "description": "The application might be vulnerable if it is missing appropriate security hardening, has unnecessary features enabled, default accounts with unchanged passwords, overly informative error messages, or missing security headers.",
+    "cwe_ids": ["CWE-16", "CWE-611"],
+    "payloads": ["/admin", "/.env", "/config.php", "/backup.zip", "/.git/config", "/phpinfo.php", "/wp-admin", "/server-status"],
+    "source": "OWASP Top 10 2021",
+    "url": "https://owasp.org/Top10/A05_2021-Security_Misconfiguration/"
+  },
+  {
+    "id": "A06:2021",
+    "name": "Vulnerable and Outdated Components",
+    "description": "Using components such as libraries, frameworks, and other software modules with known vulnerabilities can undermine application defenses and enable various attacks and impacts.",
+    "cwe_ids": ["CWE-1104"],
+    "payloads": [],
+    "source": "OWASP Top 10 2021",
+    "url": "https://owasp.org/Top10/A06_2021-Vulnerable_and_Outdated_Components/"
+  },
+  {
+    "id": "A07:2021",
+    "name": "Identification and Authentication Failures",
+    "description": "Confirmation of the user identity, authentication, and session management is critical to protect against authentication-related attacks. There may be authentication weaknesses if the application permits automated attacks such as credential stuffing or brute force.",
+    "cwe_ids": ["CWE-287", "CWE-295", "CWE-798"],
+    "payloads": ["admin:admin", "admin:password", "admin:123456", "root:root", "guest:guest", "test:test"],
+    "source": "OWASP Top 10 2021",
+    "url": "https://owasp.org/Top10/A07_2021-Identification_and_Authentication_Failures/"
+  },
+  {
+    "id": "A08:2021",
+    "name": "Software and Data Integrity Failures",
+    "description": "Software and data integrity failures relate to code and infrastructure that does not protect against integrity violations. An example is where an application relies upon plugins, libraries, or modules from untrusted sources, repositories, and content delivery networks.",
+    "cwe_ids": ["CWE-829", "CWE-494"],
+    "payloads": [],
+    "source": "OWASP Top 10 2021",
+    "url": "https://owasp.org/Top10/A08_2021-Software_and_Data_Integrity_Failures/"
+  },
+  {
+    "id": "A09:2021",
+    "name": "Security Logging and Monitoring Failures",
+    "description": "This category is to help detect, escalate, and respond to active breaches. Without logging and monitoring, breaches cannot be detected. Insufficient logging, detection, monitoring, and active response occurs any time.",
+    "cwe_ids": ["CWE-117", "CWE-223", "CWE-532", "CWE-778"],
+    "payloads": [],
+    "source": "OWASP Top 10 2021",
+    "url": "https://owasp.org/Top10/A09_2021-Security_Logging_and_Monitoring_Failures/"
+  },
+  {
+    "id": "A10:2021",
+    "name": "Server-Side Request Forgery (SSRF)",
+    "description": "SSRF flaws occur whenever a web application is fetching a remote resource without validating the user-supplied URL. It allows an attacker to coerce the application to send a crafted request to an unexpected destination, even when protected by a firewall, VPN, or another type of network ACL.",
+    "cwe_ids": ["CWE-918"],
+    "payloads": [
+      "http://127.0.0.1/admin",
+      "http://localhost:8080",
+      "http://169.254.169.254/latest/meta-data/",
+      "http://169.254.169.254/latest/meta-data/iam/security-credentials/",
+      "file:///etc/passwd",
+      "dict://127.0.0.1:6379/info",
+      "http://[::1]/admin"
+    ],
+    "source": "OWASP Top 10 2021",
+    "url": "https://owasp.org/Top10/A10_2021-Server-Side_Request_Forgery_%28SSRF%29/"
+  }
+]
