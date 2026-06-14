@@ -10,8 +10,10 @@ Argus is an autonomous AI-driven security reasoning engine that bridges the gap 
 
 ### 1.1 Goals
 *   **Autonomy:** Minimize human intervention in reconnaissance and initial vulnerability discovery.
+*   **Self-Healing:** Autonomously detect and resolve missing dependencies or tool failures.
+*   **Tactical Orchestration:** Empower the AI to manage low-level tools directly via CLI for maximum flexibility.
+*   **Reflective Verification:** Implement logic-based validation to eliminate false positives and WAF traps.
 *   **Cross-Platform Integration:** Seamlessly bridge Windows (AI/GUI) and Kali Linux (Security Tools).
-*   **Extensibility:** Allow easy addition of new tools and AI models.
 *   **Persistence:** Maintain a "Shared Blackboard" of intelligence across sessions.
 
 ---
@@ -49,6 +51,8 @@ graph TD
 *   **Argus GUI (Streamlit):** The frontend providing a real-time view of the agent's "Thought" process.
 *   **Argus Brain (core/agent.py):** The ReAct (Reasoning and Acting) controller.
 *   **WSL Bridge (core/tools.py):** The execution layer that handles WSL/SSH communication.
+*   **Specialized Tactical Modules (modules/):** Deep exploitation scripts (SQLi Bypass, RCE chaining).
+*   **Archive Research Sub-agent:** Historical intelligence and web-search integrator.
 *   **Argus Memory (core/memory.py):** The persistence layer (SQLite).
 
 ---
@@ -76,8 +80,11 @@ graph TD
 
 ## 8. Cross-Cutting Concepts
 *   **Security:** API keys and credentials managed via `.env`.
-*   **Error Handling:** "Guided Reflection" - the system detects missing tools and suggests installation commands.
+*   **Error Handling:** "Guided Reflection" - the system detects missing tools, syntax errors, and suggests corrective actions.
+*   **Reflective Verification:** Mandatory multi-step validation (Content-Length/Header checks) for all discoveries to eliminate false positives and WAF redirects.
+*   **WAF Evasion & IP Protection:** Automated block detection triggers emergency halt; stealth is enhanced via User-Agent rotation and randomized delays.
 *   **Persistence:** SQLite database (`argus_intelligence.db`) with relational mapping for Knowledge Graph visualization.
+*   **Automated Organization:** Centralized storage of tool-specific reports (e.g., `reports/nikto/`) with semantic, timestamped naming conventions.
 
 ---
 
@@ -85,6 +92,11 @@ graph TD
 *   **ADR 1: Why SQLite?** Chosen for simplicity and zero-configuration, while supporting relational data needed for the Knowledge Graph.
 *   **ADR 2: Why WSL?** Provides a native Linux environment for industry-standard security tools while remaining accessible from Windows.
 *   **ADR 3: Why LangChain ReAct?** Standardizes how the AI interacts with tools, allowing for complex multi-step reasoning.
+*   **ADR 4: Autonomous Orchestration vs Static Scripts:** Shifted toward `Run_Kali_Command` to allow the AI to troubleshoot and pivot in real-time, reducing failure points in rigid bash scripts.
+*   **ADR 5: Self-Healing Logic:** Implemented `system_self_heal` to reduce "agent downtime" by allowing the AI to fix its own environment (pip/apt) when encountering missing dependencies.
+*   **ADR 6: Reflective Verification over Status-Only Discovery:** Mandated content-level validation because modern WAFs use deceptive "200 OK" redirects for non-existent files.
+*   **ADR 7: Autonomous Syntax Learning:** Empowered the agent to run `--help` commands on-the-fly to fix its own command syntax, reducing manual tuning.
+*   **ADR 8: Intelligent Rate-Limiting & IP Protection:** Implemented automated halt-on-block logic to protect the host's IP reputation during aggressive scanning.
 
 ---
 *Created by Argus Security Framework Team - June 2026*

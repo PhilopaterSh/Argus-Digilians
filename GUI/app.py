@@ -57,7 +57,11 @@ def load_brain(model_name):
         Tool(name="Exploit_Suggester", func=bridge.suggest_payloads, description="Search PayloadsAllTheThings for test payloads."),
         Tool(name="Smart_Web_Search", func=bridge.smart_web_search, description="Search internet for CVEs/Exploits/Security info."),
         Tool(name="Run_Nikto", func=bridge.run_nikto, description="Run Nikto vulnerability scanner against a web target."),
-        Tool(name="Run_FFUF", func=bridge.run_ffuf_discovery, description="Run FFUF for fast hidden path discovery.")
+        Tool(name="Run_FFUF", func=bridge.run_ffuf_discovery, description="Run FFUF for fast hidden path discovery."),
+        Tool(name="System_Self_Heal", func=bridge.system_self_heal, description="Use this tool to autonomously install missing Python libraries (pip) or Kali system tools (apt) if you encounter a 'command not found' or 'ModuleNotFoundError'."),
+        Tool(name="Archive_Research_Subagent", func=bridge.archive_research_subagent, description="Invoke the archived AI_Agents_Project for deep intelligence research (CVEs, Web Search, Historical Memory)."),
+        Tool(name="Run_Specialized_Module", func=bridge.run_specialized_module, description="Execute a specialized exploit script from the modules/ directory (e.g., 'argus_deep_exploit.py', 'stealth_exploit.py'). Use this for deep file extraction or WAF bypass."),
+        Tool(name="Run_Kali_Command", func=bridge.run_kali_command, description="Execute ANY raw command in the Kali Linux terminal (WSL). Use this for manual subdomain discovery (subfinder, assetfinder), fixing tools, or custom reconnaissance chains.")
     ]
     return ArgusBrain(model_name, tools)
 
@@ -75,19 +79,41 @@ if st.button("RUN ANALYSIS"):
                 
                 # The Agent now takes full control and shows its thoughts live in the UI
                 analysis = brain.ask(
-                    f"Perform a comprehensive security analysis for {target}. Start with reachability, then map the attack surface, and finally provide a deep risk assessment.",
+                    f"CONSULT MEMORY FIRST using 'Query_Memory'. Then perform a comprehensive security analysis for {target}. "
+                    f"If findings like SQLi, Path Traversal, or sensitive files already exist in memory, use 'Exploit_Suggester' and 'Smart_Web_Search' to CHAIN them and reach maximum impact (RCE). "
+                    f"Finally, provide a deep risk assessment including the full attack chain.",
                     callbacks=[st_callback]
                 )
                 
                 st.markdown("### 📋 Final Security Report")
-                st.info(analysis["output"])
+                
+                # Check if we got a parsed dictionary or raw string
+                final_report = ""
+                if isinstance(analysis.get("output"), dict):
+                    # It's the parsed Pydantic dict
+                    report_dict = analysis["output"]
+                    final_report = report_dict.get("output", str(report_dict))
+                    
+                    # Display metrics in columns
+                    col1, col2 = st.columns(2)
+                    col1.metric("Overall Risk Score", f"{report_dict.get('overall_risk_score', 'N/A')}/10")
+                    col2.metric("Findings Count", len(report_dict.get("findings", [])))
+                    
+                    with st.expander("View Structured Data (JSON)"):
+                        st.json(report_dict)
+                else:
+                    # It's the raw result string
+                    final_report = analysis.get("output", str(analysis))
+                
+                # Render the final Markdown report
+                st.markdown(final_report)
                 
                 status.update(label="Analysis Finished!", state="complete")
                 
                 # --- Export Feature ---
                 st.download_button(
                     label="📥 Download Report (Markdown)",
-                    data=analysis["output"],
+                    data=final_report,
                     file_name=f"Argus_Report_{target.replace('https://', '').replace('http://', '').replace('/', '_')}.md",
                     mime="text/markdown"
                 )

@@ -27,6 +27,159 @@ class WSLBridgeTools:
         self._lock = threading.Lock()
         self.last_recon_results = None
         self.memory = ArgusMemory()
+        self.user_agents = [
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.98 Safari/537.36",
+            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.107 Safari/537.36",
+            "Mozilla/5.0 (iPhone; CPU iPhone OS 14_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.1.1 Mobile/15E148 Safari/604.1"
+        ]
+
+    def _get_stealth_headers(self):
+        import random
+        ua = random.choice(self.user_agents)
+        ip = f"{random.randint(1,255)}.{random.randint(1,255)}.{random.randint(1,255)}.{random.randint(1,255)}"
+        return f"-H 'User-Agent: {ua}' -H 'X-Forwarded-For: {ip}'"
+
+    def system_self_heal(self, tool_info):
+        """Attempts to autonomously install missing libraries or tools (Self-Healing)."""
+        print(f"[*] [Argus-SelfHeal] AI requested repair for: {tool_info}")
+        
+        # 1. Check if it's a Python library
+        if "pip install" in tool_info.lower() or "import" in tool_info.lower():
+            package = tool_info.split("install")[-1].strip().split()[0] if "install" in tool_info else tool_info.split()[-1]
+            print(f"[*] Attempting to install Python package: {package}")
+            # Use sys.executable to target the correct venv
+            import sys
+            cmd = f"{sys.executable} -m pip install -U {package}"
+            res = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+            if res.returncode == 0:
+                return f"Successfully installed Python package: {package}. You can now retry the failed action."
+            else:
+                return f"Failed to install {package}: {res.stderr}"
+
+        # 2. Check if it's a Kali/System tool
+        print(f"[*] Attempting to install Kali tool via apt: {tool_info}")
+        res = self.run(f"sudo apt-get update && sudo apt-get install -y {tool_info}")
+        if "Setting up" in res or "is already the newest version" in res:
+            return f"Successfully installed/verified system tool: {tool_info}."
+        
+        return f"Self-heal failed for {tool_info}. Please check logs or install manually."
+
+    def archive_research_subagent(self, query):
+        """Invokes the archived AI_Agents_Project for deep research (CVEs, Web Search, Memory)."""
+        print(f"[*] [Argus-Archive] Invoking research subagent for: {query}")
+        
+        # Determine paths
+        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+        archive_script = os.path.join(project_root, "archive", "AI_Agents_Project", "smart_search_with_memory.py")
+        venv_python = os.path.join(project_root, "Argus_venv", "Scripts", "python.exe")
+        
+        if not os.path.exists(archive_script):
+            return "Error: Archive research script not found at the specified path."
+            
+        # Run the script and capture output
+        try:
+            cmd = [venv_python, archive_script, query]
+            result = subprocess.run(cmd, capture_output=True, text=True, encoding='utf-8', errors='ignore', timeout=300)
+            
+            if result.returncode != 0:
+                return f"Archive Subagent Error: {result.stderr}"
+                
+            return f"--- 🧠 ARCHIVE RESEARCH REPORT ---\n{result.stdout}"
+        except Exception as e:
+            return f"Failed to invoke archive subagent: {str(e)}"
+
+    def run_specialized_module(self, module_name, target=None):
+        """Executes a specialized exploit or reasoning module from the 'modules/' directory."""
+        print(f"[*] [Argus-Modules] Invoking specialized module: {module_name}")
+        
+        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+        module_path = os.path.join(project_root, "modules", module_name)
+        venv_python = os.path.join(project_root, "Argus_venv", "Scripts", "python.exe")
+        
+        if not os.path.exists(module_path):
+            return f"Error: Module '{module_name}' not found in modules/ directory."
+            
+        try:
+            # Set PYTHONPATH to root to ensure imports work
+            env = os.environ.copy()
+            env["PYTHONPATH"] = f"{project_root};{env.get('PYTHONPATH', '')}"
+            
+            cmd = [venv_python, module_path]
+            if target:
+                # Some modules might take target as an argument or we can inject it
+                # For now, most of these scripts have the target hardcoded or we can pass it
+                cmd.append(target)
+                
+            result = subprocess.run(cmd, capture_output=True, text=True, encoding='utf-8', errors='ignore', timeout=300, env=env)
+            
+            output = f"--- 🚀 SPECIALIZED MODULE OUTPUT: {module_name} ---\n"
+            output += result.stdout
+            if result.stderr:
+                output += f"\n[!] Errors/Warnings:\n{result.stderr}"
+                
+            return output
+        except Exception as e:
+            return f"Failed to execute specialized module: {str(e)}"
+
+    def stealth_run(self, command, delay=True):
+        """Executes a command (typically curl) with stealth headers and optional delay."""
+        import time
+        import random
+        if delay:
+            time.sleep(random.uniform(1, 3))
+        
+        # If it's a curl command, inject stealth headers
+        if "curl " in command:
+            headers = self._get_stealth_headers()
+            command = command.replace("curl ", f"curl {headers} ")
+            
+        return self.run(command)
+
+    def crawl_target(self, url):
+        """Discovers internal links and entry points to expand the attack surface."""
+        print(f"[*] [Argus-Core] Crawling target: {url}")
+        # Use a combination of curl and grep for a lightweight crawler inside WSL
+        cmd = f"curl -s -L {url} | grep -oE 'href=\"[^\"]+\"' | cut -d'\"' -f2 | sort -u"
+        res = self.run(cmd)
+        
+        links = [l for l in res.split('\n') if l.strip() and not l.startswith(('#', 'javascript'))]
+        
+        clean_target = url.replace("https://", "").replace("http://", "").split("/")[0]
+        for link in links[:20]:
+            self.memory.add_finding(clean_target, "crawler", "link", link, f"Discovered link: {link}")
+            
+        return f"--- 🕸️ CRAWLER REPORT: {url} ---\nFound {len(links)} links. Top findings:\n" + "\n".join(links[:15])
+
+    def advanced_vuln_probe(self, url):
+        """Performs targeted, WAF-evasive probes for SQLi and Path Traversal."""
+        print(f"[*] [Argus-Core] Starting Advanced Evasion Probes for: {url}")
+        results = []
+        clean_target = url.replace("https://", "").replace("http://", "").split("/")[0]
+
+        # 1. Path Traversal Evasion
+        traversal_payloads = ["web.config", "..%2f..%2fweb.config", "..%5c..%5cweb.config"]
+        for p in traversal_payloads:
+            # Use stealth_run for the probe
+            cmd = f"curl -s -o /dev/null -w '%{{http_code}} %{{size_download}}' '{url}?item={p}'"
+            res = self.stealth_run(cmd)
+            if res.startswith('200'):
+                results.append(f"[!] Path Traversal Success: {p}")
+                self.memory.add_finding(clean_target, "evasion_probe", "vulnerability", f"Traversal: {p}", "Path Traversal Bypass!")
+
+        # 2. SQLi WAF Evasion
+        sqli_payloads = ["%u0027", "1'/**/OR/**/1=1/**/--", "1%20OR%201=1"]
+        for p in sqli_payloads:
+            cmd = f"curl -s -o /dev/null -w '%{{http_code}}' '{url}?id={p}'"
+            res = self.stealth_run(cmd)
+            if res == "500":
+                results.append(f"[!] Potential SQLi (Evasion): {p} (Server Error 500)")
+                self.memory.add_finding(clean_target, "evasion_probe", "vulnerability", f"SQLi: {p}", "SQLi potential via WAF evasion")
+
+        if not results:
+            return "No vulnerabilities detected with advanced evasion probes."
+        
+        return "--- 🛡️ ADVANCED EVASION PROBE REPORT ---\n" + "\n".join(results)
 
     def _clean_ansi_codes(self, text):
         """Removes ANSI escape codes (colors, bold, etc.) from terminal output."""
@@ -55,8 +208,34 @@ class WSLBridgeTools:
             except:
                 return False
 
+    def _get_stealth_headers(self):
+        import random
+        # Modern, randomized User-Agents
+        ua_list = [
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36",
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/113.0.0.0 Safari/537.36",
+            "Mozilla/5.0 (X11; Linux x86_64; rv:109.0) Gecko/20100101 Firefox/114.0"
+        ]
+        ua = random.choice(ua_list)
+        ip = f"{random.randint(1,255)}.{random.randint(1,255)}.{random.randint(1,255)}.{random.randint(1,255)}"
+        return f"-H 'User-Agent: {ua}' -H 'X-Forwarded-For: {ip}' -H 'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8' -H 'Accept-Language: en-US,en;q=0.5'"
+
+    def _is_waf_blocked(self, text):
+        """Detects if the target has restricted access based on common block pages."""
+        indicators = [
+            "Access Temporarily Restricted",
+            "possibly malicious",
+            "automated security systems",
+            "Cloudflare ray ID",
+            "IP address as possibly malicious"
+        ]
+        for ind in indicators:
+            if ind.lower() in text.lower():
+                return True
+        return False
+
     def run(self, command, show_prompt=False):
-        """Executes a command on WSL Kali with enhanced error reporting (Guided Reflection)."""
+        """Executes a command on WSL Kali with enhanced error reporting and WAF protection."""
         
         # 1. Direct WSL execution
         if self.host in ["127.0.0.1", "localhost"]:
@@ -65,18 +244,24 @@ class WSLBridgeTools:
                 wsl_cmd = ["wsl", "-d", self.distro, "-u", self.user, "bash", "-c", command]
                 result = subprocess.run(wsl_cmd, capture_output=True, text=True, timeout=600, encoding='utf-8', errors='ignore')
                 
+                output = result.stdout if result.stdout else result.stderr
+                cleaned = self._clean_ansi_codes(output)
+
+                # WAF Detection: If blocked, stop and warn
+                if self._is_waf_blocked(cleaned):
+                    return f"🛑 [WAF ALERT] Access Restricted! The target has blocked your IP. Suggestion: STOP SCANS IMMEDIATELY and wait 15-30 mins or use a VPN/Proxy."
+
                 if result.returncode != 0:
                     error_msg = result.stderr if result.stderr else result.stdout
                     # Guided Reflection: Detect common issues
                     if "command not found" in error_msg.lower():
-                        return f"Error: Tool not installed in WSL. Suggestion: Use 'apt install' to add the missing tool."
+                        return f"Error: Tool not installed in WSL. Suggestion: Use 'Run_Kali_Command' with 'sudo apt install -y {command.split()[0]}' to add the missing tool."
+                    if "flag provided but not defined" in error_msg.lower() or "invalid option" in error_msg.lower():
+                        return f"Error: Syntax Error in command. Suggestion: Use 'Run_Kali_Command' with '{command.split()[0]} --help' to verify the correct parameters for this tool."
                     if "permission denied" in error_msg.lower():
                         return f"Error: Permission denied. Suggestion: Try running with 'sudo' or check file permissions."
-                    return f"Error (Code {result.returncode}): {self._clean_ansi_codes(error_msg)}"
+                    return f"Error (Code {result.returncode}): {cleaned}"
 
-                final_output = result.stdout if result.stdout else result.stderr
-                cleaned = self._clean_ansi_codes(final_output)
-                
                 if show_prompt:
                     return f"┌──(kali㉿WSL)-[~]\n└─$ {command}\n{cleaned}"
                 return cleaned
@@ -172,7 +357,7 @@ class WSLBridgeTools:
         
         report = "--- 📁 SENSITIVE FILE DISCOVERY REPORT ---\n"
         report += "\n".join(results)
-        return report
+        return f"```\n{report}\n```"
 
     def analyze_secrets(self, url):
         """Fetches the page body and JS files to look for leaked secrets using Regex."""
@@ -206,7 +391,8 @@ class WSLBridgeTools:
         if not found:
             return "No obvious secrets or credentials leaked in the landing page HTML."
         
-        return "--- 🔍 LEAKED SECRETS ANALYSIS ---\n" + "\n".join(found)
+        report = "--- 🔍 LEAKED SECRETS ANALYSIS ---\n" + "\n".join(found)
+        return f"```\n{report}\n```"
 
     def recon_suite(self, url, selected_targets=None):
         """Runs expanded recon with smart target prioritization and parallel execution."""
@@ -366,12 +552,14 @@ class WSLBridgeTools:
             except Exception as e:
                 print(f"[!] Error parsing/saving subdomains: {e}")
 
-        return res
+        return f"```\n{res}\n```"
 
     def save_json_report(self, domain, data):
         """Saves structured intel to a JSON file for persistence."""
         os.makedirs("reports", exist_ok=True)
-        path = f"reports/intel_{domain}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+        # Sanitize domain for filename
+        safe_domain = re.sub(r'[^\w\.-]', '_', domain)
+        path = f"reports/intel_{safe_domain}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
         with open(path, "w") as f:
             json.dump(data, f, indent=4)
         print(f"[+] Structured intelligence saved to: {path}")
@@ -379,12 +567,14 @@ class WSLBridgeTools:
 
     def get_intelligence_summary(self, _=None):
         """Retrieves the current state of knowledge from the Blackboard (Shared Memory)."""
-        return self.memory.get_blackboard_summary()
+        summary = self.memory.get_blackboard_summary()
+        return f"```json\n{summary}\n```"
 
     def query_knowledge_graph(self, _=None):
         """Returns complex relationships and commonalities across targets (Knowledge Graph)."""
         print("[*] Querying Knowledge Graph for cross-target insights...")
-        return self.memory.get_graph_insights()
+        insights = self.memory.get_graph_insights()
+        return f"```\n{insights}\n```"
 
     def suggest_payloads(self, vulnerability_type):
         """Searches PayloadsAllTheThings for relevant payloads based on the vulnerability type."""
@@ -426,8 +616,8 @@ class WSLBridgeTools:
         print(f"[*] Fetching payloads from: {matched_dir}")
         
         # Read the README.md or the first .md file in the directory to get "The Juice"
-        # We use a smart grep to find actual code blocks/payloads
-        cmd = f"cat \"/opt/payloads/PayloadsAllTheThings/{matched_dir}/README.md\" | grep -A 5 '```' | head -n 30"
+        # We use a smart grep with hex encoding to avoid shell parsing issues with backticks
+        cmd = f"cat \"/opt/payloads/PayloadsAllTheThings/{matched_dir}/README.md\" | grep -A 5 -P '\\x60\\x60\\x60' | head -n 30"
         payload_data = self.run(cmd)
         
         reflection = f"--- 🛠️ SUGGESTED PAYLOADS/METHODOLOGY FOR {matched_dir} ---\n"
@@ -457,36 +647,68 @@ class WSLBridgeTools:
     def run_nikto(self, url):
         """Runs Nikto vulnerability scanner inside Kali against a web target."""
         print(f"[*] Starting Nikto Vulnerability Scan for: {url}")
+        
+        # Ensure the output directory exists
+        output_dir = "reports/nikto"
+        os.makedirs(output_dir, exist_ok=True)
+        
+        # Construct filename
+        clean_target = url.replace("https://", "").replace("http://", "").rstrip('/').replace("/", "_")
+        timestamp = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
+        filename = f"nikto_{clean_target}_{timestamp}.txt"
+        output_path = f"{output_dir}/{filename}"
+        
         # -nointeractive: no prompts, -maxtime: safety cap
-        cmd = f"nikto -h {url} -nointeractive -maxtime 120s -Format txt"
+        cmd = f"nikto -h {url} -nointeractive -maxtime 120s -Format txt -o {output_path}"
         res = self.run(cmd)
         
         # Parse and save findings
         findings = [l for l in res.split('\n') if l.strip().startswith("+")]
         if findings:
-            clean_target = url.replace("https://", "").replace("http://", "").split("/")[0]
+            target_for_mem = url.replace("https://", "").replace("http://", "").split("/")[0]
             for f in findings:
-                self.memory.add_finding(clean_target, "nikto", "vulnerability", f, "Potential vulnerability detected")
+                self.memory.add_finding(target_for_mem, "nikto", "vulnerability", f, "Potential vulnerability detected")
         
-        return f"--- 🛠️ NIKTO VULNERABILITY REPORT ---\n{res}"
+        return f"--- 🛠️ NIKTO VULNERABILITY REPORT (Saved to {output_path}) ---\n{res}"
 
     def run_ffuf_discovery(self, url):
-        """Runs FFUF for fast directory discovery inside Kali."""
+        """Runs FFUF for fast directory discovery inside Kali. Optimized for 120s timeout."""
         clean_url = url.rstrip('/')
-        # Ensure we have a wordlist, default to one in Kali's SecLists
         wordlist = "/usr/share/seclists/Discovery/Web-Content/common.txt"
         
         print(f"[*] Starting FFUF Path Discovery for: {clean_url}")
-        # -mc 200,301,302: status codes, -s: silent/quiet
-        cmd = f"ffuf -w {wordlist} -u {clean_url}/FUZZ -mc 200,301,302,403 -s"
+        # Added -t 50 for speed and -maxtime 110 to stay within bridge timeout
+        cmd = f"ffuf -w {wordlist} -u {clean_url}/FUZZ -mc 200,301,302 -s -t 50 -maxtime 110"
         res = self.run(cmd)
         
         if res.strip():
             paths = res.strip().splitlines()
             clean_target = url.replace("https://", "").replace("http://", "").split("/")[0]
-            for p in paths[:20]: # Limit saving to memory
+            for p in paths[:20]: 
                 self.memory.add_finding(clean_target, "ffuf", "path", p, "Hidden path discovered")
             return f"--- 📁 FFUF DISCOVERY REPORT ---\nDiscovered {len(paths)} paths. Top findings:\n" + "\n".join(paths[:40])
         
-        return "FFUF completed. No notable paths found."
+        return "FFUF completed. No notable paths found or timeout reached."
+
+    def run_kali_command(self, command):
+        """Executes ANY command directly in the Kali WSL environment. Use this for manual reconnaissance or fixing tool issues."""
+        print(f"[*] [Argus-Kali] Executing manual command: {command}")
+        
+        # Ensure Go bins are in PATH for the command execution
+        full_command = f"export PATH=$PATH:/home/kali/go/bin:/home/kali/.pdtm/go/bin && {command}"
+        res = self.run(full_command, show_prompt=True)
+        
+        # Integration: If the command output looks like subdomains, attempt to save them
+        if len(res.splitlines()) > 2:
+            potential_subs = re.findall(r'(?:[a-zA-Z0-9](?:[a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]{2,}', res)
+            if potential_subs:
+                # Deduplicate and limit
+                unique_subs = list(set(potential_subs))
+                print(f"[*] [Argus-Kali] Auto-detected {len(unique_subs)} potential subdomains in output.")
+                # We don't know the parent domain here easily, so we just upsert them
+                for sub in unique_subs[:50]:
+                    self.memory.upsert_target(sub)
+
+        return f"--- 🖥️ KALI TERMINAL OUTPUT ---\n{res}"
+
 
