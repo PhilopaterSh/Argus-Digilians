@@ -1,28 +1,6 @@
-from langchain_ollama import OllamaLLM
-from langchain_classic.agents import AgentExecutor, create_react_agent
-from langchain_core.tools import Tool
 from langchain_core.prompts import PromptTemplate
-from langchain_core.output_parsers import PydanticOutputParser
-from core.schemas import SecurityReport
-import os
-import json
 
-class ArgusBrain:
-    def __init__(self, model_name, tools_list):
-        self.llm = OllamaLLM(
-            model=model_name, 
-            timeout=3600,  # Increased to 1 hour for large models
-            temperature=0.1,
-            base_url=os.getenv("OLLAMA_HOST", "http://localhost:11434")
-        )
-        self.tools = tools_list
-        self.output_parser = PydanticOutputParser(pydantic_object=SecurityReport)
-        self.agent_executor = self._setup_agent()
-
-    def _setup_agent(self):
-        format_instructions = self.output_parser.get_format_instructions()
-        
-        template = """You are Argus AI, a senior security researcher and penetration testing expert.
+ARGUS_AGENT_TEMPLATE = """You are Argus AI, a senior security researcher and penetration testing expert.
 Your goal is to achieve maximum impact through AGGRESSIVE VULNERABILITY CHAINING and RCE.
 
 CRITICAL LOOP PREVENTION RULES:
@@ -94,35 +72,9 @@ CRITICAL: 'Action Input' MUST be the raw value only. NEVER provide a JSON object
 Question: {input}
 Thought: {agent_scratchpad}"""
 
-        prompt = PromptTemplate(
-            template=template,
-            input_variables=["input", "tools", "tool_names", "agent_scratchpad"],
-            partial_variables={"format_instructions": format_instructions}
-        )
-        
-        agent = create_react_agent(self.llm, self.tools, prompt)
-        return AgentExecutor(
-            agent=agent, 
-            tools=self.tools, 
-            verbose=True, 
-            handle_parsing_errors=True,
-            max_iterations=50,
-            early_stopping_method="generate"
-        )
-
-    def ask(self, query, callbacks=None):
-        raw_result = self.agent_executor.invoke({"input": query}, config={"callbacks": callbacks})
-        
-        # Try to parse the final answer into our Pydantic model
-        try:
-            # The agent's final answer should be in result["output"]
-            parsed_report = self.output_parser.parse(raw_result["output"])
-            return {"output": parsed_report.dict(), "raw": raw_result["output"]}
-        except Exception as e:
-            print(f"[!] Pydantic Parsing Error: {e}")
-            return raw_result
-
-    def simple_ask(self, prompt):
-        """Direct LLM call for analysis when tools are not needed, bypassing agent overhead."""
-        response = self.llm.invoke(prompt)
-        return {"output": response}
+def get_argus_prompt(format_instructions=""):
+    return PromptTemplate(
+        template=ARGUS_AGENT_TEMPLATE,
+        input_variables=["input", "tools", "tool_names", "agent_scratchpad"],
+        partial_variables={"format_instructions": format_instructions}
+    )

@@ -47,13 +47,14 @@ graph TD
 
 ## 5. Building Block View (C4 Level 2: Containers)
 
-### 5.1 System Building Blocks
-*   **Argus GUI (Streamlit):** The frontend providing a real-time view of the agent's "Thought" process.
-*   **Argus Brain (core/agent.py):** The ReAct (Reasoning and Acting) controller.
-*   **WSL Bridge (core/tools.py):** The execution layer that handles WSL/SSH communication.
-*   **Specialized Tactical Modules (modules/):** Deep exploitation scripts (SQLi Bypass, RCE chaining).
-*   **Archive Research Sub-agent:** Historical intelligence and web-search integrator.
-*   **Argus Memory (core/memory.py):** The persistence layer (SQLite).
+### 5.1 System Building Blocks (Refactored for Clean Architecture)
+*   **Argus GUI (app/GUI/app.py):** The frontend providing a real-time view of the agent's "Thought" process.
+*   **Argus Brain (app/core/brain.py):** The ReAct (Reasoning and Acting) controller, now decoupled into factories.
+*   **Modular Tool Services (app/tools/):** Focused classes for each tool category (Recon, Scanners, Secrets, Evasion, etc.).
+*   **Tool Registry (app/tools/tool_registry.py):** A facade that centralizes tool access for the brain.
+*   **Specialized Tactical Modules (app/modules/):** Advanced exploitation scripts (SQLi Bypass, RCE chaining).
+*   **Archive Research Sub-agent:** Historical intelligence and web-search integrator (in `app/tools/web_search.py`).
+*   **Argus Memory (app/core/memory/):** The persistence layer (SQLite), organized as a service.
 
 ---
 
@@ -61,10 +62,11 @@ graph TD
 
 ### 6.1 Reconnaissance Workflow
 1.  **Input:** User provides a URL.
-2.  **Reasoning:** `ArgusBrain` analyzes the task and selects `Check_Reachability`.
-3.  **Bridge:** `WSLBridgeTools` sends a ping/curl command to Kali.
-4.  **Action:** Kali executes the command and returns output.
-5.  **Perception:** `ArgusBrain` reads the output, updates `ArgusMemory`, and decides on the next step (e.g., `Subdomain_Enumeration`).
+2.  **Reasoning:** `ArgusBrain` (in `app/core`) analyzes the task.
+3.  **Registry:** It requests a tool from `WSLBridgeTools` (in `app/tools/tool_registry.py`).
+4.  **Service:** The registry delegates to a specific service (e.g., `ReconService` in `app/tools/recon.py`).
+5.  **Bridge:** The service uses `CommandRunner` to send commands to Kali.
+6.  **Perception:** `ArgusBrain` reads the output, updates `ArgusMemory`, and decides on the next step.
 
 ---
 
@@ -73,14 +75,20 @@ graph TD
 *   **Host OS:** Windows 10/11.
 *   **AI Engine:** Ollama (Localhost:11434).
 *   **Environment:** `Argus_venv` (Python 3.12).
+*   **Directory Structure:**
+    *   `/app`: Core logic (core, tools, modules, GUI).
+    *   `/docs`: Documentation and workflows.
+    *   `/scripts`: Root-level operational utilities.
+    *   `/setup`: Environment installation resources.
 *   **Virtualization:** WSL 2 (Distro: kali-linux).
 *   **Bridge:** Local SSH (Port 22) or `wsl.exe` direct execution.
 
 ---
 
 ## 8. Cross-Cutting Concepts
+*   **Modular Tooling:** Tools are no longer in a single monolithic file but in category-specific services, improving testability.
 *   **Security:** API keys and credentials managed via `.env`.
-*   **Error Handling:** "Guided Reflection" - the system detects missing tools, syntax errors, and suggests corrective actions.
+*   **Error Handling:** "Guided Reflection" with WAF detection and autonomous repair suggestions.
 *   **Reflective Verification:** Mandatory multi-step validation (Content-Length/Header checks) for all discoveries to eliminate false positives and WAF redirects.
 *   **WAF Evasion & IP Protection:** Automated block detection triggers emergency halt; stealth is enhanced via User-Agent rotation and randomized delays.
 *   **Persistence:** SQLite database (`argus_intelligence.db`) with relational mapping for Knowledge Graph visualization.

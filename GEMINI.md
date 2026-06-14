@@ -5,9 +5,11 @@
 - **Tone:** Professional, technical, and concise.
 
 ## 📁 Project Structure & Naming
+- **Application Logic (`app/`):** All core application code, including `core/` (brain, memory, schemas) and `tools/` (modularized tool services).
+- **Specialized Modules (`app/modules/`):** Advanced exploit and reasoning scripts.
 - **Centralized Setup:** All installation resources and sub-scripts MUST be located within the `Setup/` directory.
 - **Master Documentation:** The `Argus_Master_Documentation.md` in the root is the definitive technical reference.
-- **Root Utilities:** Maintain only core operational utilities (`INSTALL_EVERYTHING.bat`, `LAUNCH_STUDIO.bat`, `CHECK_HEALTH.bat`) in the root directory for a clean workspace.
+- **Operational Scripts:** Maintain core utilities (`scripts/CHECK_HEALTH.bat`, `scripts/LAUNCH_STUDIO.bat`, etc.) in the `scripts/` directory for a clean workspace.
 
 ## 🛠️ Development Workflow
 - **Master Installer:** Keep `INSTALL_EVERYTHING.bat` updated to reflect any changes in the `Setup/` internal scripts.

@@ -1,0 +1,31 @@
+import sys
+import subprocess
+
+class SelfHealingService:
+    """Attempts to autonomously install missing libraries or tools."""
+
+    def __init__(self, runner):
+        self.runner = runner
+
+    def system_self_heal(self, tool_info):
+        """Attempts to autonomously install missing libraries or tools (Self-Healing)."""
+        print(f"[*] [Argus-SelfHeal] AI requested repair for: {tool_info}")
+        
+        # 1. Check if it's a Python library
+        if "pip install" in tool_info.lower() or "import" in tool_info.lower():
+            package = tool_info.split("install")[-1].strip().split()[0] if "install" in tool_info else tool_info.split()[-1]
+            print(f"[*] Attempting to install Python package: {package}")
+            cmd = f"{sys.executable} -m pip install -U {package}"
+            res = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+            if res.returncode == 0:
+                return f"Successfully installed Python package: {package}. You can now retry the failed action."
+            else:
+                return f"Failed to install {package}: {res.stderr}"
+
+        # 2. Check if it's a Kali/System tool
+        print(f"[*] Attempting to install Kali tool via apt: {tool_info}")
+        res = self.runner.run(f"sudo apt-get update && sudo apt-get install -y {tool_info}")
+        if "Setting up" in res or "is already the newest version" in res:
+            return f"Successfully installed/verified system tool: {tool_info}."
+        
+        return f"Self-heal failed for {tool_info}. Please check logs or install manually."

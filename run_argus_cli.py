@@ -1,8 +1,8 @@
 import os
 import sys
 import argparse
-from core.tools import WSLBridgeTools
-from core.agent import ArgusBrain
+from app.tools.tool_registry import WSLBridgeTools
+from app.core.brain import ArgusBrain
 from langchain_core.tools import Tool
 from dotenv import load_dotenv
 

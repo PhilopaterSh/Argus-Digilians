@@ -2,11 +2,11 @@ import streamlit as st
 import sys
 import os
 
-# Ensure project root is in path for core module access
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+# Ensure project root is in path for module access
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
 
-from core.tools import WSLBridgeTools
-from core.agent import ArgusBrain
+from app.tools.tool_registry import WSLBridgeTools
+from app.core.brain import ArgusBrain
 from langchain_core.tools import Tool
 from langchain_community.callbacks.streamlit import StreamlitCallbackHandler
 
