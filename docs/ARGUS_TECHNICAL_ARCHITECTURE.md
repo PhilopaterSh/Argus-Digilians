@@ -113,4 +113,4 @@ Argus uses a **Shared Blackboard Pattern**. Instead of passing raw data between 
 ---
 **Version:** 1.5 (Post-SALMA Integration)
 **Status:** Approved Technical Baseline
-**Author:** Argus Development Agent (PhilopaterSh Edition)
+**Author:** Argus Development Agent Team
