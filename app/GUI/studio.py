@@ -1,160 +1,165 @@
 import streamlit as st
-import sys
 import os
-import concurrent.futures
-import re
-from typing import Optional
+import sys
+import time
+from dotenv import load_dotenv
 
-# Ensure project root is in path for module access
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
+# Ensure project root is in path for core module access
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from app.tools.tool_registry import WSLBridgeTools
-from app.core.brain import ArgusBrain
+from core.agent import ArgusBrain
 from langchain_core.tools import Tool
-from langchain_community.callbacks.streamlit import StreamlitCallbackHandler
 
-# --- UI Setup ---
-st.set_page_config(page_title="Argus AI Studio - WSL Bridge", layout="wide")
+# Load environment variables
+load_dotenv()
 
-# تصميم بسيط واحترافي
+# --- Page Configuration ---
+st.set_page_config(
+    page_title="Argus AI - Security Command Center",
+    page_icon="🛡️",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+# --- Enhanced Custom CSS ---
 st.markdown("""
     <style>
-    .report-card {
-        background-color: #111;
-        padding: 20px;
-        border-radius: 10px;
-        border-left: 5px solid #00ff41;
-        font-family: monospace;
+    @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;700&display=swap');
+    
+    html, body, [class*="css"] {
+        font-family: 'JetBrains+Mono', monospace;
+    }
+
+    .main {
+        background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
         color: #00ff41;
+    }
+    
+    .stApp {
+        background-color: transparent;
+    }
+
+    /* Header Styling */
+    .main-header {
+        text-align: center;
+        padding: 2rem;
+        background: rgba(0, 0, 0, 0.6);
+        border-radius: 15px;
+        border: 1px solid #00ff41;
+        box-shadow: 0 0 20px rgba(0, 255, 65, 0.2);
+        margin-bottom: 2rem;
+    }
+    
+    .main-header h1 {
+        color: #00ff41;
+        text-transform: uppercase;
+        letter-spacing: 5px;
+        margin: 0;
+    }
+
+    /* Terminal Style Recon Box */
+    .terminal-box {
+        background-color: #000000;
+        color: #00ff41;
+        padding: 15px;
+        border-radius: 5px;
+        border: 1px solid #333;
+        font-family: 'JetBrains+Mono', monospace;
+        margin-top: 10px;
+        white-space: pre-wrap;
+        font-size: 0.85rem;
+        border-left: 4px solid #00ff41;
+    }
+
+    /* Button Styling */
+    .stButton>button {
+        background-color: #00ff41 !important;
+        color: black !important;
+        font-weight: bold !important;
+        border-radius: 5px !important;
+        border: none !important;
+        transition: 0.3s !important;
+        width: 100%;
+    }
+    
+    .stButton>button:hover {
+        background-color: #008f11 !important;
+        box-shadow: 0 0 15px #00ff41 !important;
     }
     </style>
     """, unsafe_allow_html=True)
 
-st.title("🛡️ Argus AI Studio (WSL Bridge)")
+# --- Custom Header ---
+st.markdown("""
+    <div class="main-header">
+        <h1>Argus AI Security Studio</h1>
+        <p style="color: #888;">Autonomous Intelligence & Reconnaissance Framework v1.0</p>
+    </div>
+    """, unsafe_allow_html=True)
 
-# Sidebar
-with st.sidebar:
-    st.header("⚙️ Bridge Configuration")
-    st.info("App: Docker Container")
-    st.info("Tools: Local WSL Kali")
-    # Only use WhiteRabbitNeo as requested
-    model = "WhiteRabbitNeo/WhiteRabbitNeo-V3-7B:latest"
-    st.write(f"**Intelligence Model:** {model}")
+# --- Initialization ---
+bridge = WSLBridgeTools()
+MODEL_NAME = os.getenv("SELECTED_MODEL", "WhiteRabbitNeo/WhiteRabbitNeo-V3-7B:latest")
+
+@st.cache_resource
+def get_brain():
+    tools = [
+        Tool(name="Check_Reachability", func=bridge.check_reachability, description="Verify target via WSL network."),
+        Tool(name="Subdomain_Enumeration", func=bridge.enumerate_subdomains, description="Fast subdomain discovery."),
+        Tool(name="Recon_Suite", func=bridge.recon_suite, description="Execute multi-tool parallel recon in WSL Kali.")
+    ]
+    return ArgusBrain(MODEL_NAME, tools)
+
+# --- UI Layout ---
+col1, col2 = st.columns([1, 2])
+
+with col1:
+    st.subheader("System Status")
+    st.success(f"WSL Bridge: ACTIVE ({bridge.host})")
+    st.info(f"AI Engine: {MODEL_NAME}")
     
     st.markdown("---")
-    st.subheader("SSH Credentials")
-    wsl_user = st.text_input("WSL User", os.getenv("WSL_USER", "kali"))
-    wsl_pass = st.text_input("WSL Pass", os.getenv("WSL_PASS", "kali"), type="password")
+    url_input = st.text_input("Target URL", "https://example.com")
+    run_btn = st.button("EXECUTE ANALYSIS")
 
-# Logic Initialization
-# Pass dynamic credentials if needed, or rely on ENV
-bridge = WSLBridgeTools()
+with col2:
+    st.subheader("Intelligence Output")
+    if run_btn:
+        if url_input:
+            brain = get_brain()
+            with st.status("📡 Bridging to WSL Kali...", expanded=True) as status:
+                st.write("Initializing Parallel Recon Subsystem...")
+                # recon_suite returns the full string for display
+                report_display = bridge.recon_suite(url_input)
+                results = bridge.last_recon_results
+                report_for_ai = results["ai_input"]
+                
+                st.markdown("#### Technical Evidence:")
+                st.markdown(f'<div class="terminal-box">{report_display}</div>', unsafe_allow_html=True)
+                
+                st.write("🧠 AI Analyzing technical data...")
+                # We use the condensed summary for the AI to improve precision and save context
+                analysis = brain.ask(f"Analyze this reconnaissance report from WSL for {url_input}. Focus on risks and vulnerabilities based on this summary: {report_for_ai}")
+                
+                st.markdown("#### AI Intelligence Report:")
+                st.info(analysis["output"])
+                
+                status.update(label="Analysis Complete!", state="complete")
+                
+                # Report Export
+                full_export = f"# Argus Security Report - {url_input}\n\n## Technical Data\n{report_display}\n\n## AI Analysis\n{analysis['output']}"
+                st.download_button(
+                    label="📥 DOWNLOAD MARKDOWN REPORT",
+                    data=full_export,
+                    file_name=f"Argus_{url_input.replace('https://', '').replace('/', '_')}.md",
+                    mime="text/markdown"
+                )
+        else:
+            st.warning("Please enter a valid target URL.")
 
-def load_brain(model_name):
-    tools = [
-        Tool(name="Check_Reachability", func=bridge.check_reachability, description="Verify if the target domain is reachable before scanning."),
-        Tool(name="Subdomain_Enumeration", func=bridge.enumerate_subdomains, description="Discover subdomains to map the target's attack surface."),
-        Tool(name="Recon_Suite", func=bridge.recon_suite, description="Execute parallel advanced recon (WAF, Nmap, WhatWeb, HTTP Headers, Spider) inside Kali."),
-        Tool(name="Query_Memory", func=bridge.get_intelligence_summary, description="Query the internal Shared Memory (Blackboard) for a summary of all findings."),
-        Tool(name="Query_Knowledge_Graph", func=bridge.query_knowledge_graph, description="Access the Knowledge Graph to find cross-target relationships, shared infrastructure, and lateral movement paths."),
-        Tool(name="Exploit_Suggester", func=bridge.suggest_payloads, description="Search PayloadsAllTheThings for test payloads."),
-        Tool(name="Smart_Web_Search", func=bridge.smart_web_search, description="Search internet for CVEs/Exploits/Security info."),
-        Tool(name="Run_Nikto", func=bridge.run_nikto, description="Run Nikto vulnerability scanner against a web target."),
-        Tool(name="Run_FFUF", func=bridge.run_ffuf_discovery, description="Run FFUF for fast hidden path discovery."),
-        Tool(name="System_Self_Heal", func=bridge.system_self_heal, description="Use this tool to autonomously install missing Python libraries (pip) or Kali system tools (apt) if you encounter a 'command not found' or 'ModuleNotFoundError'."),
-        Tool(name="Archive_Research_Subagent", func=bridge.archive_research_subagent, description="Invoke the archived AI_Agents_Project for deep intelligence research (CVEs, Web Search, Historical Memory)."),
-        Tool(name="Run_Specialized_Module", func=bridge.run_specialized_module, description="Execute a specialized exploit script from the modules/ directory (e.g., 'argus_deep_exploit.py', 'stealth_exploit.py'). Use this for deep file extraction or WAF bypass."),
-        Tool(name="Run_Kali_Command", func=bridge.run_kali_command, description="Execute ANY raw command in the Kali Linux terminal (WSL). Use this for manual subdomain discovery (subfinder, assetfinder), fixing tools, or custom reconnaissance chains.")
-    ]
-    return ArgusBrain(model_name, tools)
-
-# Main Interface
-target = st.text_input("🎯 Target URL", "https://")
-
-if st.button("RUN ANALYSIS"):
-    if target:
-        brain = load_brain(model)
-
-        # Step 1: quick reachability check to give immediate feedback
-        st.info("Running quick reachability check...")
-        try:
-            reach = bridge.check_reachability(target)
-        except Exception as e:
-            reach = f"Error checking reachability: {e}"
-        st.code(str(reach))
-
-        # Offer the user to run full analysis only after quick check
-        if st.button("RUN FULL ANALYSIS"):
-            with st.status("🕵️ Argus Agent is thinking...", expanded=True) as status:
-                try:
-                    st.write("Initializing autonomous security reasoning...")
-                    st_callback = StreamlitCallbackHandler(st.container())
-
-                    # Run the agent in a separate thread with a timeout to avoid UI hang
-                    def _run_agent():
-                        return brain.ask(
-                            f"CONSULT MEMORY FIRST using 'Query_Memory'. Then perform a comprehensive security analysis for {target}. "
-                            f"If findings like SQLi, Path Traversal, or sensitive files already exist in memory, use 'Exploit_Suggester' and 'Smart_Web_Search' to CHAIN them and reach maximum impact (RCE). "
-                            f"Finally, provide a deep risk assessment including the full attack chain.",
-                            callbacks=[st_callback]
-                        )
-
-                    analysis = {"output": "Analysis failed or timed out."}
-                    # Determine analysis timeout from config.yaml if present
-                    ANALYSIS_TIMEOUT = 600
-                    try:
-                        import yaml
-                        cfg_path = os.path.join(os.path.dirname(__file__), '..', '..', 'config.yaml')
-                        if os.path.exists(cfg_path):
-                            with open(cfg_path, 'r') as cf:
-                                _cfg = yaml.safe_load(cf) or {}
-                                ANALYSIS_TIMEOUT = int(_cfg.get('analysis_timeout_seconds', _cfg.get('command_timeout_seconds', 600)))
-                    except Exception:
-                        ANALYSIS_TIMEOUT = 600
-
-                    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-                        future = executor.submit(_run_agent)
-                        try:
-                            analysis = future.result(timeout=ANALYSIS_TIMEOUT)
-                        except concurrent.futures.TimeoutError:
-                            future.cancel()
-                            st.error(f"Analysis timed out after {ANALYSIS_TIMEOUT} seconds. Consider running smaller tasks or increasing the timeout.")
-                            status.update(label="Analysis Timed Out", state="error")
-
-                    st.markdown("### 📋 Final Security Report")
-
-                    # Check if we got a parsed dictionary or raw string
-                    final_report = ""
-                    if isinstance(analysis.get("output"), dict):
-                        # It's the parsed Pydantic dict
-                        report_dict = analysis["output"]
-                        final_report = report_dict.get("output", str(report_dict))
-
-                        # Display metrics in columns
-                        col1, col2 = st.columns(2)
-                        col1.metric("Overall Risk Score", f"{report_dict.get('overall_risk_score', 'N/A')}/10")
-                        col2.metric("Findings Count", len(report_dict.get("findings", [])))
-
-                        with st.expander("View Structured Data (JSON)"):
-                            st.json(report_dict)
-                    else:
-                        # It's the raw result string
-                        final_report = analysis.get("output", str(analysis))
-
-                    # Render the final Markdown report using a safe code box for technical output
-                    st.code(final_report, language='markdown')
-
-                    status.update(label="Analysis Finished!", state="complete")
-
-                    # --- Export Feature (sanitize filename) ---
-                    safe_name = re.sub(r'[^A-Za-z0-9._-]', '_', target.replace('https://', '').replace('http://', '').strip('/'))
-                    st.download_button(
-                        label="📥 Download Report (Markdown)",
-                        data=final_report,
-                        file_name=f"Argus_Report_{safe_name}.md",
-                        mime="text/markdown"
-                    )
-                except Exception as e:
-                    st.error(f"❌ Critical Error during AI Analysis: {str(e)}")
-                    st.warning("🔄 Suggestion: Restart Argus and try 'Force CPU Mode' if this is a GPU/CUDA error.")
-                    status.update(label="Analysis Failed", state="error")
+st.markdown("""
+    <div style="position: fixed; bottom: 10px; right: 10px; color: #555; font-size: 0.8rem;">
+        Argus Framework v1.0 | Security Intelligence Division
+    </div>
+    """, unsafe_allow_html=True)
