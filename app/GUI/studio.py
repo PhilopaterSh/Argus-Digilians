@@ -91,25 +91,25 @@ if st.button("RUN ANALYSIS"):
 
                 analysis = {"output": "Analysis failed or timed out."}
                 # Determine analysis timeout from config.yaml if present
-                                ANALYSIS_TIMEOUT = 600
-                                try:
-                                    import yaml
-                                    cfg_path = os.path.join(os.path.dirname(__file__), '..', '..', 'config.yaml')
-                                    if os.path.exists(cfg_path):
-                                        with open(cfg_path, 'r') as cf:
-                                            _cfg = yaml.safe_load(cf) or {}
-                                            ANALYSIS_TIMEOUT = int(_cfg.get('analysis_timeout_seconds', _cfg.get('command_timeout_seconds', 600)))
-                                except Exception:
-                                    ANALYSIS_TIMEOUT = 600
+                ANALYSIS_TIMEOUT = 600
+                try:
+                    import yaml
+                    cfg_path = os.path.join(os.path.dirname(__file__), '..', '..', 'config.yaml')
+                    if os.path.exists(cfg_path):
+                        with open(cfg_path, 'r') as cf:
+                            _cfg = yaml.safe_load(cf) or {}
+                            ANALYSIS_TIMEOUT = int(_cfg.get('analysis_timeout_seconds', _cfg.get('command_timeout_seconds', 600)))
+                except Exception:
+                    ANALYSIS_TIMEOUT = 600
 
-                                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-                                    future = executor.submit(_run_agent)
-                                    try:
-                                        analysis = future.result(timeout=ANALYSIS_TIMEOUT)
-                                    except concurrent.futures.TimeoutError:
-                                        future.cancel()
-                                        st.error(f"Analysis timed out after {ANALYSIS_TIMEOUT} seconds. Consider running smaller tasks or increasing the timeout.")
-                                        status.update(label="Analysis Timed Out", state="error")
+                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                    future = executor.submit(_run_agent)
+                    try:
+                        analysis = future.result(timeout=ANALYSIS_TIMEOUT)
+                    except concurrent.futures.TimeoutError:
+                        future.cancel()
+                        st.error(f"Analysis timed out after {ANALYSIS_TIMEOUT} seconds. Consider running smaller tasks or increasing the timeout.")
+                        status.update(label="Analysis Timed Out", state="error")
 
                 st.markdown("### 📋 Final Security Report")
 
