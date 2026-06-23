@@ -50,8 +50,8 @@ CRITICAL OPERATIONAL RULES:
 Tools: {tools}
 
 Format:
-Question: {input}
-Thought: I will use 'Check_Reachability' which executes 'ping -c 4' internally to confirm the target is online. My goal is to establish connectivity.
+Example:
+
 Action: Check_Reachability
 Action Input: testasp.vulnweb.com
 Observation: (result)
@@ -68,6 +68,12 @@ Observation: (recon data)
 Available tool names: {tool_names}
 
 CRITICAL: 'Action Input' MUST be the raw value only. NEVER provide a JSON object or quotes in the Action Input.
+
+CRITICAL NOTE: If an action requires no input, the agent MUST still include the literal line 'Action Input:' followed by an empty value (no quotes). Example:
+Action: Sleep
+Action Input:
+
+This empty-line convention prevents parser errors when an action has no parameters.
 
 Question: {input}
 Thought: {agent_scratchpad}"""
