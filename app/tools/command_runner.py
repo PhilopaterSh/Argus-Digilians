@@ -1,8 +1,21 @@
 import subprocess
 import time
+import os
+import yaml
 import paramiko
 from app.tools.utils import clean_ansi_codes
 from app.tools.wsl_bridge import WSLBridge
+
+# ── Load timeout from config.yaml ─────────────────────────────────────────────
+_CFG_PATH = os.path.join(os.path.dirname(__file__), '..', '..', 'config.yaml')
+_cfg: dict = {}
+if os.path.exists(_CFG_PATH):
+    try:
+        with open(_CFG_PATH, 'r') as _f:
+            _cfg = yaml.safe_load(_f) or {}
+    except Exception:
+        pass
+_CMD_TIMEOUT: int = int(_cfg.get("command_timeout_seconds", 600))
 
 class CommandRunner:
     """Responsible only for executing commands through WSL or SSH fallback."""
@@ -36,6 +49,8 @@ class CommandRunner:
 
     def _run_direct_wsl(self, command: str, show_prompt: bool = False) -> str:
         try:
+            # Use a more robust way to pass the command to bash -c
+            # Single quotes prevent early expansion of variables/parentheses
             wsl_cmd = [
                 "wsl",
                 "-d",
@@ -50,13 +65,28 @@ class CommandRunner:
                 wsl_cmd,
                 capture_output=True,
                 text=True,
-                timeout=600,
+                timeout=_CMD_TIMEOUT,
                 encoding="utf-8",
                 errors="ignore",
             )
 
             output = result.stdout if result.stdout else result.stderr
-            cleaned = clean_ansi_codes(output)
+            # Defensive: remove embedded null bytes which can cause downstream ValueErrors
+            try:
+                if output and '\x00' in output:
+                    output = output.replace('\x00', '')
+            except Exception:
+                # If replacement fails, coerce to safe ascii fallback
+                try:
+                    output = (output.encode('utf-8', 'ignore') if isinstance(output, str) else output).decode('utf-8', 'ignore')
+                except Exception:
+                    output = '[Unrepresentable output]' 
+
+            # Clean ANSI and other control characters; guard against unexpected errors
+            try:
+                cleaned = clean_ansi_codes(output)
+            except Exception as e:
+                cleaned = f"[Output cleaning failed: {e}]\nRaw:\n{repr(output)[:1000]}"
 
             # WAF Detection
             if self._is_waf_blocked(cleaned):
@@ -77,7 +107,7 @@ class CommandRunner:
                 return f"┌──(kali㉿WSL)-[~]\n└─$ {command}\n{cleaned}"
             return cleaned
         except subprocess.TimeoutExpired:
-            return "Error: Command timed out after 600s. Suggestion: The target might be slow or blocking the scan. Try narrowing the scope or increasing the timeout."
+            return f"Error: Command timed out after {_CMD_TIMEOUT}s. Suggestion: The target might be slow or blocking the scan. Try narrowing the scope or increasing the timeout."
         except Exception as exc:
             return f"Bridge Error: {exc}"
 
