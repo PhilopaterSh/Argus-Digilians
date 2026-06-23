@@ -75,76 +75,86 @@ if st.button("RUN ANALYSIS"):
     if target:
         brain = load_brain(model)
 
-        with st.status("🕵️ Argus Agent is thinking...", expanded=True) as status:
-            try:
-                st.write("Initializing autonomous security reasoning...")
-                st_callback = StreamlitCallbackHandler(st.container())
+        # Step 1: quick reachability check to give immediate feedback
+        st.info("Running quick reachability check...")
+        try:
+            reach = bridge.check_reachability(target)
+        except Exception as e:
+            reach = f"Error checking reachability: {e}"
+        st.code(str(reach))
 
-                # Run the agent in a separate thread with a timeout to avoid UI hang
-                def _run_agent():
-                    return brain.ask(
-                        f"CONSULT MEMORY FIRST using 'Query_Memory'. Then perform a comprehensive security analysis for {target}. "
-                        f"If findings like SQLi, Path Traversal, or sensitive files already exist in memory, use 'Exploit_Suggester' and 'Smart_Web_Search' to CHAIN them and reach maximum impact (RCE). "
-                        f"Finally, provide a deep risk assessment including the full attack chain.",
-                        callbacks=[st_callback]
-                    )
-
-                analysis = {"output": "Analysis failed or timed out."}
-                # Determine analysis timeout from config.yaml if present
-                ANALYSIS_TIMEOUT = 600
+        # Offer the user to run full analysis only after quick check
+        if st.button("RUN FULL ANALYSIS"):
+            with st.status("🕵️ Argus Agent is thinking...", expanded=True) as status:
                 try:
-                    import yaml
-                    cfg_path = os.path.join(os.path.dirname(__file__), '..', '..', 'config.yaml')
-                    if os.path.exists(cfg_path):
-                        with open(cfg_path, 'r') as cf:
-                            _cfg = yaml.safe_load(cf) or {}
-                            ANALYSIS_TIMEOUT = int(_cfg.get('analysis_timeout_seconds', _cfg.get('command_timeout_seconds', 600)))
-                except Exception:
+                    st.write("Initializing autonomous security reasoning...")
+                    st_callback = StreamlitCallbackHandler(st.container())
+
+                    # Run the agent in a separate thread with a timeout to avoid UI hang
+                    def _run_agent():
+                        return brain.ask(
+                            f"CONSULT MEMORY FIRST using 'Query_Memory'. Then perform a comprehensive security analysis for {target}. "
+                            f"If findings like SQLi, Path Traversal, or sensitive files already exist in memory, use 'Exploit_Suggester' and 'Smart_Web_Search' to CHAIN them and reach maximum impact (RCE). "
+                            f"Finally, provide a deep risk assessment including the full attack chain.",
+                            callbacks=[st_callback]
+                        )
+
+                    analysis = {"output": "Analysis failed or timed out."}
+                    # Determine analysis timeout from config.yaml if present
                     ANALYSIS_TIMEOUT = 600
-
-                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
-                    future = executor.submit(_run_agent)
                     try:
-                        analysis = future.result(timeout=ANALYSIS_TIMEOUT)
-                    except concurrent.futures.TimeoutError:
-                        future.cancel()
-                        st.error(f"Analysis timed out after {ANALYSIS_TIMEOUT} seconds. Consider running smaller tasks or increasing the timeout.")
-                        status.update(label="Analysis Timed Out", state="error")
+                        import yaml
+                        cfg_path = os.path.join(os.path.dirname(__file__), '..', '..', 'config.yaml')
+                        if os.path.exists(cfg_path):
+                            with open(cfg_path, 'r') as cf:
+                                _cfg = yaml.safe_load(cf) or {}
+                                ANALYSIS_TIMEOUT = int(_cfg.get('analysis_timeout_seconds', _cfg.get('command_timeout_seconds', 600)))
+                    except Exception:
+                        ANALYSIS_TIMEOUT = 600
 
-                st.markdown("### 📋 Final Security Report")
+                    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+                        future = executor.submit(_run_agent)
+                        try:
+                            analysis = future.result(timeout=ANALYSIS_TIMEOUT)
+                        except concurrent.futures.TimeoutError:
+                            future.cancel()
+                            st.error(f"Analysis timed out after {ANALYSIS_TIMEOUT} seconds. Consider running smaller tasks or increasing the timeout.")
+                            status.update(label="Analysis Timed Out", state="error")
 
-                # Check if we got a parsed dictionary or raw string
-                final_report = ""
-                if isinstance(analysis.get("output"), dict):
-                    # It's the parsed Pydantic dict
-                    report_dict = analysis["output"]
-                    final_report = report_dict.get("output", str(report_dict))
+                    st.markdown("### 📋 Final Security Report")
 
-                    # Display metrics in columns
-                    col1, col2 = st.columns(2)
-                    col1.metric("Overall Risk Score", f"{report_dict.get('overall_risk_score', 'N/A')}/10")
-                    col2.metric("Findings Count", len(report_dict.get("findings", [])))
+                    # Check if we got a parsed dictionary or raw string
+                    final_report = ""
+                    if isinstance(analysis.get("output"), dict):
+                        # It's the parsed Pydantic dict
+                        report_dict = analysis["output"]
+                        final_report = report_dict.get("output", str(report_dict))
 
-                    with st.expander("View Structured Data (JSON)"):
-                        st.json(report_dict)
-                else:
-                    # It's the raw result string
-                    final_report = analysis.get("output", str(analysis))
+                        # Display metrics in columns
+                        col1, col2 = st.columns(2)
+                        col1.metric("Overall Risk Score", f"{report_dict.get('overall_risk_score', 'N/A')}/10")
+                        col2.metric("Findings Count", len(report_dict.get("findings", [])))
 
-                # Render the final Markdown report using a safe code box for technical output
-                st.code(final_report, language='markdown')
+                        with st.expander("View Structured Data (JSON)"):
+                            st.json(report_dict)
+                    else:
+                        # It's the raw result string
+                        final_report = analysis.get("output", str(analysis))
 
-                status.update(label="Analysis Finished!", state="complete")
+                    # Render the final Markdown report using a safe code box for technical output
+                    st.code(final_report, language='markdown')
 
-                # --- Export Feature (sanitize filename) ---
-                safe_name = re.sub(r'[^A-Za-z0-9._-]', '_', target.replace('https://', '').replace('http://', '').strip('/'))
-                st.download_button(
-                    label="📥 Download Report (Markdown)",
-                    data=final_report,
-                    file_name=f"Argus_Report_{safe_name}.md",
-                    mime="text/markdown"
-                )
-            except Exception as e:
-                st.error(f"❌ Critical Error during AI Analysis: {str(e)}")
-                st.warning("🔄 Suggestion: Restart Argus and try 'Force CPU Mode' if this is a GPU/CUDA error.")
-                status.update(label="Analysis Failed", state="error")
+                    status.update(label="Analysis Finished!", state="complete")
+
+                    # --- Export Feature (sanitize filename) ---
+                    safe_name = re.sub(r'[^A-Za-z0-9._-]', '_', target.replace('https://', '').replace('http://', '').strip('/'))
+                    st.download_button(
+                        label="📥 Download Report (Markdown)",
+                        data=final_report,
+                        file_name=f"Argus_Report_{safe_name}.md",
+                        mime="text/markdown"
+                    )
+                except Exception as e:
+                    st.error(f"❌ Critical Error during AI Analysis: {str(e)}")
+                    st.warning("🔄 Suggestion: Restart Argus and try 'Force CPU Mode' if this is a GPU/CUDA error.")
+                    status.update(label="Analysis Failed", state="error")
