@@ -134,23 +134,40 @@ with col2:
                 st.write("Initializing Parallel Recon Subsystem...")
                 # recon_suite returns the full string for display
                 report_display = bridge.recon_suite(url_input)
-                results = bridge.last_recon_results
-                report_for_ai = results["ai_input"]
-                
+                results = bridge.last_recon_results or {}
+                # Prefer an explicit ai_input if available, otherwise compose from available recon fields
+                if isinstance(results, dict) and results.get("ai_input"):
+                    report_for_ai = results.get("ai_input")
+                else:
+                    # Fall back to concatenating key parts (tech, ports, dns) to give the AI useful context
+                    parts = []
+                    for k in ("tech", "ports", "dns"):
+                        v = results.get(k) if isinstance(results, dict) else None
+                        if v:
+                            parts.append(f"[{k}] {v[:800]}")
+                    # If recon returned nothing useful, use the human-readable report_display
+                    report_for_ai = "\n\n".join(parts) if parts else report_display
+                    # Keep the AI input reasonably sized
+                    if len(report_for_ai) > 3000:
+                        report_for_ai = report_for_ai[:3000] + "\n...[truncated]"
+
                 st.markdown("#### Technical Evidence:")
                 st.markdown(f'<div class="terminal-box">{report_display}</div>', unsafe_allow_html=True)
-                
+
                 st.write("🧠 AI Analyzing technical data...")
-                # We use the condensed summary for the AI to improve precision and save context
-                analysis = brain.ask(f"Analyze this reconnaissance report from WSL for {url_input}. Focus on risks and vulnerabilities based on this summary: {report_for_ai}")
-                
+                try:
+                    # We use the condensed summary for the AI to improve precision and save context
+                    analysis = brain.ask(f"Analyze this reconnaissance report from WSL for {url_input}. Focus on risks and vulnerabilities based on this summary: {report_for_ai}")
+                except Exception as e:
+                    analysis = {"output": f"AI analysis failed: {e}"}
+
                 st.markdown("#### AI Intelligence Report:")
-                st.info(analysis["output"])
-                
+                st.info(analysis.get("output", "No analysis available"))
+
                 status.update(label="Analysis Complete!", state="complete")
-                
+
                 # Report Export
-                full_export = f"# Argus Security Report - {url_input}\n\n## Technical Data\n{report_display}\n\n## AI Analysis\n{analysis['output']}"
+                full_export = f"# Argus Security Report - {url_input}\n\n## Technical Data\n{report_display}\n\n## AI Analysis\n{analysis.get('output', '')}"
                 st.download_button(
                     label="📥 DOWNLOAD MARKDOWN REPORT",
                     data=full_export,
