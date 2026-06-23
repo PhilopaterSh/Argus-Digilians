@@ -5,12 +5,10 @@ import time
 from dotenv import load_dotenv
 
 # Ensure project root is in path for core module access
-proj_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
-if proj_root not in sys.path:
-    sys.path.insert(0, proj_root)
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from app.tools.tool_registry import WSLBridgeTools
-from core.brain import ArgusBrain
+from core.tools import WSLBridgeTools
+from core.agent import ArgusBrain
 from langchain_core.tools import Tool
 
 # Load environment variables
