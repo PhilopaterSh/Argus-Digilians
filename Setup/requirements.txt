@@ -6,7 +6,8 @@ langchain-community
 langchain-core
 langchain-text-splitters
 streamlit
-duckduckgo-search
+# Added duckduckgo_search for web search capability
+duckduckgo_search
 faiss-cpu
 sentence-transformers
 pypdf

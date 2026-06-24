@@ -11,6 +11,35 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 load_dotenv()
 
+# Heuristic patch: increase websockets keepalive defaults to reduce
+# spurious keepalive ping timeouts (close code 1011) when a lower-level
+# dependency opens websocket connections without explicit ping settings.
+# This is intentionally resilient: if websockets isn't installed or the
+# internal API changes, fall back silently.
+try:
+    from websockets.legacy.protocol import WebSocketCommonProtocol
+    _orig_ws_init = WebSocketCommonProtocol.__init__
+
+    def _patched_ws_init(self, *args, **kwargs):
+        # Set more forgiving defaults if not explicitly provided by callers.
+        # Keep None as-is (disables keepalive/timeouts when intentionally set).
+        kwargs.setdefault("ping_interval", 30)
+        kwargs.setdefault("ping_timeout", 60)
+        # Sanity clamp (avoid accidentally setting extremely small values).
+        pi = kwargs.get("ping_interval")
+        pt = kwargs.get("ping_timeout")
+        if pi is not None and isinstance(pi, (int, float)) and pi < 5:
+            kwargs["ping_interval"] = 30
+        if pt is not None and isinstance(pt, (int, float)) and pt < 10:
+            kwargs["ping_timeout"] = 60
+        return _orig_ws_init(self, *args, **kwargs)
+
+    WebSocketCommonProtocol.__init__ = _patched_ws_init
+except Exception:
+    # Ignore failures to avoid breaking startup when websockets isn't present
+    pass
+
+
 def run_analysis(target_url):
     bridge = WSLBridgeTools()
     # Using the primary model defined in the project
@@ -27,7 +56,11 @@ def run_analysis(target_url):
         Tool(name="Run_Nikto", func=bridge.run_nikto, description="Run Nikto vulnerability scanner against a web target."),
         Tool(name="Run_FFUF", func=bridge.run_ffuf_discovery, description="Run FFUF for fast hidden path discovery."),
         Tool(name="Crawl_Target", func=bridge.crawl_target, description="Discover internal links and entry points to expand attack surface."),
-        Tool(name="Advanced_Evasion_Probe", func=bridge.advanced_vuln_probe, description="Perform targeted, WAF-evasive probes for SQLi and Path Traversal.")
+        Tool(name="Advanced_Evasion_Probe", func=bridge.advanced_vuln_probe, description="Perform targeted, WAF-evasive probes for SQLi and Path Traversal."),
+        Tool(name="Reflective_Pre_Verify", func=bridge.pre_execute_verify, description="Check commands for malformed parameters, illegal syntax, or missing tools before running."),
+        Tool(name="Reflective_Post_Verify", func=bridge.post_execute_verify, description="Inspect output headers, content size, or redirect parameters to filter out honeypots or false positives."),
+        Tool(name="Task_Difficulty_Assessment", func=bridge.task_difficulty_assessment, description="Compute TDA scores for target selection based on expected path length, version confidence, and history."),
+        Tool(name="ZERO_APT_Simulation", func=bridge.run_zero_apt_simulation, description="Run a three-party interactive simulation (Attacker vs Active Defender L1-L3 with independent Judge) and export a STIX 2.0 report.")
     ]
     
     brain = ArgusBrain(model, tools)

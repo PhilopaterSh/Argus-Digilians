@@ -1,6 +1,19 @@
 import re
 import json
+import os
+import yaml
 from datetime import datetime
+
+# ── Load truncation config ─────────────────────────────────────────────────────────
+_CFG_PATH = os.path.join(os.path.dirname(__file__), '..', '..', 'config.yaml')
+_cfg: dict = {}
+if os.path.exists(_CFG_PATH):
+    try:
+        with open(_CFG_PATH, 'r') as _f:
+            _cfg = yaml.safe_load(_f) or {}
+    except Exception:
+        pass
+_TRUNCATE: int = int(_cfg.get("recon_truncate_chars", 1000))
 
 class ReconService:
     """Handles subdomain enumeration, prioritization, and broad reconnaissance suites."""
@@ -86,8 +99,8 @@ class ReconService:
         if self.report_writer:
             self.report_writer.save_json_report(clean_target, results)
 
-        report = f"--- 🛰️ FULL RECON REPORT: {clean_target} ---\n"
-        report += f"Tech: {results['tech'][:200]}...\n"
-        report += f"Ports: {results['ports'][:500]}...\n"
+        report = f"--- 🛠️ FULL RECON REPORT: {clean_target} ---\n"
+        report += f"Tech: {results['tech'][:_TRUNCATE]}\n"
+        report += f"Ports: {results['ports'][:_TRUNCATE]}\n"
         
         return f"```\n{report}\n```"

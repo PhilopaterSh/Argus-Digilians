@@ -1,12 +1,23 @@
-from core.agent import ArgusBrain
-from core.tools import WSLBridgeTools
+from app.core.brain import ArgusBrain
+from app.tools.tool_registry import WSLBridgeTools
 from langchain_core.tools import Tool
 import os
+import yaml
 
 def run_autonomous_reasoning():
+    # Load model name from config.yaml
+    _cfg_path = os.path.join(os.path.dirname(__file__), '..', '..', 'config.yaml')
+    _cfg: dict = {}
+    if os.path.exists(_cfg_path):
+        try:
+            with open(_cfg_path, 'r') as _f:
+                _cfg = yaml.safe_load(_f) or {}
+        except Exception:
+            pass
+
     bridge = WSLBridgeTools()
-    model = "WhiteRabbitNeo/WhiteRabbitNeo-V3-7B:latest"
-    
+    model = _cfg.get("model_name", "WhiteRabbitNeo/WhiteRabbitNeo-V3-7B:latest")
+
     tools = [
         Tool(name="Check_Reachability", func=bridge.check_reachability, description="Verify if the target domain is reachable."),
         Tool(name="Subdomain_Enumeration", func=bridge.enumerate_subdomains, description="Discover subdomains."),

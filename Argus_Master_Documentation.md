@@ -111,3 +111,16 @@ Use `LAUNCH_STUDIO.bat` to start the AI interface at `http://localhost:12199`.
 ---
 Maintained by: Argus Security Framework Team
 Consolidated Technical Reference: May 2026
+## 5.4 Advanced Multi‑Agent Features
+
+**Reflective Verification**
+- Provides pre‑execution and post‑execution validation of tool actions to reduce false positives and improve reliability.
+- Implemented in `app/tools/reflective_verification.py` with functions `pre_execute_verify`, `post_execute_verify`, and `task_difficulty_assessment`.
+- Registered in `tool_registry.py` and exposed to the ArgusBrain as `Reflective_Pre_Verify`, `Reflective_Post_Verify`, `Task_Difficulty_Assessment`.
+
+**ZERO‑APT Simulation Engine**
+- Simulates attacker‑defender‑judge cycles for red‑team exercises without impacting real infrastructure.
+- Implemented in `app/tools/simulation.py`; generates STIX 2.0 bundles and feeds results back into the shared memory store.
+- Registered as `ZERO_APT_Simulation` and callable from the ArgusBrain.
+
+These components elevate Argus to a fully autonomous, self‑reflective penetration‑testing framework.

@@ -1,4 +1,4 @@
-from core.tools import WSLBridgeTools
+from app.tools.tool_registry import WSLBridgeTools
 
 def test_integration():
     bridge = WSLBridgeTools()

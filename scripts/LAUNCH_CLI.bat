@@ -1,5 +1,6 @@
 @echo off
 setlocal enabledelayedexpansion
+cd /d "%~dp0.."
 
 :: --- ARGUS CLI LAUNCHER ---
 :: This script activates the environment and runs the Argus Intelligence CLI.
@@ -10,7 +11,7 @@ cls
 :: 1. Environment Check
 if not exist "Argus_venv\" (
     echo [!] Virtual environment not found. Running setup...
-    call INSTALL_EVERYTHING.bat
+    call scripts\INSTALL_EVERYTHING.bat
 )
 
 :: 2. Activate Venv

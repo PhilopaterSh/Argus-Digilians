@@ -1,5 +1,9 @@
 import os
+import yaml
 from datetime import datetime
+
+# Resolve project root (two levels up from app/tools/)
+_PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 
 class VulnerabilityScanners:
     """Specialized service for running automated scanners like Nikto and FFUF."""
@@ -12,7 +16,7 @@ class VulnerabilityScanners:
         """Runs Nikto vulnerability scanner inside Kali against a web target."""
         print(f"[*] Starting Nikto Vulnerability Scan for: {url}")
         
-        output_dir = "reports/nikto"
+        output_dir = os.path.join(_PROJECT_ROOT, "reports", "nikto")
         os.makedirs(output_dir, exist_ok=True)
         
         clean_target = url.replace("https://", "").replace("http://", "").rstrip('/').replace("/", "_")
