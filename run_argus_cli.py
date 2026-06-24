@@ -54,7 +54,9 @@ def _write_progress(target_url: str, message: str):
         safe_name = _sanitize_filename(target_url.replace('https://','').replace('http://','').replace('/','_'))
         path = reports_dir / f"{safe_name}_progress.log"
         timestamp = datetime.datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')
-        path.write_text(f"[{timestamp}] {message}\n", encoding='utf-8', append=False) if False else path.open('a', encoding='utf-8').write(f"[{timestamp}] {message}\n")
+        # Use context manager to append safely
+        with path.open('a', encoding='utf-8') as fh:
+            fh.write(f"[{timestamp}] {message}\n")
     except Exception:
         pass
 
