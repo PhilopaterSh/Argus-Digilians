@@ -74,26 +74,32 @@ if 'last_results' not in st.session_state:
     st.session_state.last_results = None
 if 'thread_exc' not in st.session_state:
     st.session_state.thread_exc = None
+if 'scan_log' not in st.session_state:
+    st.session_state.scan_log = []
 
 # Background task
 def run_scan(target_url, model_name, temperature):
     try:
         st.session_state.running = True
+        st.session_state.scan_log.append(f"Starting recon for: {target_url}")
         status_placeholder.info(f"Starting recon for: {target_url}")
-        thoughts_box.code("Initializing WSL recon suite...\n")
+        st.session_state.scan_log.append("Initializing WSL recon suite...")
+
         # 1. quick reachability
         reach = bridge.check_reachability(target_url)
-        thoughts_box.code(f"Reachability check:\n{reach}\n", language='text')
+        st.session_state.scan_log.append(f"Reachability:\n{reach}")
 
         # 2. full recon (this runs in WSL and may take time)
+        st.session_state.scan_log.append("Running full recon suite (this may take a while)...")
         report_display = bridge.recon_suite(target_url)
         st.session_state.last_results = bridge.last_recon_results
-        thoughts_box.code(f"Recon report ready.\n", language='text')
+        st.session_state.scan_log.append("Recon report ready.")
 
         # 3. prepare AI input
         results = st.session_state.last_results or {}
         if isinstance(results, dict) and results.get('ai_input'):
             report_for_ai = results.get('ai_input')
+            st.session_state.scan_log.append("Using explicit ai_input from recon results.")
         else:
             parts = []
             for k in ('tech','ports','dns'):
@@ -103,31 +109,55 @@ def run_scan(target_url, model_name, temperature):
             report_for_ai = "\n\n".join(parts) if parts else report_display
             if len(report_for_ai) > 3000:
                 report_for_ai = report_for_ai[:3000] + "\n...[truncated]"
+            st.session_state.scan_log.append("Prepared condensed AI input from recon fields.")
 
         # 4. call AI analysis if available
         if brain is not None:
-            thoughts_box.code("Sending condensed report to AI for analysis...\n")
+            st.session_state.scan_log.append("Sending condensed report to AI for analysis...")
             try:
                 analysis = brain.ask(f"Analyze reconnaissance report for {target_url}. Context: {report_for_ai}")
                 ai_output = analysis.get('output') if isinstance(analysis, dict) else str(analysis)
+                st.session_state.scan_log.append("AI analysis complete.")
             except Exception as e:
                 ai_output = f"AI analysis failed: {e}"
+                st.session_state.scan_log.append(ai_output)
         else:
             ai_output = "AI engine not available in this environment."
+            st.session_state.scan_log.append(ai_output)
 
         # Save last report
         full_export = f"# Argus Security Report - {target_url}\n\n## Technical Data\n{report_display}\n\n## AI Analysis\n{ai_output}"
         st.session_state.last_report = full_export
         st.session_state.running = False
         status_placeholder.success("Scan complete")
-        output_box.code(ai_output)
-        findings_box.text(report_display)
+        st.session_state.scan_log.append("Scan complete")
+        st.session_state.scan_log.append("\n--- AI Output ---\n" + (ai_output or ''))
+        st.session_state.scan_log.append("\n--- Raw Recon ---\n" + (report_display or ''))
         last_run_box.info(f"Last run: {time.strftime('%Y-%m-%d %H:%M:%S')}")
     except Exception as exc:
         st.session_state.thread_exc = traceback.format_exc()
         st.session_state.running = False
         status_placeholder.error("Scan failed: see exception")
-        output_box.code(st.session_state.thread_exc)
+        st.session_state.scan_log.append("Exception:\n" + st.session_state.thread_exc)
+
+# Auto-refresh while running so UI updates
+if st.session_state.running:
+    try:
+        from streamlit_autorefresh import st_autorefresh
+        st_autorefresh(interval=1000, key='autorefresh')
+    except Exception:
+        # If streamlit_autorefresh not available, fall back to experimental rerun
+        st.experimental_rerun()
+
+# Render live log
+log_text = "\n".join(st.session_state.scan_log[-200:]) if st.session_state.scan_log else "No logs yet."
+# render in the thoughts_box with preserved terminal styling
+thoughts_box.markdown(f"<div class=\"terminal-box\">{log_text.replace('\n','<br/>')}</div>", unsafe_allow_html=True)
+
+# Show any thread exception
+if st.session_state.thread_exc:
+    st.error("Background task exception:")
+    st.code(st.session_state.thread_exc)
 
 # Handle stop
 if stop_btn and st.session_state.running:
