@@ -180,6 +180,29 @@ if st.session_state.thread_exc:
     st.error("Background task exception:")
     st.code(st.session_state.thread_exc)
 
+# Monitor external CLI progress
+st.markdown("---")
+with st.expander("Monitor CLI progress (follow a target run by LAUNCH_CLI)"):
+    monitor_target = st.text_input("Monitor Target URL (exact)", key="monitor_target_input")
+    if st.button("Start Monitoring", key="start_monitor"):
+        st.session_state.monitor_target = monitor_target
+    if st.button("Stop Monitoring", key="stop_monitor"):
+        st.session_state.monitor_target = None
+
+    mon_tgt = st.session_state.get('monitor_target')
+    if mon_tgt:
+        # locate progress file
+        import pathlib
+        safe = ''.join(c for c in mon_tgt if c.isalnum() or c in '-_.').rstrip()
+        safe = safe.replace('https://','').replace('http://','').replace('/','_')
+        path = pathlib.Path('reports') / f"{safe}_progress.log"
+        if path.exists():
+            content = path.read_text(encoding='utf-8')
+            st.markdown(f"**Monitoring:** {mon_tgt}")
+            st.markdown(f"<div class=\"terminal-box\">{content.replace('\n','<br/>')}</div>", unsafe_allow_html=True)
+        else:
+            st.info(f"No progress file found yet for {mon_tgt}. It will appear once LAUNCH_CLI writes progress to reports/.")
+
 # Small status footer
 st.markdown("---")
 st.caption(f"WSL Bridge: {bridge.host} | Model: {model_name} | Running: {st.session_state.running}")

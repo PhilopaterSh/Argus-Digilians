@@ -40,6 +40,25 @@ except Exception:
     pass
 
 
+import pathlib
+import datetime
+
+def _sanitize_filename(s: str) -> str:
+    # crude sanitization for filenames
+    return ''.join(c for c in s if c.isalnum() or c in '-_.').rstrip()
+
+def _write_progress(target_url: str, message: str):
+    try:
+        reports_dir = pathlib.Path('reports')
+        reports_dir.mkdir(parents=True, exist_ok=True)
+        safe_name = _sanitize_filename(target_url.replace('https://','').replace('http://','').replace('/','_'))
+        path = reports_dir / f"{safe_name}_progress.log"
+        timestamp = datetime.datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')
+        path.write_text(f"[{timestamp}] {message}\n", encoding='utf-8', append=False) if False else path.open('a', encoding='utf-8').write(f"[{timestamp}] {message}\n")
+    except Exception:
+        pass
+
+
 def run_analysis(target_url):
     bridge = WSLBridgeTools()
     # Using the primary model defined in the project
@@ -72,9 +91,19 @@ def run_analysis(target_url):
     print("-" * 60)
 
     try:
+        _write_progress(target_url, 'CLI started')
         query = f"Perform a comprehensive security analysis for {target_url}. Start with reachability, then map the attack surface, and finally provide a deep risk assessment."
+        _write_progress(target_url, 'Preparing AI agent')
+
+        # quick reachability update
+        _write_progress(target_url, 'Checking reachability')
+        reach = bridge.check_reachability(target_url)
+        _write_progress(target_url, f'Reachability: {str(reach)[:800]}')
+
         # Brain.ask returns a dict with "output" (parsed JSON) or raw result
+        _write_progress(target_url, 'Starting main brain.ask analysis')
         result = brain.ask(query)
+        _write_progress(target_url, 'AI analysis complete')
         
         print("\n" + "="*60)
         print("🛡️ ARGUS AGENT FINAL REPORT")
@@ -89,10 +118,13 @@ def run_analysis(target_url):
                 print(output)
         else:
             print(result)
-            
+        
+        _write_progress(target_url, 'Completed')
     except KeyboardInterrupt:
+        _write_progress(target_url, 'Interrupted by user')
         print("\n[!] Analysis interrupted by user.")
     except Exception as e:
+        _write_progress(target_url, f'Error: {e}')
         print(f"\n[!] An error occurred during execution: {e}")
 
 if __name__ == "__main__":
