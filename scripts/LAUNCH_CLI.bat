@@ -17,11 +17,20 @@ if not exist "Argus_venv\" (
 :: 2. Activate Venv
 call Argus_venv\Scripts\activate.bat
 
-:: 3. Run CLI Analysis
-echo [!] Starting Argus Autonomous Agent...
-python run_argus_cli.py %*
+:: 3. Resolve target: accept as CLI arg or prompt interactively (like LAUNCH_STUDIO)
+set "TARGET=%~1"
+if "%TARGET%"=="" (
+    echo.
+    set /p TARGET="Enter target URL (or press Enter for default https://example.com): "
+    if "%TARGET%"=="" set "TARGET=https://example.com/"
+)
 
-:: 4. Keep window open if error or finished
+:: 4. Run CLI Analysis
+echo [!] Starting Argus Autonomous Agent...
+echo [*] Target: %TARGET%
+python run_argus_cli.py %TARGET%
+
+:: 5. Keep window open if error or finished
 if %ERRORLEVEL% NEQ 0 (
     echo.
     echo [!] Argus stopped with an error code: %ERRORLEVEL%
