@@ -1,1 +1,7 @@
+Stabilize GUI and bridge output handling 
+ 
+- Fix imports and restored argus_gui layout 
+- Handle missing ai_input and provide AI input fallback 
+- Strip embedded null bytes and robust output cleaning in command runner 
+ 
 Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com> 
