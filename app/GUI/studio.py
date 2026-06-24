@@ -1,172 +1,158 @@
 import streamlit as st
+import threading
+import time
 import os
 import sys
-import time
+import traceback
 from dotenv import load_dotenv
 
-# Ensure project root is in path for core module access
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+# Ensure project root is importable
+proj_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+if proj_root not in sys.path:
+    sys.path.insert(0, proj_root)
 
 from app.tools.tool_registry import WSLBridgeTools
+# ArgusBrain may live in app.core.brain or legacy core.agent
 try:
     from app.core.brain import ArgusBrain
 except Exception:
     try:
-        # Legacy location fallback
         from core.agent import ArgusBrain
     except Exception:
         ArgusBrain = None
-from langchain_core.tools import Tool
 
-# Load environment variables
 load_dotenv()
 
-# --- Page Configuration ---
-st.set_page_config(
-    page_title="Argus AI - Security Command Center",
-    page_icon="🛡️",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
+st.set_page_config(page_title="Argus AI - Studio (Streamlit)", page_icon="🛡️", layout="wide")
 
-# --- Enhanced Custom CSS ---
-st.markdown("""
-    <style>
-    @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;700&display=swap');
-    
-    html, body, [class*="css"] {
-        font-family: 'JetBrains+Mono', monospace;
-    }
+st.title("Argus AI Security Studio")
 
-    .main {
-        background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
-        color: #00ff41;
-    }
-    
-    .stApp {
-        background-color: transparent;
-    }
-
-    /* Header Styling */
-    .main-header {
-        text-align: center;
-        padding: 2rem;
-        background: rgba(0, 0, 0, 0.6);
-        border-radius: 15px;
-        border: 1px solid #00ff41;
-        box-shadow: 0 0 20px rgba(0, 255, 65, 0.2);
-        margin-bottom: 2rem;
-    }
-    
-    .main-header h1 {
-        color: #00ff41;
-        text-transform: uppercase;
-        letter-spacing: 5px;
-        margin: 0;
-    }
-
-    /* Terminal Style Recon Box */
-    .terminal-box {
-        background-color: #000000;
-        color: #00ff41;
-        padding: 15px;
-        border-radius: 5px;
-        border: 1px solid #333;
-        font-family: 'JetBrains+Mono', monospace;
-        margin-top: 10px;
-        white-space: pre-wrap;
-        font-size: 0.85rem;
-        border-left: 4px solid #00ff41;
-    }
-
-    /* Button Styling */
-    .stButton>button {
-        background-color: #00ff41 !important;
-        color: black !important;
-        font-weight: bold !important;
-        border-radius: 5px !important;
-        border: none !important;
-        transition: 0.3s !important;
-        width: 100%;
-    }
-    
-    .stButton>button:hover {
-        background-color: #008f11 !important;
-        box-shadow: 0 0 15px #00ff41 !important;
-    }
-    </style>
-    """, unsafe_allow_html=True)
-
-# --- Custom Header ---
-st.markdown("""
-    <div class="main-header">
-        <h1>Argus AI Security Studio</h1>
-        <p style="color: #888;">Autonomous Intelligence & Reconnaissance Framework v1.0</p>
-    </div>
-    """, unsafe_allow_html=True)
-
-# --- Initialization ---
-bridge = WSLBridgeTools()
-MODEL_NAME = os.getenv("SELECTED_MODEL", "WhiteRabbitNeo/WhiteRabbitNeo-V3-7B:latest")
-
-@st.cache_resource
-def get_brain():
-    tools = [
-        Tool(name="Check_Reachability", func=bridge.check_reachability, description="Verify target via WSL network."),
-        Tool(name="Subdomain_Enumeration", func=bridge.enumerate_subdomains, description="Fast subdomain discovery."),
-        Tool(name="Recon_Suite", func=bridge.recon_suite, description="Execute multi-tool parallel recon in WSL Kali.")
-    ]
-    return ArgusBrain(MODEL_NAME, tools)
-
-# --- UI Layout ---
-col1, col2 = st.columns([1, 2])
-
-with col1:
-    st.subheader("System Status")
-    st.success(f"WSL Bridge: ACTIVE ({bridge.host})")
-    st.info(f"AI Engine: {MODEL_NAME}")
-    
+# Sidebar: inputs and controls
+with st.sidebar:
+    st.header("Controls")
+    target = st.text_input("Target URL", value="https://example.com")
+    temperature = st.slider("AI Temperature", 0.0, 1.0, 0.2)
+    run_btn = st.button("Start Scan")
+    stop_btn = st.button("Stop Scan")
     st.markdown("---")
-    url_input = st.text_input("Target URL", "https://example.com")
-    run_btn = st.button("EXECUTE ANALYSIS")
+    st.write("Model:")
+    model_name = st.text_input("Model Name", value=os.getenv("SELECTED_MODEL", "WhiteRabbitNeo/WhiteRabbitNeo-V3-7B:latest"))
 
-with col2:
-    st.subheader("Intelligence Output")
-    if run_btn:
-        if url_input:
-            brain = get_brain()
-            with st.status("📡 Bridging to WSL Kali...", expanded=True) as status:
-                st.write("Initializing Parallel Recon Subsystem...")
-                # recon_suite returns the full string for display
-                report_display = bridge.recon_suite(url_input)
-                results = bridge.last_recon_results
-                report_for_ai = results["ai_input"]
-                
-                st.markdown("#### Technical Evidence:")
-                st.markdown(f'<div class="terminal-box">{report_display}</div>', unsafe_allow_html=True)
-                
-                st.write("🧠 AI Analyzing technical data...")
-                # We use the condensed summary for the AI to improve precision and save context
-                analysis = brain.ask(f"Analyze this reconnaissance report from WSL for {url_input}. Focus on risks and vulnerabilities based on this summary: {report_for_ai}")
-                
-                st.markdown("#### AI Intelligence Report:")
-                st.info(analysis["output"])
-                
-                status.update(label="Analysis Complete!", state="complete")
-                
-                # Report Export
-                full_export = f"# Argus Security Report - {url_input}\n\n## Technical Data\n{report_display}\n\n## AI Analysis\n{analysis['output']}"
-                st.download_button(
-                    label="📥 DOWNLOAD MARKDOWN REPORT",
-                    data=full_export,
-                    file_name=f"Argus_{url_input.replace('https://', '').replace('/', '_')}.md",
-                    mime="text/markdown"
-                )
+# Initialize bridge and brain singletons in session_state
+if 'bridge' not in st.session_state:
+    st.session_state.bridge = WSLBridgeTools()
+if 'brain' not in st.session_state:
+    if ArgusBrain is not None:
+        st.session_state.brain = ArgusBrain(model_name, [])
+    else:
+        st.session_state.brain = None
+
+bridge = st.session_state.bridge
+brain = st.session_state.brain
+
+# Layout: two columns
+col_left, col_right = st.columns([2, 1])
+
+with col_left:
+    st.subheader("Agent Mind")
+    status_placeholder = st.empty()
+    thoughts_box = st.empty()
+    output_box = st.empty()
+    download_placeholder = st.empty()
+
+with col_right:
+    st.subheader("Blackboard & Findings")
+    findings_box = st.empty()
+    last_run_box = st.empty()
+
+# Run control state
+if 'running' not in st.session_state:
+    st.session_state.running = False
+if 'last_report' not in st.session_state:
+    st.session_state.last_report = None
+if 'last_results' not in st.session_state:
+    st.session_state.last_results = None
+if 'thread_exc' not in st.session_state:
+    st.session_state.thread_exc = None
+
+# Background task
+def run_scan(target_url, model_name, temperature):
+    try:
+        st.session_state.running = True
+        status_placeholder.info(f"Starting recon for: {target_url}")
+        thoughts_box.code("Initializing WSL recon suite...\n")
+        # 1. quick reachability
+        reach = bridge.check_reachability(target_url)
+        thoughts_box.code(f"Reachability check:\n{reach}\n", language='text')
+
+        # 2. full recon (this runs in WSL and may take time)
+        report_display = bridge.recon_suite(target_url)
+        st.session_state.last_results = bridge.last_recon_results
+        thoughts_box.code(f"Recon report ready.\n", language='text')
+
+        # 3. prepare AI input
+        results = st.session_state.last_results or {}
+        if isinstance(results, dict) and results.get('ai_input'):
+            report_for_ai = results.get('ai_input')
         else:
-            st.warning("Please enter a valid target URL.")
+            parts = []
+            for k in ('tech','ports','dns'):
+                v = results.get(k) if isinstance(results, dict) else None
+                if v:
+                    parts.append(f"[{k}] {v[:800]}")
+            report_for_ai = "\n\n".join(parts) if parts else report_display
+            if len(report_for_ai) > 3000:
+                report_for_ai = report_for_ai[:3000] + "\n...[truncated]"
 
-st.markdown("""
-    <div style="position: fixed; bottom: 10px; right: 10px; color: #555; font-size: 0.8rem;">
-        Argus Framework v1.0 | Security Intelligence Division
-    </div>
-    """, unsafe_allow_html=True)
+        # 4. call AI analysis if available
+        if brain is not None:
+            thoughts_box.code("Sending condensed report to AI for analysis...\n")
+            try:
+                analysis = brain.ask(f"Analyze reconnaissance report for {target_url}. Context: {report_for_ai}")
+                ai_output = analysis.get('output') if isinstance(analysis, dict) else str(analysis)
+            except Exception as e:
+                ai_output = f"AI analysis failed: {e}"
+        else:
+            ai_output = "AI engine not available in this environment."
+
+        # Save last report
+        full_export = f"# Argus Security Report - {target_url}\n\n## Technical Data\n{report_display}\n\n## AI Analysis\n{ai_output}"
+        st.session_state.last_report = full_export
+        st.session_state.running = False
+        status_placeholder.success("Scan complete")
+        output_box.code(ai_output)
+        findings_box.text(report_display)
+        last_run_box.info(f"Last run: {time.strftime('%Y-%m-%d %H:%M:%S')}")
+    except Exception as exc:
+        st.session_state.thread_exc = traceback.format_exc()
+        st.session_state.running = False
+        status_placeholder.error("Scan failed: see exception")
+        output_box.code(st.session_state.thread_exc)
+
+# Handle stop
+if stop_btn and st.session_state.running:
+    # We don't have a clean cancellation token for WSL calls; set flag and inform user
+    st.session_state.running = False
+    status_placeholder.warning("Stop requested. Long-running WSL processes may still complete in background.")
+
+# Trigger run
+if run_btn and not st.session_state.running:
+    t = threading.Thread(target=run_scan, args=(target, model_name, temperature), daemon=True)
+    t.start()
+    status_placeholder.info("Scan started in background...")
+
+# Download report button if available
+if st.session_state.last_report:
+    download_placeholder.download_button(label="Download Last Report", data=st.session_state.last_report, file_name=f"Argus_Report_{int(time.time())}.md", mime='text/markdown')
+
+# Show any thread exception
+if st.session_state.thread_exc:
+    st.error("Background task exception:")
+    st.code(st.session_state.thread_exc)
+
+# Small status footer
+st.markdown("---")
+st.caption(f"WSL Bridge: {bridge.host} | Model: {model_name} | Running: {st.session_state.running}")
+
+# Suggestion for users
+st.info("Tip: Use the sidebar to adjust AI parameters. For heavy scans, run in a controlled manner.")
