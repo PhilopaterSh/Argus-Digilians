@@ -8,7 +8,14 @@ from dotenv import load_dotenv
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from app.tools.tool_registry import WSLBridgeTools
-from core.agent import ArgusBrain
+try:
+    from app.core.brain import ArgusBrain
+except Exception:
+    try:
+        # Legacy location fallback
+        from core.agent import ArgusBrain
+    except Exception:
+        ArgusBrain = None
 from langchain_core.tools import Tool
 
 # Load environment variables
