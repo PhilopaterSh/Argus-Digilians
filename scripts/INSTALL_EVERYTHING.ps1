@@ -6,11 +6,22 @@ param(
     [switch]$Offline,
     [switch]$Interactive,
     [switch]$SkipHealthCheck,
-    [int]$RetryCount = 2
+    [object]$RetryCount = 2
 )
 
+# Normalize RetryCount to an integer and fallback to 2 on invalid input.
+try {
+    if ($RetryCount -is [string]) {
+        if ($RetryCount -match '^[0-9]+$') { $RetryCount = [int]$RetryCount } else { $RetryCount = 2 }
+    } elseif (-not ($RetryCount -is [int])) {
+        $RetryCount = 2
+    }
+} catch {
+    $RetryCount = 2
+}
+
 $ErrorActionPreference = "Stop"
-$ScriptDir = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Definition)
+$ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
 $env:ARGUS_AUTO_INSTALL = if ($Interactive) { "" } else { "1" }
 if ($Offline) { $env:ARGUS_OFFLINE = "1" }
 
@@ -271,7 +282,7 @@ foreach ($step in $steps) {
 
 if (-not $SkipHealthCheck) {
     Write-Header "RUNNING SYSTEM FINAL VALIDATION"
-    $healthCheck = Join-Path $ScriptDir "scripts\CHECK_HEALTH.bat"
+    $healthCheck = Join-Path $ScriptDir "CHECK_HEALTH.bat"
     if (Test-Path -LiteralPath $healthCheck) {
         $env:ARGUS_SKIP_PAUSE = "1"
         $process = Start-Process cmd.exe -ArgumentList "/c `"$healthCheck`"" -Wait -NoNewWindow -PassThru
