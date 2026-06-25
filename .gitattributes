@@ -1,0 +1,18 @@
+# Auto detect text files and normalize line endings
+* text=auto
+
+# Force LF for POSIX files
+*.sh text eol=lf
+*.md text eol=lf
+*.py text eol=lf
+
+# Use CRLF for Windows batch and PowerShell
+*.bat text eol=crlf
+*.ps1 text eol=crlf
+
+# Binary files
+*.exe binary
+*.dll binary
+*.zip binary
+*.png binary
+*.jpg binary
