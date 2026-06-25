@@ -18,6 +18,7 @@ call Argus_venv\Scripts\activate.bat
 
 :: 3. Run CLI Analysis
 echo [!] Starting Argus Autonomous Agent...
+cd /d "%~dp0.."
 python run_argus_cli.py %*
 
 :: 4. Keep window open if error or finished

@@ -3,8 +3,9 @@ import sys
 import os
 
 # Ensure project root is in path for module access
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
 
+# Use relative imports for clarity
 from app.tools.tool_registry import WSLBridgeTools
 from app.core.brain import ArgusBrain
 from langchain_core.tools import Tool
@@ -60,7 +61,6 @@ def load_brain(model_name):
         Tool(name="Run_FFUF", func=bridge.run_ffuf_discovery, description="Run FFUF for fast hidden path discovery."),
         Tool(name="System_Self_Heal", func=bridge.system_self_heal, description="Use this tool to autonomously install missing Python libraries (pip) or Kali system tools (apt) if you encounter a 'command not found' or 'ModuleNotFoundError'."),
         Tool(name="Archive_Research_Subagent", func=bridge.archive_research_subagent, description="Invoke the archived AI_Agents_Project for deep intelligence research (CVEs, Web Search, Historical Memory)."),
-        Tool(name="Run_Specialized_Module", func=bridge.run_specialized_module, description="Execute a specialized exploit script from the modules/ directory (e.g., 'argus_deep_exploit.py', 'stealth_exploit.py'). Use this for deep file extraction or WAF bypass."),
         Tool(name="Run_Kali_Command", func=bridge.run_kali_command, description="Execute ANY raw command in the Kali Linux terminal (WSL). Use this for manual subdomain discovery (subfinder, assetfinder), fixing tools, or custom reconnaissance chains.")
     ]
     return ArgusBrain(model_name, tools)
