@@ -35,3 +35,28 @@ streamlit.out.log
 Reports/
 Discovery_*.txt
 Setup/Archive/
+reports/
+argus_intelligence.db
+Argus_Secure_Sync.exe
+
+# Virtual Environments (only root location allowed)
+Argus_venv/
+scripts/Argus_venv/
+scripts/Setup/
+
+# Runtime Generated Files
+*.pyc
+.streamlit/
+.cache/
+streamlit_runtime/
+
+# OS Specific
+Thumbs.db
+.DS_Store
+*.lnk
+
+# Archives
+archive/
+*.zip
+*.tar.gz
+*.rar
