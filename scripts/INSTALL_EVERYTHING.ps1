@@ -217,11 +217,13 @@ function Invoke-InstallerStep {
 
     # Resolve script path: prefer root\Setup (one level above scripts), then scripts\Setup, then literal path relative to ScriptDir
     $rootDir = Split-Path -Parent $ScriptDir
-    $candidates = @(
-        Join-Path $rootDir $Script,
-        Join-Path $ScriptDir $Script,
-        Join-Path $ScriptDir (Split-Path $Script -Leaf)
-    )
+
+    $cand1 = Join-Path $rootDir $Script
+    $cand2 = Join-Path $ScriptDir $Script
+    $leaf = Split-Path $Script -Leaf
+    $cand3 = Join-Path $ScriptDir $leaf
+
+    $candidates = @($cand1, $cand2, $cand3)
 
     $scriptPath = $null
     foreach ($cand in $candidates) {
