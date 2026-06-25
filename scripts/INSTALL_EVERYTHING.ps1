@@ -214,11 +214,29 @@ function Invoke-InstallerStep {
     }
 
     Write-Step $ID $Name
-    $scriptPath = Join-Path $ScriptDir $Script
-    if (-not (Test-Path -LiteralPath $scriptPath)) {
-        Write-ErrorMsg "Script not found: $scriptPath"
+
+    # Resolve script path: prefer root\Setup (one level above scripts), then scripts\Setup, then literal path relative to ScriptDir
+    $rootDir = Split-Path -Parent $ScriptDir
+    $candidates = @(
+        Join-Path $rootDir $Script,
+        Join-Path $ScriptDir $Script,
+        Join-Path $ScriptDir (Split-Path $Script -Leaf)
+    )
+
+    $scriptPath = $null
+    foreach ($cand in $candidates) {
+        if (Test-Path -LiteralPath $cand) {
+            $scriptPath = $cand
+            break
+        }
+    }
+
+    if (-not $scriptPath) {
+        Write-ErrorMsg "Script not found in expected locations: $($candidates -join ', ')"
         return $false
     }
+
+    Write-Log "INFO" "Resolved script path: $scriptPath"
 
     for ($attempt = 1; $attempt -le [Math]::Max(1, $RetryCount); $attempt++) {
         Write-Log "INFO" "Starting Step $ID attempt $attempt/${RetryCount}: $scriptPath"
