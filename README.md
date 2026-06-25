@@ -30,15 +30,49 @@ Not sure if everything is working? Run the health check:
 
 ```text
 Argus/
-├── LAUNCH_STUDIO.bat           # 🚀 One-click system start
-├── INSTALL_EVERYTHING.bat      # 🛠️ Full environment setup
-├── CHECK_HEALTH.bat            # 🔍 System health diagnostics
-├── Argus_Master_Documentation.md # 📖 Comprehensive Documentation
-├── Setup/                      # 🌐 All Installation Scripts & Resources
-├── core/                       # 🧠 AI Brain & WSL Bridge Logic
-├── GUI/                        # 🖥️ Streamlit Web Command Center
-├── Workflows/                  # 📊 Mappings & Diagrams
-└── tests/                      # 🧪 System test scripts
+├── 📄 README.md                           # Project overview
+├── 📄 Argus_Master_Documentation.md       # Technical reference
+├── .env.example                           # Environment template
+├── .gitignore                             # Git ignore rules
+│
+├── 📁 scripts/                            # Operational scripts & launchers
+│   ├── LAUNCH_STUDIO.bat                  # 🚀 One-click system start
+│   ├── LAUNCH_CLI.bat                     # CLI agent launcher
+│   ├── CHECK_HEALTH.bat                   # 🔍 System health diagnostics
+│   ├── INSTALL_EVERYTHING.ps1             # Master installer
+│   └── run_argus_cli.py                   # CLI entry point
+│
+├── 📁 app/                                # Main application core
+│   ├── GUI/                               # 🖥️ Streamlit Web Command Center
+│   ├── core/                              # 🧠 AI Brain & Memory Logic
+│   ├── tools/                             # Security tools & modules
+│   └── modules/                           # Specialized exploit scripts
+│
+├── 📁 Setup/                              # 🌐 Installation scripts & resources
+│   ├── Step_1_Host_Setup.bat
+│   ├── Step_2_Python_AI.bat
+│   ├── Step_3_Kali_Tools.bat
+│   └── helpers/
+│
+├── 📁 docs/                               # Documentation
+│   ├── README.md                          # Doc index
+│   ├── STRUCTURE_GUIDE.md                 # Organization guide
+│   ├── GEMINI.md                          # Development standards
+│   └── arc42.md                           # Architecture documentation
+│
+├── 📁 tests/                              # 🧪 Test suites
+│   └── test_*.py                          # Test modules
+│
+├── 📁 data/                               # Data & databases
+│   └── argus_intelligence.db              # AI cache database
+│
+├── 📁 bin/                                # Executables
+│   └── Argus_Secure_Sync.exe
+│
+├── 📁 logs/                               # Application logs
+│   └── .gitkeep
+│
+└── 📁 archive/                            # Legacy/deprecated code
 ```
 
 ---

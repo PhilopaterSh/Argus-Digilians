@@ -66,7 +66,7 @@ def load_brain(model_name):
     return ArgusBrain(model_name, tools)
 
 # Main Interface
-target = st.text_input("🎯 Target URL", "https://")
+target = st.text_input("🎯 Target URL", "https://example.com")
 
 if st.button("RUN ANALYSIS"):
     if target:

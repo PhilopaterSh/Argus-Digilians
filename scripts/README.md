@@ -25,7 +25,7 @@ LAUNCH_STUDIO.bat C
   - `A`: Standard CLI mode
   - `B`: Debug mode (verbose output)
   - `C`: Enhanced mode (full features)
-- **Entry Point**: `run_argus_cli.py` (in project root)
+- **Entry Point**: `scripts/run_argus_cli.py`
 
 **Example**:
 ```batch
@@ -74,7 +74,7 @@ scripts/
 ├── INSTALL_EVERYTHING.ps1      # Master installer
 ├── Check_Requirements.ps1      # Pre-flight checks
 ├── Initialize_Folders.bat      # Folder setup
-├── Setup/                       # (Deleted - now in root Setup/ only)
+├── run_argus_cli.py            # CLI entry point (moved here)
 └── README.md                    # This file
 ```
 
@@ -97,7 +97,7 @@ scripts/
 
 ### ModuleNotFoundError in CLI
 - **Cause**: Python path not set correctly
-- **Solution**: Ensure `run_argus_cli.py` is in project root, scripts are in project root/scripts/
+- **Solution**: Ensure `scripts/run_argus_cli.py` is in scripts/ directory, and project root is accessible
 
 ## Performance Tips
 

@@ -14,12 +14,26 @@ wsl_output.txt
 
 # Databases
 *.db
-!argus_intelligence.db  # Keep the skeleton DB if essential, or ignore all if user prefers
+!data/argus_intelligence.db  # Keep the skeleton DB
 
 # Logs
 ARGUS_INSTALLATION.log
 streamlit.err.log
 streamlit.out.log
+logs/*.log  # Ignore generated logs
+
+# Project Specific
+reports/
+Discovery_*.txt
+Setup/Archive/
+reports/
+
+# Executables (moved to bin/)
+bin/Argus_Secure_Sync.exe
+
+# Virtual Environments (only root location allowed)
+Argus_venv/
+scripts/Argus_venv/
 
 # IDEs
 .vscode/
@@ -30,29 +44,7 @@ streamlit.out.log
 [Tt]humbs.db
 *.bak
 .DS_Store
-
-# Project Specific
-Reports/
-Discovery_*.txt
-Setup/Archive/
-reports/
-argus_intelligence.db
-Argus_Secure_Sync.exe
-
-# Virtual Environments (only root location allowed)
-Argus_venv/
-scripts/Argus_venv/
-scripts/Setup/
-
-# Runtime Generated Files
-*.pyc
-.streamlit/
-.cache/
-streamlit_runtime/
-
-# OS Specific
 Thumbs.db
-.DS_Store
 *.lnk
 
 # Archives
@@ -60,3 +52,9 @@ archive/
 *.zip
 *.tar.gz
 *.rar
+
+# Runtime Generated Files
+*.pyc
+.streamlit/
+.cache/
+streamlit_runtime/
