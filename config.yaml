@@ -1,0 +1,38 @@
+log_level: INFO
+max_web_search_attempts: 3
+web_search_timeout_seconds: 10
+early_stopping_method: stop
+model_name: "WhiteRabbitNeo/WhiteRabbitNeo-V3-7B:latest"
+command_timeout_seconds: 600
+recon_truncate_chars: 1000
+
+# RAG (Retrieval-Augmented Generation) settings
+rag:
+  enabled: true
+  embedding_model: "nomic-embed-text"
+  embedding_device: "cpu"
+  chunk_size: 600
+  chunk_overlap: 100
+  retriever_k: 4
+  similarity_threshold: 0.5
+  auto_rebuild: true
+  knowledge_base_dir: "knowledge_base"
+
+# Streamlit / GUI settings (editable, non-sensitive)
+streamlit:
+  host: localhost
+  port: 8501
+  headless: true
+  enableCORS: false
+  enableXsrfProtection: false
+
+paths:
+  venv_python: "..\\Argus_venv\\Scripts\\python.exe"
+  gui_entry: "..\\app\\GUI\\gui_app.py"
+
+logging:
+  transformers_verbosity: error
+  stream_log_level: error
+  python_warnings: ignore
+
+# Note: Keep secrets in a .env file at repo root. LAUNCH_STUDIO.bat reads .env for runtime overrides.
