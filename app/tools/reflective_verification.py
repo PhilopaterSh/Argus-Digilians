@@ -3,6 +3,10 @@ import json
 import urllib.parse
 from app.core.memory.memory_service import ArgusMemory
 
+MAX_HISTORY = 10
+LOOP_THRESHOLD = 3
+
+
 class ReflectiveVerificationService:
     """
     Implements Reflective Verification and Task Difficulty Assessment (TDA)
@@ -12,6 +16,7 @@ class ReflectiveVerificationService:
     def __init__(self, runner, memory: ArgusMemory):
         self.runner = runner
         self.memory = memory
+        self._command_history: list[str] = []
 
     def pre_execute_verify(self, command: str) -> str:
         """
@@ -45,8 +50,15 @@ class ReflectiveVerificationService:
             if not urls:
                 return "Verification Warning: Curl command is missing a valid HTTP/HTTPS target URL."
 
-        # 4. Check for multiple consecutive runs (Infinite Loop Prevention)
-        # We can implement a check using the blackboard, or let it pass with validation
+        # 4. Infinite Loop Prevention: detect 3+ identical consecutive commands
+        self._command_history.append(command)
+        if len(self._command_history) > MAX_HISTORY:
+            self._command_history.pop(0)
+        if len(self._command_history) >= LOOP_THRESHOLD:
+            recent = self._command_history[-LOOP_THRESHOLD:]
+            if all(c == command for c in recent):
+                return "Verification Blocked: Command repeated 3+ times (possible infinite loop)."
+
         print(f"[+] [Reflector-Phase1] Command successfully verified.")
         return "SUCCESS: Command syntax and parameters validated."
 

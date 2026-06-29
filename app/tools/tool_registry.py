@@ -15,6 +15,7 @@ from app.tools.reachability import ReachabilityService, JSONReportWriter
 from app.tools.crawler import CrawlerService
 from app.tools.evasion import EvasionService
 from app.tools.self_heal import SelfHealingService
+from app.tools.reflective_verification import ReflectiveVerificationService
 
 logger = logging.getLogger(__name__)
 
@@ -64,6 +65,7 @@ class WSLBridgeTools:
         self.crawler = CrawlerService(self.runner, self.memory)
         self.evasion = EvasionService(self.runner, self.memory)
         self.self_heal = SelfHealingService(self.runner)
+        self.verifier = ReflectiveVerificationService(self.runner, self.memory)
 
         self._register_defaults()
 
@@ -103,6 +105,15 @@ class WSLBridgeTools:
         ))
         self.registry.register(_ToolServiceAdapter(
             "self_heal", "Autonomously install missing tools", self.self_heal, "system_self_heal"
+        ))
+        self.registry.register(_ToolServiceAdapter(
+            "verify_command", "Validate command syntax and detect infinite loops", self.verifier, "pre_execute_verify"
+        ))
+        self.registry.register(_ToolServiceAdapter(
+            "verify_output", "Analyze command output for WAF blocks and false positives", self.verifier, "post_execute_verify"
+        ))
+        self.registry.register(_ToolServiceAdapter(
+            "assess_difficulty", "Task Difficulty Assessment for target selection", self.verifier, "task_difficulty_assessment"
         ))
         self.registry.register(_ToolServiceAdapter(
             "intelligence", "Query blackboard intelligence summary", self.memory, "get_blackboard_summary"
@@ -164,6 +175,15 @@ class WSLBridgeTools:
 
     def system_self_heal(self, tool_info):
         return self.self_heal.system_self_heal(tool_info)
+
+    def verify_command(self, command):
+        return self.verifier.pre_execute_verify(command)
+
+    def verify_output(self, url, command, raw_output):
+        return self.verifier.post_execute_verify(url, command, raw_output)
+
+    def assess_difficulty(self, targets):
+        return self.verifier.task_difficulty_assessment(targets)
 
     def get_intelligence_summary(self, _=None):
         return self.memory.get_blackboard_summary()
