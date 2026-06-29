@@ -1,8 +1,18 @@
+import os
 import sys
 import subprocess
+import urllib.request
+import json
+import logging
 from typing import Any
 
 from app.core.registry.base_tool import BaseToolService, ToolMetadata
+
+logger = logging.getLogger(__name__)
+
+OLLAMA_URL = "http://localhost:11434/api/tags"
+OLLAMA_HEALTH_TIMEOUT = 5
+WSL_TERMINATE_TIMEOUT = 10
 
 
 class SelfHealingService(BaseToolService):
@@ -45,3 +55,94 @@ class SelfHealingService(BaseToolService):
             return f"Successfully installed/verified system tool: {tool_info}."
         
         return f"Self-heal failed for {tool_info}. Please check logs or install manually."
+
+    def health_check(self) -> dict:
+        return {
+            "wsl": self._check_wsl(),
+            "ollama": self._check_ollama(),
+            "python": self._check_python(),
+        }
+
+    def _check_wsl(self) -> str:
+        try:
+            res = subprocess.run(
+                ["wsl", "--status"],
+                capture_output=True, text=True, timeout=10,
+            )
+            if res.returncode == 0:
+                return "ok"
+            return f"failed: {res.stderr.strip() or res.stdout.strip()}"
+        except subprocess.TimeoutExpired:
+            return "failed: timeout"
+        except FileNotFoundError:
+            return "failed: wsl.exe not found"
+        except Exception as e:
+            return f"failed: {e}"
+
+    def _check_ollama(self) -> str:
+        try:
+            req = urllib.request.Request(OLLAMA_URL)
+            with urllib.request.urlopen(req, timeout=OLLAMA_HEALTH_TIMEOUT) as resp:
+                if resp.status == 200:
+                    return "ok"
+                return f"failed: HTTP {resp.status}"
+        except urllib.error.URLError as e:
+            return f"failed: cannot reach Ollama ({e.reason})"
+        except Exception as e:
+            return f"failed: {e}"
+
+    def _check_python(self) -> str:
+        try:
+            ver = sys.version.split()[0]
+            venv = sys.prefix
+            return f"ok (Python {ver}, venv: {os.path.basename(venv)})"
+        except Exception as e:
+            return f"failed: {e}"
+
+    def restart_service(self, name: str) -> str:
+        name = name.lower().strip()
+        if name == "ollama":
+            return self._restart_ollama()
+        elif name == "wsl":
+            return self._restart_wsl()
+        else:
+            return f"Unknown service: {name}"
+
+    def _restart_ollama(self) -> str:
+        try:
+            subprocess.run(
+                ["taskkill", "/f", "/im", "ollama.exe"],
+                capture_output=True, text=True, timeout=10,
+            )
+        except Exception:
+            pass
+        try:
+            subprocess.Popen(
+                ["ollama", "serve"],
+                creationflags=subprocess.CREATE_NO_WINDOW,
+            )
+            return "Successfully restarted Ollama."
+        except FileNotFoundError:
+            return "Failed: ollama.exe not found in PATH."
+        except Exception as e:
+            return f"Failed to restart Ollama: {e}"
+
+    def _restart_wsl(self) -> str:
+        try:
+            subprocess.run(
+                ["wsl", "--terminate", "kali-linux"],
+                capture_output=True, text=True, timeout=WSL_TERMINATE_TIMEOUT,
+            )
+            res = subprocess.run(
+                ["wsl", "-d", "kali-linux", "echo", "ready"],
+                capture_output=True, text=True, timeout=30,
+            )
+            if res.returncode == 0:
+                return "Successfully restarted WSL (kali-linux)."
+            return f"WSL restart completed but verification failed: {res.stderr}"
+        except subprocess.TimeoutExpired:
+            return "Failed: WSL restart timed out."
+        except FileNotFoundError:
+            return "Failed: wsl.exe not found."
+        except Exception as e:
+            return f"Failed to restart WSL: {e}"
