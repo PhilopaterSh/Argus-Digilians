@@ -168,3 +168,100 @@ Every Spec-Kit phase **MUST** produce at least one `git commit` before moving to
 2. Never commit secrets, tokens, or large binaries.
 3. If a phase produces multiple files, commit each logically grouped change separately.
 4. After `/speckit.implement`, commit **after each completed Task**, not only at the end of the phase.
+
+### Alignment with Architecture Vision (`docs/ARGUS_FRAMEWORK_ARCHITECTURE_v2.md`)
+
+كل Phase في هذا المشروع تبني مكوناً من الـ Architecture:
+
+| Feature ID | Architecture v2 Component | Section(s) |
+|-----------|--------------------------|-----------|
+| 002-consolidated-installer | **Infrastructure** — Python, Ollama, WSL, Kali, venv, SSH bridge | §7 Deployment View |
+| 003-sqlite-blackboard | **SQLite Blackboard** — targets, findings, entities, relations, global_state | §5.1 Memory, §6.1 Phase 4 |
+| 004-rag-pipeline | **RAG Subsystem** — DocumentProcessor, EmbeddingFactory, VectorStore (FAISS), RAGEngine | §5.1 RAG Subsystem, §5.2 |
+| 005-tool-registry | **Tool Registry + 12 Services** — Recon, Scanners, Crawler, Evasion, etc. | §5.1 Tool Services |
+| 006-tactical-modules | **Tactical Modules** — Recon, Deep Exploit, Stealth, Map Target | §5.3 Tactical Modules |
+| 007-reflective-verification | **Reflective Verification Service** — false positive elimination | §5.1, §8 |
+| 008-self-healing | **Self-Healing Service** — auto-fix missing deps | §5.1 |
+| 009-gui | **GUI Layer** — Streamlit, Tkinter, Argus Studio | §5.3 GUI Layer |
+
+---
+
+## 5. Approved Additions (post-review)
+
+The following four additions were approved after a review of the initial plan.
+They close real gaps between the written plan and the actual repository state.
+
+### 5.1 Git-Track Spec-Kit Files
+
+**Problem**: `opencode.json`, `.specify/`, and `.opencode/commands/` are currently
+**untracked** in git. Anyone who clones the repo will not have the `/speckit.*`
+commands working, which defeats the whole Spec-Kit workflow.
+
+**Action**:
+- Verify `.gitignore` does not exclude these paths.
+- `git add` the three paths so the Spec-Kit configuration is committed.
+- Confirm `opencode.json` correctly registers the `/speckit.*` commands.
+
+**Success**: After a fresh clone, `/speckit.constitution` and the rest of the
+workflow are available without any manual init step.
+
+### 5.2 Clean Up `CHECK_HEALTH.bat` References
+
+**Problem**: The plan says the health check is now embedded in the installer, but
+`scripts/CHECK_HEALTH.bat` still exists and is still referenced by
+`LAUNCH_CLI.bat` and `LAUNCH_STUDIO.bat` (e.g. "Run INSTALL_EVERYTHING.bat first").
+This creates dead references to a deprecated tool.
+
+**Action**:
+- Remove `scripts/CHECK_HEALTH.bat` (its logic is now embedded).
+- Update `LAUNCH_CLI.bat`: replace the `INSTALL_EVERYTHING.bat` fallback with a
+  pointer to `INSTALL.bat` / the embedded `-OnlyHealthCheck` mode.
+- Update `LAUNCH_STUDIO.bat`: same cleanup of stale references.
+
+**Success**: No file references `CHECK_HEALTH.bat` or `INSTALL_EVERYTHING.bat`
+(the `.bat` variant) anymore.
+
+### 5.3 Add `-OnlyHealthCheck` Mode
+
+**Problem**: After deleting `CHECK_HEALTH.bat`, there is no clean way to run just
+the validation without re-running the whole installer.
+
+**Action**:
+- Add an `-OnlyHealthCheck` switch to `INSTALL_EVERYTHING.ps1`.
+- When set, the script skips self-elevation, skips all install steps, and runs
+  only the embedded `Invoke-HealthCheck`, then exits with a code reflecting health
+  (0 = healthy, non-zero = issues).
+- Add `health` as a recognized token in `INSTALL.bat` (`INSTALL.bat health`).
+
+**Success**: `INSTALL.bat health` runs a fast, non-elevated diagnostic that
+replaces the old standalone `CHECK_HEALTH.bat`.
+
+### 5.4 Add `wsl --update` and Real Model Verification
+
+**Problem**:
+- Step 2 enables WSL2 features but never updates the WSL kernel itself, which
+  causes common Kali boot errors on fresh systems.
+- Step 3 only checks that the model **name** appears in `ollama list`; it does
+  not verify the model actually **responds**.
+
+**Action**:
+- In Step 2 (Host Foundation): add `wsl --update` (best-effort, non-fatal) right
+  after the Windows features are enabled.
+- In Step 3 (AI Environment): after confirming the model is present, run a tiny
+  prompt through it (e.g. `ollama run <model> ""` with a short timeout) to verify
+  it actually loads and responds. A non-responding model is a WARN, not a failure.
+
+**Success**: WSL kernel is current after install, and the model is confirmed to
+actually run, not just be listed.
+
+---
+
+## 6. Change Log
+
+| Date | Change |
+|------|--------|
+| 2026-06-27 | Initial plan (Phases 0-5) drafted. |
+| 2026-06-27 | Constitution v1.0.0 ratified (Phase 0 complete). |
+| 2026-06-27 | Section 5 added: 4 approved additions (git-track, CHECK_HEALTH cleanup, -OnlyHealthCheck, wsl --update + model verify). |
+| 2026-06-29 | Added Commit Strategy §4 (commit-per-phase). |
+| 2026-06-29 | Added Alignment with Architecture Vision table mapping every Feature ID to `docs/ARGUS_FRAMEWORK_ARCHITECTURE_v2.md` components. |
