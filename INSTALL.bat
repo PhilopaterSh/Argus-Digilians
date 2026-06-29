@@ -2,7 +2,7 @@
 REM ==========================================================================
 REM  Argus Security Framework - Single-Click Master Installer (Launcher)
 REM --------------------------------------------------------------------------
-REM  This launcher runs scripts\INSTALL_EVERYTHING.ps1, which will:
+REM  This launcher runs scripts\ARGUS_INSTALLER.ps1, which will:
 REM    * self-elevate to Administrator
 REM    * install + configure + validate the entire Argus environment
 REM    * write a log to logs\argus_install_<timestamp>.log

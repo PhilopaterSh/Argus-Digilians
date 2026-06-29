@@ -70,7 +70,7 @@ if %errorlevel% neq 0 (
 :: 3. Launching Studio
 echo [*] Activating Environment and Launching Web Interface...
 if not exist "Argus_venv\Scripts\activate.bat" (
-    echo [ERROR] Virtual Environment missing! Run INSTALL_EVERYTHING.bat first.
+    echo [ERROR] Virtual Environment missing! Run INSTALL.bat from the project root first.
     pause & exit /b
 )
 

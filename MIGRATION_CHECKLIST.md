@@ -130,7 +130,7 @@
 ### Batch Files
 - [x] `scripts/LAUNCH_CLI.bat` - Valid syntax
 - [x] `scripts/LAUNCH_STUDIO.bat` - Valid syntax
-- [x] `scripts/CHECK_HEALTH.bat` - Valid syntax
+- [x] `scripts/CHECK_HEALTH.bat` - Deprecated (replaced by embedded health check in `INSTALL.bat health`)
 
 ### Python Files
 - [x] `scripts/run_argus_cli.py` - Valid Python syntax
@@ -160,7 +160,7 @@
 - [x] Cleaned up root directory
 
 ### Recommended Next Steps
-- [ ] Run: `scripts/CHECK_HEALTH.bat`
+- [ ] Run: `INSTALL.bat health` (embedded health check, no separate file)
 - [ ] Activate venv: `Argus_venv\Scripts\activate.bat`
 - [ ] Test CLI: `scripts/LAUNCH_CLI.bat`
 - [ ] Test UI: `scripts/LAUNCH_STUDIO.bat`

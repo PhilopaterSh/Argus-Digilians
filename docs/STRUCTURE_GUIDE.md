@@ -39,18 +39,17 @@ remote_Argus_PhilopaterSh/
 │   ├── 📄 README.md                       # ⭐ Usage guide
 │   ├── LAUNCH_CLI.bat                     # CLI agent launcher
 │   ├── LAUNCH_STUDIO.bat                  # Streamlit launcher
-│   ├── INSTALL_EVERYTHING.ps1             # Master installer
-│   ├── Check_Requirements.ps1             # Pre-flight checks
-│   ├── Initialize_Folders.bat             # Folder setup
+│   ├── ARGUS_INSTALLER.ps1                # ⭐ Master installer (self-contained)
+│   ├── run_argus_cli.py                   # CLI entry point
 │   └── __init__.py                        # (Python package marker)
 │
-├── 📁 Setup/                              # Installation pipeline
-│   ├── 📄 README.md                       # ⭐ Setup guide
-│   ├── Step_1_Host_Setup.bat              # Windows/WSL setup
-│   ├── Step_2_Python_AI.bat               # Python venv setup
-│   ├── Step_3_Kali_Tools.bat              # Kali integration
-│   ├── helpers/                           # Setup utility scripts
-│   └── Archive/                           # Deprecated scripts
+├── 📁 Setup_legacy/                       # Archived installation scripts (manual fallback)
+│   ├── 📄 README.md                       # Legacy setup guide
+│   ├── Step_1_Core_Foundation.bat
+│   ├── Step_2_AI_Python_Env.bat
+│   ├── Step_3_Kali_Tools_Setup.bat
+│   ├── check_and_install.sh               # Kali tool installer
+│   └── requirements.txt
 │
 ├── 📁 docs/                               # Documentation
 │   ├── 📄 README.md                       # ⭐ Doc index & guide
@@ -89,8 +88,8 @@ remote_Argus_PhilopaterSh/
 - ✅ **`__init__.py` in all packages**: Makes directories importable
 
 ### Batch/PowerShell Scripts
-- ✅ **UPPERCASE with underscores**: `INSTALL_EVERYTHING.ps1`, `LAUNCH_CLI.bat`
-- ✅ **Verb first**: `CHECK_Requirements.ps1`, `LAUNCH_Studio.bat`
+- ✅ **UPPERCASE with underscores**: `ARGUS_INSTALLER.ps1`, `LAUNCH_CLI.bat`
+- ✅ **Verb first**: `LAUNCH_STUDIO.bat`
 - ✅ **Clear action**: What the script does
 
 ### Documentation

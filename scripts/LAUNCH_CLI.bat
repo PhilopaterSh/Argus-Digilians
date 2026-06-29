@@ -9,8 +9,9 @@ cls
 
 :: 1. Environment Check
 if not exist "Argus_venv\" (
-    echo [!] Virtual environment not found. Running setup...
-    call INSTALL_EVERYTHING.bat
+    echo [!] Virtual environment not found. Run INSTALL.bat from the project root first.
+    pause
+    exit /b 1
 )
 
 :: 2. Activate Venv

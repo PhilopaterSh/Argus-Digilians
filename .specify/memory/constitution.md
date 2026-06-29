@@ -53,7 +53,7 @@ validates the full Argus environment. Fragmented multi-file orchestration that
 duplicates prerequisite checks across steps is forbidden.
 
 Rules:
-- `scripts/INSTALL_EVERYTHING.ps1` is the single source of truth for installation.
+- `scripts/ARGUS_INSTALLER.ps1` is the single source of truth for installation.
 - A root-level `INSTALL.bat` exists only as a convenience launcher; it MUST NOT
   contain installation logic of its own.
 - Each prerequisite (Python, Ollama, WSL, Kali) MUST be checked exactly once and

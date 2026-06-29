@@ -351,3 +351,18 @@ All reorganization tasks have been tested and verified:
 ---
 
 *This test report documents the comprehensive validation of the Argus Security Framework reorganization and confirms all systems are operational.*
+
+---
+
+## 📌 Post-Report Update (2026-06-29)
+
+> The installer was consolidated after this report was written. The following
+> files referenced above are now **deprecated/removed**:
+> - `scripts/CHECK_HEALTH.bat` → removed; logic is now embedded in the installer,
+>   invoked via `INSTALL.bat health` (the `-OnlyHealthCheck` switch).
+> - `scripts/INSTALL_EVERYTHING.ps1` → removed; superseded by the single
+>   self-contained `scripts/ARGUS_INSTALLER.ps1`.
+> - `Setup/` → archived as `Setup_legacy/` after a successful first run.
+>
+> Refer to `Plan md/Plan.md` §5 and `INSTALLATION_GUIDE.md` for the current
+> supported paths.

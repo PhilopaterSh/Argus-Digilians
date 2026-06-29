@@ -13,7 +13,7 @@ installer, as well as the legacy manual fallback.
 | **Entry Point** | `INSTALL.bat` (root) | `Setup/Step_*.bat` (manual) |
 | **Execution** | Automatic (one command) | Manual (step-by-step) |
 | **Admin Handling** | Auto-elevates via UAC | Must run as Admin manually |
-| **Health Check** | Embedded at end of install | `scripts/CHECK_HEALTH.bat` (separate) |
+| **Health Check** | Embedded at end of install | `INSTALL.bat health` (same script) |
 | **Logging** | Unified log file | Console only |
 
 ---
@@ -22,7 +22,7 @@ installer, as well as the legacy manual fallback.
 
 ### What It Does
 
-`scripts/INSTALL_EVERYTHING.ps1` is a single, self-contained PowerShell module that:
+`scripts/ARGUS_INSTALLER.ps1` is a single, self-contained PowerShell module that:
 
 1. **Self-elevates** to Administrator (UAC prompt)
 2. **Verifies system readiness** (OS, RAM, disk, internet)
@@ -53,7 +53,7 @@ cd C:\AI_PenTest_Project\remote_Argus_PhilopaterSh
 **Option C: Direct PowerShell**
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts\INSTALL_EVERYTHING.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\ARGUS_INSTALLER.ps1
 ```
 
 ### Installation Modes
@@ -89,7 +89,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts\INSTALL_EVERYTHING.p
 INSTALL.bat (root launcher, no logic)
     |
     v
-scripts/INSTALL_EVERYTHING.ps1 (unified self-elevating installer)
+scripts/ARGUS_INSTALLER.ps1 (unified self-elevating installer)
     |
     +-- Step 0: System Readiness (RAM, Disk, Internet)
     +-- Step 1: Python 3.12 bootstrap
@@ -173,7 +173,7 @@ START: Do you want to install Argus?
     |       +-- NO  -> continue
     |
     +-- CI/CD pipeline?
-    |       +-- YES -> scripts/INSTALL_EVERYTHING.ps1 -DryRun (validate)
+    |       +-- YES -> scripts/ARGUS_INSTALLER.ps1 -DryRun (validate)
     |       +-- NO  -> INSTALL.bat
 ```
 

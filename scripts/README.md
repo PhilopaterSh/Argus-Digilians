@@ -7,11 +7,13 @@ entry points for the Argus framework.
 
 ## Master Installer
 
-### `ARGUS_INSTALLER.ps1` (Recommended)
+### `ARGUS_INSTALLER.ps1` (Recommended — Single Source of Truth)
 
 A fully self-contained PowerShell script that embeds all dependencies
 (requirements.txt, check_and_install.sh) internally as here-strings.
 It has ZERO external file dependencies — copy this ONE file and run it.
+This is the **only** supported installer; the previous `INSTALL_EVERYTHING.ps1`
+was removed (it depended on the now-archived `Setup/` directory).
 
 After a successful first run, the legacy `Setup/` directory is automatically
 archived to `Setup_legacy/`.
@@ -31,23 +33,19 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts\ARGUS_INSTALLER.ps1
 | `-DryRun` | Simulate without making system changes |
 | `-SkipHealthCheck` | Skip the embedded final health check |
 | `-RetryCount N` | Retry failed steps N times (default: 2) |
+| `-OnlyHealthCheck` | Run **only** the embedded health check, no install steps, no elevation |
 
 **Embedded Steps (in order):**
 
 1. Self-Elevation (Admin-first)
 2. System Readiness (OS, RAM, Disk, Internet)
 3. Python 3.12 bootstrap
-4. Host Foundation (WSL2, Kali distro, Ollama)
-5. AI Environment (Argus_venv, pip, model pull)
+4. Host Foundation (WSL2, Kali distro, `wsl --update`, Ollama)
+5. AI Environment (Argus_venv, pip, model pull + response verification)
 6. Kali Security Tools (embedded check_and_install.sh inside WSL)
 7. SSH Bridge (sshd + port 22 test)
 8. Embedded Health Check (venv, Ollama, Kali, SSH)
 9. Cleanup (archive Setup/ to Setup_legacy/)
-
-### `INSTALL_EVERYTHING.ps1` (Legacy)
-
-The previous master installer. Still functional but requires the `Setup/`
-directory for external dependencies. Replaced by `ARGUS_INSTALLER.ps1`.
 
 ---
 
@@ -83,8 +81,7 @@ LAUNCH_CLI.bat C         # Enhanced mode
 
 ```text
 scripts/
-+-- ARGUS_INSTALLER.ps1        # Self-contained installer (recommended)
-+-- INSTALL_EVERYTHING.ps1     # Legacy installer (requires Setup/ directory)
++-- ARGUS_INSTALLER.ps1        # Self-contained installer (single source of truth)
 +-- LAUNCH_STUDIO.bat          # Streamlit web UI launcher
 +-- LAUNCH_CLI.bat             # CLI agent launcher
 +-- run_argus_cli.py           # CLI Python entry point

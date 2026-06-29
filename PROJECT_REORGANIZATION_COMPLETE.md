@@ -134,8 +134,7 @@ Argus/
 ├── 📁 scripts/                           ← Launchers & CLI
 │   ├── LAUNCH_STUDIO.bat
 │   ├── LAUNCH_CLI.bat                    ✅ UPDATED PATHS
-│   ├── CHECK_HEALTH.bat
-│   ├── INSTALL_EVERYTHING.ps1
+│   ├── ARGUS_INSTALLER.ps1               ✅ UNIFIED INSTALLER (self-contained)
 │   ├── run_argus_cli.py                  ✅ MOVED HERE
 │   └── README.md
 │
@@ -208,9 +207,9 @@ Argus/
 
 ### 1. Verify System Health
 ```batch
-cd scripts/
-CHECK_HEALTH.bat
+INSTALL.bat health
 ```
+(Runs the embedded health check — no separate CHECK_HEALTH.bat file needed)
 
 ### 2. Activate Python Environment
 ```batch
@@ -272,7 +271,7 @@ git commit -m "refactor: reorganize project structure for better organization
 ## ⚠️ IMPORTANT NOTES
 
 ### Before You Deploy
-1. Run `scripts/CHECK_HEALTH.bat` to verify all components
+1. Run `INSTALL.bat health` to verify all components
 2. Test each launcher script individually
 3. Verify database operations work correctly
 4. Check logs are being written to `logs/`
@@ -295,7 +294,7 @@ git commit -m "refactor: reorganize project structure for better organization
 
 ### Immediate (Today)
 - [ ] Review this summary
-- [ ] Run `scripts/CHECK_HEALTH.bat`
+- [ ] Run `INSTALL.bat health`
 - [ ] Test each launcher script
 
 ### Short Term (This Week)
