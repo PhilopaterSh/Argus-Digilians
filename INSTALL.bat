@@ -43,6 +43,7 @@ if /I "%~1"=="dryrun"      set "ARG=-DryRun"
 if /I "%~1"=="offline"     set "ARG=-Offline"
 if /I "%~1"=="interactive" set "ARG=-Interactive"
 if /I "%~1"=="skiphealth"  set "ARG=-SkipHealthCheck"
+if /I "%~1"=="health"      set "ARG=-OnlyHealthCheck"
 
 echo [INFO] Launching PowerShell master installer...
 if defined ARG (

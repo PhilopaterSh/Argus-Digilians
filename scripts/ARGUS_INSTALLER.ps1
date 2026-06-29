@@ -28,6 +28,10 @@
 .PARAMETER SkipHealthCheck
     Skip the embedded final health check.
 
+.PARAMETER OnlyHealthCheck
+    Run ONLY the embedded health check — no self-elevation, no install steps,
+    no cleanup. Exits with 0 if healthy, non-zero otherwise.
+
 .PARAMETER RetryCount
     Number of retry attempts per step (default 2).
 
@@ -37,6 +41,8 @@
     powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\ARGUS_INSTALLER.ps1 -DryRun
 .EXAMPLE
     powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\ARGUS_INSTALLER.ps1 -Offline -Interactive
+.EXAMPLE
+    powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\ARGUS_INSTALLER.ps1 -OnlyHealthCheck
 #>
 
 [CmdletBinding()]
@@ -45,6 +51,7 @@ param(
     [switch]$Interactive,
     [switch]$DryRun,
     [switch]$SkipHealthCheck,
+    [switch]$OnlyHealthCheck,
     [int]$RetryCount = 2
 )
 
@@ -596,6 +603,7 @@ function Invoke-SelfElevation {
     if ($Interactive)     { $argList += "-Interactive" }
     if ($DryRun)          { $argList += "-DryRun" }
     if ($SkipHealthCheck) { $argList += "-SkipHealthCheck" }
+    if ($OnlyHealthCheck) { $argList += "-OnlyHealthCheck" }
     $argList += "-RetryCount $RetryCount"
 
     try {
@@ -919,6 +927,19 @@ function Invoke-StepHostFoundation {
     $featuresOk = (Enable-WindowsFeature "Microsoft-Windows-Subsystem-Linux") -and $featuresOk
     $featuresOk = (Enable-WindowsFeature "VirtualMachinePlatform") -and $featuresOk
 
+    # Update WSL kernel to avoid common Kali boot errors on fresh systems
+    if (-not $DryRun) {
+        try {
+            Write-Info "Updating WSL kernel (best-effort, non-fatal)..."
+            & wsl --update 2>&1 | ForEach-Object { Write-Info $_ }
+            Write-OK "WSL kernel update completed (or already current)."
+        } catch {
+            Write-Warn "WSL kernel update failed (non-fatal): $($_.Exception.Message)"
+        }
+    } else {
+        Write-Info "[DryRun] Would run 'wsl --update'."
+    }
+
     if (-not (Test-WslCommand)) {
         Write-Err "wsl.exe not available after enabling features. Please REBOOT and rerun the installer."
         Record-Step 2 "Host Foundation" "FAILED" "WSL unavailable (reboot needed)"
@@ -1054,6 +1075,19 @@ function Invoke-StepAiEnvironment {
                 } catch { }
                 if ($already) {
                     Write-OK "Model '$OLLAMA_MODEL' already present."
+                    # Verify the model actually responds (not just listed)
+                    Write-Info "Verifying model responds..."
+                    try {
+                        $testPrompt = "Say OK"
+                        $modelResponse = & ollama run $OLLAMA_MODEL $testPrompt 2>&1
+                        if ($LASTEXITCODE -eq 0 -and $null -ne $modelResponse) {
+                            Write-OK "Model responds correctly."
+                        } else {
+                            Write-Warn "Model is listed but may not respond. Check Ollama status."
+                        }
+                    } catch {
+                        Write-Warn "Model verification failed (non-fatal): $($_.Exception.Message)"
+                    }
                 } else {
                     Write-Info "Pulling model '$OLLAMA_MODEL' (depends on internet speed)..."
                     $pulled = $false
@@ -1286,6 +1320,13 @@ function Show-FinalReport {
 # ============================================================================
 Write-Header "ARGUS SECURITY FRAMEWORK - INSTALLER (Self-Contained)"
 if ($DryRun) { Write-Warn "DRY RUN mode: no system changes will be made." }
+
+# -OnlyHealthCheck: fast diagnostic, no elevation, no install steps.
+if ($OnlyHealthCheck) {
+    Write-Info "OnlyHealthCheck mode — skipping self-elevation and all install steps."
+    $healthy = Invoke-HealthCheck
+    exit $(if ($healthy) { 0 } else { 1 })
+}
 
 # Admin-first: self-elevate before anything mutating happens.
 Invoke-SelfElevation
