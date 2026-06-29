@@ -1,13 +1,29 @@
 import sys
 import subprocess
+from typing import Any
 
-class SelfHealingService:
+from app.core.registry.base_tool import BaseToolService, ToolMetadata
+
+
+class SelfHealingService(BaseToolService):
     """Attempts to autonomously install missing libraries or tools."""
 
     def __init__(self, runner):
         self.runner = runner
 
-    def system_self_heal(self, tool_info):
+    @property
+    def metadata(self) -> ToolMetadata:
+        return ToolMetadata(
+            name="self_heal",
+            description="Autonomously install missing Python libraries or Kali system tools",
+            version="2.0.0",
+        )
+
+    def execute(self, **kwargs) -> str:
+        tool_info = kwargs.get("tool_info", "")
+        return self.system_self_heal(tool_info)
+
+    def system_self_heal(self, tool_info: str) -> str:
         """Attempts to autonomously install missing libraries or tools (Self-Healing)."""
         print(f"[*] [Argus-SelfHeal] AI requested repair for: {tool_info}")
         

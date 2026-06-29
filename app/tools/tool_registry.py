@@ -1,5 +1,7 @@
-import os
+import logging
 from app.core.memory.memory_service import ArgusMemory
+from app.core.registry.base_tool import ToolMetadata
+from app.core.registry.tool_registry import ToolRegistry
 from app.tools.wsl_bridge import WSLBridge, WSLConfig
 from app.tools.command_runner import CommandRunner
 from app.tools.recon import ReconService
@@ -12,17 +14,40 @@ from app.tools.crawler import CrawlerService
 from app.tools.evasion import EvasionService
 from app.tools.self_heal import SelfHealingService
 
+logger = logging.getLogger(__name__)
+
+
+class _ToolServiceAdapter:
+    """Wraps a legacy tool service as a BaseToolService-compatible adapter."""
+
+    def __init__(self, name: str, description: str, service, method_name: str):
+        self._meta = ToolMetadata(name=name, description=description)
+        self._service = service
+        self._method_name = method_name
+
+    @property
+    def metadata(self) -> ToolMetadata:
+        return self._meta
+
+    def execute(self, **kwargs):
+        method = getattr(self._service, self._method_name)
+        return method(**kwargs)
+
+
 class WSLBridgeTools:
     """
     Facade that preserves the original public API from tools.py.
     Internally, it delegates each responsibility to a focused service class.
+    Uses ToolRegistry for tool discovery and dispatch.
     """
 
     def __init__(self):
         self.memory = ArgusMemory()
         self.bridge = WSLBridge(WSLConfig())
         self.runner = CommandRunner(self.bridge)
-        
+
+        self.registry = ToolRegistry()
+
         self.report_writer = JSONReportWriter()
         self.recon = ReconService(
             runner=self.runner,
@@ -37,6 +62,53 @@ class WSLBridgeTools:
         self.crawler = CrawlerService(self.runner, self.memory)
         self.evasion = EvasionService(self.runner, self.memory)
         self.self_heal = SelfHealingService(self.runner)
+
+        self._register_defaults()
+
+    def _register_defaults(self):
+        self.registry.register(_ToolServiceAdapter(
+            "recon", "Execute advanced reconnaissance suite", self.recon, "recon_suite"
+        ))
+        self.registry.register(_ToolServiceAdapter(
+            "subdomains", "Enumerate subdomains", self.recon, "enumerate_subdomains"
+        ))
+        self.registry.register(_ToolServiceAdapter(
+            "reachability", "Check target reachability", self.reachability, "check_reachability"
+        ))
+        self.registry.register(_ToolServiceAdapter(
+            "nikto", "Run Nikto vulnerability scanner", self.scanners, "run_nikto"
+        ))
+        self.registry.register(_ToolServiceAdapter(
+            "ffuf", "Run FFUF for path discovery", self.scanners, "run_ffuf_discovery"
+        ))
+        self.registry.register(_ToolServiceAdapter(
+            "payloads", "Suggest exploit payloads", self.payloads, "suggest_payloads"
+        ))
+        self.registry.register(_ToolServiceAdapter(
+            "secrets", "Analyze secrets in responses", self.secrets, "analyze_secrets"
+        ))
+        self.registry.register(_ToolServiceAdapter(
+            "web_search", "Smart web search for OSINT", self.web, "smart_web_search"
+        ))
+        self.registry.register(_ToolServiceAdapter(
+            "archive_search", "Archive research subagent", self.web, "archive_research_subagent"
+        ))
+        self.registry.register(_ToolServiceAdapter(
+            "crawler", "Crawl target URLs", self.crawler, "crawl_target"
+        ))
+        self.registry.register(_ToolServiceAdapter(
+            "evasion", "Advanced vulnerability probe with evasion", self.evasion, "advanced_vuln_probe"
+        ))
+        self.registry.register(_ToolServiceAdapter(
+            "self_heal", "Autonomously install missing tools", self.self_heal, "system_self_heal"
+        ))
+        self.registry.register(_ToolServiceAdapter(
+            "intelligence", "Query blackboard intelligence summary", self.memory, "get_blackboard_summary"
+        ))
+        self.registry.register(_ToolServiceAdapter(
+            "knowledge_graph", "Query knowledge graph insights", self.memory, "get_graph_insights"
+        ))
+        logger.info("Registered %d tools in registry", len(self.registry))
 
     # Legacy Properties for compatibility
     @property
