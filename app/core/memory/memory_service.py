@@ -1,218 +1,336 @@
 import sqlite3
 import json
 import os
+import logging
+import shutil
 from datetime import datetime
+from contextlib import contextmanager
+from typing import Optional, Any
+
+logger = logging.getLogger(__name__)
+
+_DEFAULT_DB_PATH = os.path.join("data", "argus_intelligence.db")
+_ROOT_DB_PATH = "argus_intelligence.db"
+_SCHEMA_VERSION = 1
+
 
 class ArgusMemory:
-    def __init__(self, db_path="data/argus_intelligence.db"):
+    def __init__(self, db_path: str = _DEFAULT_DB_PATH) -> None:
         self.db_path = db_path
-        # Ensure data directory exists
-        os.makedirs(os.path.dirname(self.db_path), exist_ok=True)
+        db_dir = os.path.dirname(self.db_path)
+        if db_dir:
+            os.makedirs(db_dir, exist_ok=True)
+        if self.db_path != ":memory:":
+            self._migrate_from_root()
         self._init_db()
+        if self.db_path != ":memory:":
+            self._verify_integrity()
 
-    def _init_db(self):
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        # Table for targets and their discovery status
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS targets (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                domain TEXT UNIQUE,
-                parent_domain TEXT,
-                status TEXT DEFAULT 'discovered',
-                priority INTEGER DEFAULT 0,
-                last_seen DATETIME
-            )
-        ''')
-
-        # Table for technical findings (Blackboard)
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS findings (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                target_id INTEGER,
-                tool_name TEXT,
-                data_type TEXT, -- 'waf', 'tech', 'ports', 'headers'
-                raw_data TEXT,
-                summary TEXT,
-                timestamp DATETIME,
-                FOREIGN KEY (target_id) REFERENCES targets(id)
-            )
-        ''')
-
-        # [NEW] Knowledge Graph Nodes (Entities)
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS entities (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                type TEXT, -- 'domain', 'ip', 'email', 'key', 'tech', 'software', 'vulnerability'
-                value TEXT UNIQUE,
-                metadata TEXT, -- JSON storage for extra details
-                first_seen DATETIME
-            )
-        ''')
-
-        # [NEW] Knowledge Graph Edges (Relationships)
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS relations (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                source_id INTEGER,
-                target_id INTEGER,
-                type TEXT, -- 'HOSTS', 'USES_TECH', 'HAS_FILE', 'SHARED_CREDENTIAL', 'LINKED_TO'
-                strength FLOAT DEFAULT 1.0,
-                timestamp DATETIME,
-                FOREIGN KEY (source_id) REFERENCES entities(id),
-                FOREIGN KEY (target_id) REFERENCES entities(id),
-                UNIQUE(source_id, target_id, type)
-            )
-        ''')
-
-        # Table for global AI-ready summaries
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS global_state (
-                key TEXT PRIMARY KEY,
-                value TEXT,
-                updated_at DATETIME
-            )
-        ''')
-
-        conn.commit()
-        conn.close()
-
-    def upsert_entity(self, entity_type, value, metadata=None):
-        """Adds or updates a node in the Knowledge Graph."""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        now = datetime.now().isoformat()
-        meta_json = json.dumps(metadata) if metadata else None
-        
-        cursor.execute('''
-            INSERT INTO entities (type, value, metadata, first_seen)
-            VALUES (?, ?, ?, ?)
-            ON CONFLICT(value) DO UPDATE SET
-                metadata = COALESCE(excluded.metadata, entities.metadata)
-        ''', (entity_type, value, meta_json, now))
-        
-        cursor.execute('SELECT id FROM entities WHERE value = ?', (value,))
-        entity_id = cursor.fetchone()[0]
-        
-        conn.commit()
-        conn.close()
-        return entity_id
-
-    def add_relation(self, source_val, target_val, rel_type, strength=1.0):
-        """Creates a link (Edge) between two entities in the Graph."""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        now = datetime.now().isoformat()
-        
+    # ------------------------------------------------------------------
+    # Connection management
+    # ------------------------------------------------------------------
+    @contextmanager
+    def _get_conn(self) -> Any:
+        conn = sqlite3.connect(self.db_path, timeout=10)
+        conn.row_factory = sqlite3.Row
         try:
-            # Ensure entities exist
-            cursor.execute('SELECT id FROM entities WHERE value = ?', (source_val,))
-            s_row = cursor.fetchone()
-            cursor.execute('SELECT id FROM entities WHERE value = ?', (target_val,))
-            t_row = cursor.fetchone()
-            
-            if s_row and t_row:
-                cursor.execute('''
-                    INSERT INTO relations (source_id, target_id, type, strength, timestamp)
-                    VALUES (?, ?, ?, ?, ?)
-                    ON CONFLICT(source_id, target_id, type) DO UPDATE SET
-                        strength = MAX(relations.strength, excluded.strength),
-                        timestamp = excluded.timestamp
-                ''', (s_row[0], t_row[0], rel_type, strength, now))
-        except Exception as e:
-            print(f"[!] Graph Error: {e}")
-        finally:
+            conn.execute("PRAGMA journal_mode=WAL")
+            conn.execute("PRAGMA foreign_keys=ON")
+            yield conn
             conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
             conn.close()
 
-    def get_graph_insights(self):
-        """Returns a high-level overview of entity relationships for AI reasoning."""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        # Query for cross-target commonalities
-        cursor.execute('''
-            SELECT e1.value, r.type, e2.value
-            FROM relations r
-            JOIN entities e1 ON r.source_id = e1.id
-            JOIN entities e2 ON r.target_id = e2.id
-            ORDER BY r.timestamp DESC
-            LIMIT 100
-        ''')
-        
-        rows = cursor.fetchall()
-        conn.close()
-        
-        insights = []
-        for s, t, o in rows:
-            insights.append(f"({s}) --[{t}]--> ({o})")
-            
-        return "\n".join(insights)
+    # ------------------------------------------------------------------
+    # Migration from root db
+    # ------------------------------------------------------------------
+    def _migrate_from_root(self) -> None:
+        if not os.path.exists(_ROOT_DB_PATH):
+            return
+        if self.db_path == _ROOT_DB_PATH:
+            return
+        target_exists = os.path.exists(self.db_path)
+        try:
+            src_conn = sqlite3.connect(_ROOT_DB_PATH)
+            dst_conn = sqlite3.connect(self.db_path)
+            dst_conn.execute("PRAGMA journal_mode=WAL")
+            dst_conn.execute("PRAGMA foreign_keys=ON")
+            tables = [
+                t[0]
+                for t in src_conn.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"
+                ).fetchall()
+                if t[0] != "schema_version"
+            ]
+            if not target_exists:
+                src_conn.backup(dst_conn)
+                logger.info("Migrated root DB to %s (%d tables)", self.db_path, len(tables))
+            else:
+                for table in tables:
+                    rows = src_conn.execute(f"SELECT * FROM [{table}]").fetchall()
+                    if rows:
+                        col_names = [d[0] for d in src_conn.execute(f"PRAGMA table_info([{table}])").fetchall()]
+                        placeholders = ", ".join("?" for _ in col_names)
+                        cols = ", ".join(f"[{c}]" for c in col_names)
+                        for row in rows:
+                            try:
+                                dst_conn.execute(
+                                    f"INSERT OR IGNORE INTO [{table}] ({cols}) VALUES ({placeholders})",
+                                    row,
+                                )
+                            except Exception:
+                                pass
+                    dst_conn.commit()
+                logger.info("Merged %d tables from root DB", len(tables))
+            src_conn.close()
+            dst_conn.close()
+            os.remove(_ROOT_DB_PATH)
+            logger.info("Root DB removed after migration")
+        except Exception as e:
+            logger.warning("Root DB migration failed: %s", e)
 
+    # ------------------------------------------------------------------
+    # Integrity check
+    # ------------------------------------------------------------------
+    def _verify_integrity(self) -> None:
+        try:
+            with self._get_conn() as conn:
+                row = conn.execute("PRAGMA integrity_check").fetchone()
+                if row and row[0] != "ok":
+                    logger.warning("Database integrity issue: %s", row[0])
+        except Exception as e:
+            logger.warning("Could not verify integrity: %s", e)
 
-    def upsert_target(self, domain, parent_domain=None, priority=0):
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        now = datetime.now().isoformat()
-        cursor.execute('''
-            INSERT INTO targets (domain, parent_domain, priority, last_seen)
-            VALUES (?, ?, ?, ?)
-            ON CONFLICT(domain) DO UPDATE SET
-                last_seen = excluded.last_seen,
-                priority = MAX(targets.priority, excluded.priority)
-        ''', (domain, parent_domain, priority, now))
-        conn.commit()
-        conn.close()
+    # ------------------------------------------------------------------
+    # Schema versioning
+    # ------------------------------------------------------------------
+    def _get_schema_version(self) -> int:
+        try:
+            with self._get_conn() as conn:
+                row = conn.execute("PRAGMA user_version").fetchone()
+                return row[0] if row else 0
+        except Exception:
+            return 0
 
-    def add_finding(self, domain, tool_name, data_type, raw_data, summary):
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        # Get target_id
-        cursor.execute('SELECT id FROM targets WHERE domain = ?', (domain,))
-        row = cursor.fetchone()
-        if not row:
-            self.upsert_target(domain)
-            cursor.execute('SELECT id FROM targets WHERE domain = ?', (domain,))
-            row = cursor.fetchone()
-        
-        target_id = row[0]
-        now = datetime.now().isoformat()
-        
-        cursor.execute('''
-            INSERT INTO findings (target_id, tool_name, data_type, raw_data, summary, timestamp)
-            VALUES (?, ?, ?, ?, ?, ?)
-        ''', (target_id, tool_name, data_type, raw_data, summary, now))
-        
-        conn.commit()
-        conn.close()
+    def _set_schema_version(self, version: int) -> None:
+        try:
+            with self._get_conn() as conn:
+                conn.execute(f"PRAGMA user_version = {version}")
+        except Exception:
+            pass
 
-    def get_blackboard_summary(self):
-        """Returns a condensed view of all intelligence for the AI Agent."""
-        conn = sqlite3.connect(self.db_path)
-        cursor = conn.cursor()
-        
-        cursor.execute('''
-            SELECT t.domain, f.data_type, f.summary 
-            FROM targets t
-            JOIN findings f ON t.id = f.target_id
-            ORDER BY t.priority DESC, f.timestamp DESC
-        ''')
-        
-        rows = cursor.fetchall()
-        conn.close()
-        
-        summary = {}
-        for domain, dtype, smry in rows:
-            if domain not in summary:
-                summary[domain] = {}
-            if dtype not in summary[domain]:
-                summary[domain][dtype] = smry
-                
-        return json.dumps(summary, indent=2)
+    # ------------------------------------------------------------------
+    # Database initialization
+    # ------------------------------------------------------------------
+    def _init_db(self) -> None:
+        try:
+            with self._get_conn() as conn:
+                conn.execute("""
+                    CREATE TABLE IF NOT EXISTS targets (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        domain TEXT UNIQUE,
+                        parent_domain TEXT,
+                        status TEXT DEFAULT 'discovered',
+                        priority INTEGER DEFAULT 0,
+                        last_seen DATETIME
+                    )
+                """)
+                conn.execute("""
+                    CREATE TABLE IF NOT EXISTS findings (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        target_id INTEGER,
+                        tool_name TEXT,
+                        data_type TEXT,
+                        raw_data TEXT,
+                        summary TEXT,
+                        timestamp DATETIME,
+                        FOREIGN KEY (target_id) REFERENCES targets(id)
+                    )
+                """)
+                conn.execute("""
+                    CREATE TABLE IF NOT EXISTS entities (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        type TEXT,
+                        value TEXT UNIQUE,
+                        metadata TEXT,
+                        first_seen DATETIME
+                    )
+                """)
+                conn.execute("""
+                    CREATE TABLE IF NOT EXISTS relations (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        source_id INTEGER,
+                        target_id INTEGER,
+                        type TEXT,
+                        strength FLOAT DEFAULT 1.0,
+                        timestamp DATETIME,
+                        FOREIGN KEY (source_id) REFERENCES entities(id),
+                        FOREIGN KEY (target_id) REFERENCES entities(id),
+                        UNIQUE(source_id, target_id, type)
+                    )
+                """)
+                conn.execute("""
+                    CREATE TABLE IF NOT EXISTS global_state (
+                        key TEXT PRIMARY KEY,
+                        value TEXT,
+                        updated_at DATETIME
+                    )
+                """)
+                current = self._get_schema_version()
+                if current < _SCHEMA_VERSION:
+                    self._set_schema_version(_SCHEMA_VERSION)
+                    logger.info("Schema upgraded to v%d", _SCHEMA_VERSION)
+        except Exception as e:
+            logger.error("Database init failed: %s", e)
+            raise
 
-    def clear_memory(self):
-        if os.path.exists(self.db_path):
-            os.remove(self.db_path)
-        self._init_db()
+    # ------------------------------------------------------------------
+    # CRUD: Entities (Knowledge Graph nodes)
+    # ------------------------------------------------------------------
+    def upsert_entity(self, entity_type: str, value: str, metadata: Optional[dict] = None) -> int:
+        try:
+            with self._get_conn() as conn:
+                meta_json = json.dumps(metadata) if metadata else None
+                now = datetime.now().isoformat()
+                conn.execute(
+                    """INSERT INTO entities (type, value, metadata, first_seen)
+                       VALUES (?, ?, ?, ?)
+                       ON CONFLICT(value) DO UPDATE SET
+                           metadata = COALESCE(excluded.metadata, entities.metadata)""",
+                    (entity_type, value, meta_json, now),
+                )
+                row = conn.execute("SELECT id FROM entities WHERE value = ?", (value,)).fetchone()
+                return row["id"] if row else -1
+        except Exception as e:
+            logger.error("upsert_entity(%s, %s) failed: %s", entity_type, value, e)
+            return -1
+
+    # ------------------------------------------------------------------
+    # CRUD: Relations (Knowledge Graph edges)
+    # ------------------------------------------------------------------
+    def add_relation(self, source_val: str, target_val: str, rel_type: str, strength: float = 1.0) -> None:
+        try:
+            with self._get_conn() as conn:
+                s_row = conn.execute("SELECT id FROM entities WHERE value = ?", (source_val,)).fetchone()
+                t_row = conn.execute("SELECT id FROM entities WHERE value = ?", (target_val,)).fetchone()
+                if s_row and t_row:
+                    now = datetime.now().isoformat()
+                    conn.execute(
+                        """INSERT INTO relations (source_id, target_id, type, strength, timestamp)
+                           VALUES (?, ?, ?, ?, ?)
+                           ON CONFLICT(source_id, target_id, type) DO UPDATE SET
+                               strength = MAX(relations.strength, excluded.strength),
+                               timestamp = excluded.timestamp""",
+                        (s_row["id"], t_row["id"], rel_type, strength, now),
+                    )
+        except Exception as e:
+            logger.error("add_relation(%s, %s, %s) failed: %s", source_val, target_val, rel_type, e)
+
+    # ------------------------------------------------------------------
+    # CRUD: Graph insights
+    # ------------------------------------------------------------------
+    def get_graph_insights(self) -> str:
+        try:
+            with self._get_conn() as conn:
+                rows = conn.execute(
+                    """SELECT e1.value, r.type, e2.value
+                       FROM relations r
+                       JOIN entities e1 ON r.source_id = e1.id
+                       JOIN entities e2 ON r.target_id = e2.id
+                       ORDER BY r.timestamp DESC
+                       LIMIT 100"""
+                ).fetchall()
+                return "\n".join(f"({s}) --[{t}]--> ({o})" for s, t, o in rows)
+        except Exception as e:
+            logger.error("get_graph_insights failed: %s", e)
+            return ""
+
+    # ------------------------------------------------------------------
+    # CRUD: Targets
+    # ------------------------------------------------------------------
+    def upsert_target(self, domain: str, parent_domain: Optional[str] = None, priority: int = 0) -> None:
+        try:
+            with self._get_conn() as conn:
+                now = datetime.now().isoformat()
+                conn.execute(
+                    """INSERT INTO targets (domain, parent_domain, priority, last_seen)
+                       VALUES (?, ?, ?, ?)
+                       ON CONFLICT(domain) DO UPDATE SET
+                           last_seen = excluded.last_seen,
+                           priority = MAX(targets.priority, excluded.priority)""",
+                    (domain, parent_domain, priority, now),
+                )
+        except Exception as e:
+            logger.error("upsert_target(%s) failed: %s", domain, e)
+
+    # ------------------------------------------------------------------
+    # CRUD: Findings
+    # ------------------------------------------------------------------
+    def add_finding(self, domain: str, tool_name: str, data_type: str, raw_data: str, summary: str) -> None:
+        try:
+            with self._get_conn() as conn:
+                row = conn.execute("SELECT id FROM targets WHERE domain = ?", (domain,)).fetchone()
+                if row:
+                    target_id = row["id"]
+                else:
+                    now = datetime.now().isoformat()
+                    conn.execute(
+                        "INSERT INTO targets (domain, last_seen) VALUES (?, ?)",
+                        (domain, now),
+                    )
+                    row = conn.execute("SELECT id FROM targets WHERE domain = ?", (domain,)).fetchone()
+                    target_id = row["id"] if row else -1
+                if target_id < 0:
+                    logger.warning("add_finding: could not resolve target for %s", domain)
+                    return
+                now = datetime.now().isoformat()
+                conn.execute(
+                    """INSERT INTO findings (target_id, tool_name, data_type, raw_data, summary, timestamp)
+                       VALUES (?, ?, ?, ?, ?, ?)""",
+                    (target_id, tool_name, data_type, raw_data, summary, now),
+                )
+        except Exception as e:
+            logger.error("add_finding(%s, %s) failed: %s", domain, tool_name, e)
+
+    # ------------------------------------------------------------------
+    # CRUD: Blackboard summary
+    # ------------------------------------------------------------------
+    def get_blackboard_summary(self) -> str:
+        try:
+            with self._get_conn() as conn:
+                rows = conn.execute(
+                    """SELECT t.domain, f.data_type, f.summary
+                       FROM targets t
+                       JOIN findings f ON t.id = f.target_id
+                       ORDER BY t.priority DESC, f.timestamp DESC"""
+                ).fetchall()
+                summary: dict[str, dict[str, str]] = {}
+                for domain, dtype, smry in rows:
+                    if domain not in summary:
+                        summary[domain] = {}
+                    if dtype not in summary[domain]:
+                        summary[domain][dtype] = smry
+                return json.dumps(summary, indent=2)
+        except Exception as e:
+            logger.error("get_blackboard_summary failed: %s", e)
+            return "{}"
+
+    # ------------------------------------------------------------------
+    # Clear memory
+    # ------------------------------------------------------------------
+    def clear_memory(self) -> None:
+        backup = self.db_path + ".bak"
+        try:
+            if os.path.exists(self.db_path):
+                shutil.copy2(self.db_path, backup)
+                os.remove(self.db_path)
+            self._init_db()
+            logger.info("Memory cleared (backup at %s)", backup)
+        except Exception as e:
+            logger.error("clear_memory failed: %s", e)
+            if os.path.exists(backup):
+                shutil.copy2(backup, self.db_path)
+                logger.info("Restored from backup after failed clear")
