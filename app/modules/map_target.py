@@ -1,4 +1,4 @@
-from core.tools import WSLBridgeTools
+from app.tools.tool_registry import WSLBridgeTools
 import sys
 
 def main():

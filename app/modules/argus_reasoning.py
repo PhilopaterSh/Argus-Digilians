@@ -1,5 +1,5 @@
-from core.agent import ArgusBrain
-from core.tools import WSLBridgeTools
+from app.core.brain import ArgusBrain
+from app.tools.tool_registry import WSLBridgeTools
 from langchain_core.tools import Tool
 import os
 
