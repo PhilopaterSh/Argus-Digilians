@@ -1,6 +1,8 @@
 import logging
+from typing import Any
+
 from app.core.memory.memory_service import ArgusMemory
-from app.core.registry.base_tool import ToolMetadata
+from app.core.registry.base_tool import BaseToolService, ToolMetadata
 from app.core.registry.tool_registry import ToolRegistry
 from app.tools.wsl_bridge import WSLBridge, WSLConfig
 from app.tools.command_runner import CommandRunner
@@ -17,7 +19,7 @@ from app.tools.self_heal import SelfHealingService
 logger = logging.getLogger(__name__)
 
 
-class _ToolServiceAdapter:
+class _ToolServiceAdapter(BaseToolService):
     """Wraps a legacy tool service as a BaseToolService-compatible adapter."""
 
     def __init__(self, name: str, description: str, service, method_name: str):
@@ -29,7 +31,7 @@ class _ToolServiceAdapter:
     def metadata(self) -> ToolMetadata:
         return self._meta
 
-    def execute(self, **kwargs):
+    def execute(self, **kwargs) -> Any:
         method = getattr(self._service, self._method_name)
         return method(**kwargs)
 

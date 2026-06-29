@@ -13,7 +13,7 @@ class ArgusBrainV2:
         registry: Optional[ToolRegistry] = None,
         model_name: Optional[str] = None,
     ):
-        self.registry = registry or ToolRegistry()
+        self.registry = registry if registry is not None else ToolRegistry()
         self.model_name = model_name
 
     def dispatch(self, tool_name: str, **kwargs) -> Any:
