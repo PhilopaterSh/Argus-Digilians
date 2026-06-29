@@ -202,6 +202,8 @@ commands working, which defeats the whole Spec-Kit workflow.
 - `git add` the three paths so the Spec-Kit configuration is committed.
 - Confirm `opencode.json` correctly registers the `/speckit.*` commands.
 
+**Status**: ✅ **DONE** — all three paths are tracked; `/speckit.*` commands work after a fresh clone.
+
 **Success**: After a fresh clone, `/speckit.constitution` and the rest of the
 workflow are available without any manual init step.
 
@@ -218,6 +220,8 @@ This creates dead references to a deprecated tool.
   pointer to `INSTALL.bat` / the embedded `-OnlyHealthCheck` mode.
 - Update `LAUNCH_STUDIO.bat`: same cleanup of stale references.
 
+**Status**: ✅ **DONE** — `CHECK_HEALTH.bat` removed; `LAUNCH_CLI.bat`, `LAUNCH_STUDIO.bat`, and all `.md` docs updated to point to `INSTALL.bat` / `ARGUS_INSTALLER.ps1`.
+
 **Success**: No file references `CHECK_HEALTH.bat` or `INSTALL_EVERYTHING.bat`
 (the `.bat` variant) anymore.
 
@@ -232,6 +236,8 @@ the validation without re-running the whole installer.
   only the embedded `Invoke-HealthCheck`, then exits with a code reflecting health
   (0 = healthy, non-zero = issues).
 - Add `health` as a recognized token in `INSTALL.bat` (`INSTALL.bat health`).
+
+**Status**: ✅ **DONE** — `-OnlyHealthCheck` switch added to `ARGUS_INSTALLER.ps1` (the consolidated installer that supersedes the old `INSTALL_EVERYTHING.ps1`); `INSTALL.bat health` token wired.
 
 **Success**: `INSTALL.bat health` runs a fast, non-elevated diagnostic that
 replaces the old standalone `CHECK_HEALTH.bat`.
@@ -251,8 +257,25 @@ replaces the old standalone `CHECK_HEALTH.bat`.
   prompt through it (e.g. `ollama run <model> ""` with a short timeout) to verify
   it actually loads and responds. A non-responding model is a WARN, not a failure.
 
+**Status**: ✅ **DONE** — `wsl --update` added to `Invoke-StepHostFoundation` (best-effort, non-fatal); model response verification added after model presence check in `Invoke-StepAiEnvironment`.
+
 **Success**: WSL kernel is current after install, and the model is confirmed to
 actually run, not just be listed.
+
+### 5.5 Wire `ARGUS_INSTALLER.ps1` as Primary Installer
+
+**Problem**: `INSTALL.bat` pointed to `scripts/INSTALL_EVERYTHING.ps1`, but that
+file referenced the now-archived `Setup/` directory and would fail. The
+self-contained `scripts/ARGUS_INSTALLER.ps1` (created per `specs/002-consolidated-installer`)
+was never wired into the launcher.
+
+**Action**:
+- Point `INSTALL.bat` at `scripts/ARGUS_INSTALLER.ps1`.
+- Remove the broken `scripts/INSTALL_EVERYTHING.ps1` (preserved locally under `archive/`).
+
+**Status**: ✅ **DONE** — `INSTALL.bat` updated; old installer removed from the repo.
+
+**Success**: A single double-click of `INSTALL.bat` runs the self-contained installer with zero external file dependencies.
 
 ---
 
@@ -265,3 +288,4 @@ actually run, not just be listed.
 | 2026-06-27 | Section 5 added: 4 approved additions (git-track, CHECK_HEALTH cleanup, -OnlyHealthCheck, wsl --update + model verify). |
 | 2026-06-29 | Added Commit Strategy §4 (commit-per-phase). |
 | 2026-06-29 | Added Alignment with Architecture Vision table mapping every Feature ID to `docs/ARGUS_FRAMEWORK_ARCHITECTURE_v2.md` components. |
+| 2026-06-29 | §5 additions 5.1-5.4 all marked **DONE**; added §5.5 (wire `ARGUS_INSTALLER.ps1` as primary installer, remove broken `INSTALL_EVERYTHING.ps1`). |

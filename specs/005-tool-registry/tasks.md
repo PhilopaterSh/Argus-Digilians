@@ -22,8 +22,8 @@ description: "Task list for Tool Registry Abstraction & Testing"
 
 **Purpose**: Project initialization and basic structure
 
-- [ ] T001 Create `app/core/registry/` package with `__init__.py`
-- [ ] T002 [P] Create `app/core/agent/` package with `__init__.py`
+- [x] T001 Create `app/core/registry/` package with `__init__.py`
+- [x] T002 [P] Create `app/core/agent/` package with `__init__.py`
 
 ---
 
@@ -31,8 +31,8 @@ description: "Task list for Tool Registry Abstraction & Testing"
 
 **Purpose**: Core infrastructure that MUST be complete before ANY user story
 
-- [ ] T003 Create `BaseToolService` ABC + `ToolMetadata` dataclass in `app/core/registry/base_tool.py`
-- [ ] T004 Create `ToolRegistry` class in `app/core/registry/tool_registry.py` (register, unregister, get_tool, list_tools, __len__, __contains__)
+- [x] T003 Create `BaseToolService` ABC + `ToolMetadata` dataclass in `app/core/registry/base_tool.py`
+- [x] T004 Create `ToolRegistry` class in `app/core/registry/tool_registry.py` (register, unregister, get_tool, list_tools, __len__, __contains__)
 
 **Checkpoint**: Foundation ready — BaseToolService and ToolRegistry exist with full interface
 
@@ -46,11 +46,11 @@ description: "Task list for Tool Registry Abstraction & Testing"
 
 ### Implementation for User Story 1
 
-- [ ] T005 [US1] Implement `register()` with duplicate-name warning in `app/core/registry/tool_registry.py`
-- [ ] T006 [US1] Implement `unregister()`, `get_tool()`, `list_tools()`, `__len__`, `__contains__` in `app/core/registry/tool_registry.py`
-- [ ] T007 [P] [US1] Add structured logging to all registry operations
-- [ ] T008 [US1] Refactor `WSLBridgeTools` in `app/tools/tool_registry.py` to use `ToolRegistry` internally — add `_register_defaults()` method, keep all 42 public methods unchanged
-- [ ] T009 [US1] Adapt `SelfHealingService` in `app/tools/self_heal.py` to implement `BaseToolService` (add `metadata` property, rename `system_self_heal` → `execute` with backward-compat alias)
+- [x] T005 [US1] Implement `register()` with duplicate-name warning in `app/core/registry/tool_registry.py`
+- [x] T006 [US1] Implement `unregister()`, `get_tool()`, `list_tools()`, `__len__`, `__contains__` in `app/core/registry/tool_registry.py`
+- [x] T007 [P] [US1] Add structured logging to all registry operations
+- [x] T008 [US1] Refactor `WSLBridgeTools` in `app/tools/tool_registry.py` to use `ToolRegistry` internally — add `_register_defaults()` method, keep all 42 public methods unchanged
+- [x] T009 [US1] Adapt `SelfHealingService` in `app/tools/self_heal.py` to implement `BaseToolService` (add `metadata` property, rename `system_self_heal` → `execute` with backward-compat alias)
 
 **Checkpoint**: At this point, plugin-based registration works and WSLBridgeTools is backward-compatible
 
@@ -64,10 +64,10 @@ description: "Task list for Tool Registry Abstraction & Testing"
 
 ### Implementation for User Story 2
 
-- [ ] T010 [US2] Create `ArgusBrainV2` class in `app/core/agent/brain_v2.py` with `dispatch()`, `get_available_tools()`, `get_tool_names()`
-- [ ] T011 [US2] Implement default registry creation in `ArgusBrainV2.__init__()` if no registry provided
-- [ ] T012 [US2] Create factory functions in `app/core/agent/agent_factory_v2.py`: `create_default_registry()`, `create_brain()`, `register_all_tools()`
-- [ ] T013 [US2] Implement `register_all_tools()` to register all 14 services (ReconService, VulnerabilityScanners, PayloadSuggester, SecretAnalyzer, SmartWebSearch, ReachabilityService, CrawlerService, EvasionService, SelfHealingService, ReflectiveVerificationService, CommandRunner, WSLBridge, JSONReportWriter)
+- [x] T010 [US2] Create `ArgusBrainV2` class in `app/core/agent/brain_v2.py` with `dispatch()`, `get_available_tools()`, `get_tool_names()`
+- [x] T011 [US2] Implement default registry creation in `ArgusBrainV2.__init__()` if no registry provided
+- [x] T012 [US2] Create factory functions in `app/core/agent/agent_factory_v2.py`: `create_default_registry()`, `create_brain()`, `register_all_tools()`
+- [x] T013 [US2] Implement `register_all_tools()` to register all 14 services (ReconService, VulnerabilityScanners, PayloadSuggester, SecretAnalyzer, SmartWebSearch, ReachabilityService, CrawlerService, EvasionService, SelfHealingService, ReflectiveVerificationService, CommandRunner, WSLBridge, JSONReportWriter)
 
 **Checkpoint**: Both architecture-mandated components exist and work with the registry
 
@@ -81,11 +81,11 @@ description: "Task list for Tool Registry Abstraction & Testing"
 
 ### Implementation for User Story 3
 
-- [ ] T014 [P] [US3] Create `tests/test_registry/` directory with `__init__.py`
-- [ ] T015 [P] [US3] Write tests for `BaseToolService` (ABC cannot be instantiated, concrete subclass works) in `tests/test_registry/test_base_tool.py`
-- [ ] T016 [P] [US3] Write tests for `ToolRegistry` (register, unregister, get_tool, list_tools, __len__, __contains__, duplicate warning, TypeError) in `tests/test_registry/test_tool_registry.py`
-- [ ] T017 [P] [US3] Write tests for `ArgusBrainV2` (dispatch, KeyError, get_available_tools) in `tests/test_registry/test_brain_v2.py`
-- [ ] T018 [P] [US3] Write tests for `agent_factory_v2.py` (create_default_registry returns 14 tools, create_brain returns working brain) in `tests/test_registry/test_agent_factory.py`
+- [x] T014 [P] [US3] Create `tests/test_registry/` directory with `__init__.py`
+- [x] T015 [P] [US3] Write tests for `BaseToolService` (ABC cannot be instantiated, concrete subclass works) in `tests/test_registry/test_base_tool.py`
+- [x] T016 [P] [US3] Write tests for `ToolRegistry` (register, unregister, get_tool, list_tools, __len__, __contains__, duplicate warning, TypeError) in `tests/test_registry/test_tool_registry.py`
+- [x] T017 [P] [US3] Write tests for `ArgusBrainV2` (dispatch, KeyError, get_available_tools) in `tests/test_registry/test_brain_v2.py`
+- [x] T018 [P] [US3] Write tests for `agent_factory_v2.py` (create_default_registry returns 14 tools, create_brain returns working brain) in `tests/test_registry/test_agent_factory.py`
 
 **Checkpoint**: All user stories complete, all tests passing
 
@@ -95,10 +95,10 @@ description: "Task list for Tool Registry Abstraction & Testing"
 
 **Purpose**: Improvements that affect multiple user stories
 
-- [ ] T019 [P] Run import validation: `python -c "from app.core.registry import ToolRegistry; from app.core.agent import ArgusBrainV2; print('OK')"`
-- [ ] T020 [P] Run full test suite: `pytest tests/test_registry/ -v`
-- [ ] T021 [P] Run quickstart.md validation steps manually
-- [ ] T022 Update spec/005-tool-registry plan.md alignment table if needed
+- [x] T019 [P] Run import validation: `python -c "from app.core.registry import ToolRegistry; from app.core.agent import ArgusBrainV2; print('OK')"`
+- [x] T020 [P] Run full test suite: `pytest tests/test_registry/ -v`
+- [x] T021 [P] Run quickstart.md validation steps manually
+- [x] T022 Update spec/005-tool-registry plan.md alignment table if needed
 
 ---
 

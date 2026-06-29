@@ -13,7 +13,7 @@ description: "Task list for Tactical Modules Refactoring"
 
 ## Phase 1: Setup
 
-- [ ] T001 Create `app/modules/base.py` with `BaseTacticalModule` ABC
+- [x] T001 Create `app/modules/base.py` with `BaseTacticalModule` ABC
 
 ---
 
@@ -21,12 +21,12 @@ description: "Task list for Tactical Modules Refactoring"
 
 **Goal**: All 9 modules use valid `app.*` imports
 
-- [ ] T002 [US1] Fix imports in `app/modules/argus_reasoning.py` (`core.agent` → `app.core.brain`, `core.tools` → `app.tools.tool_registry`)
-- [ ] T003 [US1] Fix imports in `app/modules/argus_deep_exploit.py` (`core.tools` → `app.tools.tool_registry`)
-- [ ] T004 [US1] Fix imports in `app/modules/run_recon.py` (`core.tools` → `app.tools.tool_registry`)
-- [ ] T005 [US1] Fix imports in `app/modules/run_full_recon.py` (`core.tools` → `app.tools.tool_registry`)
-- [ ] T006 [US1] Fix imports in `app/modules/map_target.py` (`core.tools` → `app.tools.tool_registry`)
-- [ ] T007 [US1] Fix imports in `app/modules/crawler.py` (`core.tools` → `app.tools.tool_registry`)
+- [x] T002 [US1] Fix imports in `app/modules/argus_reasoning.py` (`core.agent` → `app.core.brain`, `core.tools` → `app.tools.tool_registry`)
+- [x] T003 [US1] Fix imports in `app/modules/argus_deep_exploit.py` (`core.tools` → `app.tools.tool_registry`)
+- [x] T004 [US1] Fix imports in `app/modules/run_recon.py` (`core.tools` → `app.tools.tool_registry`)
+- [x] T005 [US1] Fix imports in `app/modules/run_full_recon.py` (`core.tools` → `app.tools.tool_registry`)
+- [x] T006 [US1] Fix imports in `app/modules/map_target.py` (`core.tools` → `app.tools.tool_registry`)
+- [x] T007 [US1] Fix imports in `app/modules/crawler.py` (`core.tools` → `app.tools.tool_registry`)
 
 ---
 
@@ -34,8 +34,8 @@ description: "Task list for Tactical Modules Refactoring"
 
 **Goal**: Common interface + orchestrator
 
-- [ ] T008 [US2] Implement `BaseTacticalModule` in `app/modules/base.py` with `name`, `description`, `execute(target)` 
-- [ ] T009 [US2] Refactor `app/modules/__init__.py` with `register()`, `run_all()`, `run_module()`, `list_modules()`
+- [x] T008 [US2] Implement `BaseTacticalModule` in `app/modules/base.py` with `name`, `description`, `execute(target)` 
+- [x] T009 [US2] Refactor `app/modules/__init__.py` with `register()`, `run_all()`, `run_module()`, `list_modules()`
 
 ---
 
@@ -43,11 +43,11 @@ description: "Task list for Tactical Modules Refactoring"
 
 **Goal**: Smoke tests verifying all modules import cleanly
 
-- [ ] T010 [P] [US3] Create `tests/test_modules/` directory with `__init__.py`
-- [ ] T011 [US3] Write import validation test for all 9 modules in `tests/test_modules/test_imports.py`
+- [x] T010 [P] [US3] Create `tests/test_modules/` directory with `__init__.py`
+- [x] T011 [US3] Write import validation test for all 9 modules in `tests/test_modules/test_imports.py`
 
 ---
 
 ## Phase 5: Polish
 
-- [ ] T012 Run import validation + test suite
+- [x] T012 Run import validation + test suite
