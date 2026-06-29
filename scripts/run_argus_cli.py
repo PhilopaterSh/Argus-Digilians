@@ -3,6 +3,7 @@ import sys
 import argparse
 from app.tools.tool_registry import WSLBridgeTools
 from app.core.brain import ArgusBrain
+from app.core.config import ArgusConfig
 from langchain_core.tools import Tool
 from dotenv import load_dotenv
 
@@ -10,11 +11,11 @@ from dotenv import load_dotenv
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 load_dotenv()
+config = ArgusConfig.load()
 
 def run_analysis(target_url):
     bridge = WSLBridgeTools()
-    # Using the primary model defined in the project
-    model = "WhiteRabbitNeo/WhiteRabbitNeo-V3-7B:latest"
+    model = config.model_name
     
     tools = [
         Tool(name="Check_Reachability", func=bridge.check_reachability, description="Verify if the target domain is reachable before scanning."),

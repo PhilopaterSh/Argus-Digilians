@@ -5,11 +5,13 @@ import os
 # Ensure project root is in path for module access
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
 
-# Use relative imports for clarity
+from app.core.config import ArgusConfig
 from app.tools.tool_registry import WSLBridgeTools
 from app.core.brain import ArgusBrain
 from langchain_core.tools import Tool
 from langchain_community.callbacks.streamlit import StreamlitCallbackHandler
+
+config = ArgusConfig.load()
 
 # --- UI Setup ---
 st.set_page_config(page_title="Argus AI Studio - WSL Bridge", layout="wide")
@@ -35,8 +37,7 @@ with st.sidebar:
     st.header("⚙️ Bridge Configuration")
     st.info("App: Docker Container")
     st.info("Tools: Local WSL Kali")
-    # Only use WhiteRabbitNeo as requested
-    model = "WhiteRabbitNeo/WhiteRabbitNeo-V3-7B:latest"
+    model = config.model_name
     st.write(f"**Intelligence Model:** {model}")
     
     st.markdown("---")
