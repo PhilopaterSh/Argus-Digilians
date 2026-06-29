@@ -27,7 +27,7 @@ echo          ARGUS SECURITY FRAMEWORK - INSTALLER
 echo ========================================================
 echo.
 
-set "PS1=scripts\INSTALL_EVERYTHING.ps1"
+set "PS1=scripts\ARGUS_INSTALLER.ps1"
 
 if not exist "%PS1%" (
     echo [ERROR] Master installer not found: %PS1%
