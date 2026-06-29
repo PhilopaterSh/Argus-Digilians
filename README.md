@@ -1,87 +1,150 @@
-# 🛡️ Argus-Digilians Security Framework
+# Argus Security Framework
 
-Argus is a professional-grade security analysis system and an autonomous AI Agent studio, bridging Windows accessibility with Kali Linux's offensive power.
+Argus is a professional-grade security analysis system and autonomous AI agent
+studio, bridging Windows accessibility with Kali Linux's offensive power.
 
----
+```mermaid
+graph TB
+    User((Security Researcher))
 
-## 🚀 QUICK START
-If you have just cloned this repository, follow these two steps:
+    subgraph Argus["Argus Security Framework"]
+        GUI[GUI Layer<br/>Streamlit / Tkinter / Studio]
+        Brain[ArgusBrain<br/>ReAct / SimpleChain]
+        RAG[RAG Engine<br/>FAISS + nomic-embed-text]
+        KB[(Knowledge Base<br/>.md .json .csv .pdf)]
+        Mem[ArgusMemory<br/>SQLite Blackboard]
+        Modules[Tactical Modules<br/>apps/modules/]
+        Tools[Tool Registry<br/>13 Services]
+    end
 
-### 1. Full Installation (First Time Only)
-Run the **Master Installer** as Administrator to set up WSL, Kali, Python, and AI Models.
-- **File:** `INSTALL_EVERYTHING.bat`
-- **Note:** A system restart may be required after WSL installation.
+    subgraph External["External Systems"]
+        LLM[Ollama LLM<br/>WhiteRabbitNeo V3 7B]
+        Kali[Kali Linux WSL<br/>SSH / Subprocess]
+        Target[Target Infrastructure]
+    end
 
-### 2. Launch the Studio (Daily Use)
-Start the entire ecosystem with a single click.
-- **File:** `LAUNCH_STUDIO.bat`
-- **Action:** Launches the AI engine, activates the SSH bridge, and opens your browser at `http://localhost:12199`.
+    User -->|Launches| GUI
+    GUI -->|Queries| Brain
 
----
+    Brain -->|1 - Refresh| Mem
+    Brain -->|2 - Enrich| RAG
+    RAG -->|3 - Similarity| KB
+    RAG -->|4 - Pull State| Mem
 
-## 🔍 SYSTEM DIAGNOSTICS
-Not sure if everything is working? Run the health check:
-- **File:** `CHECK_HEALTH.bat`
-- **Verified Components:** Python Environment, Ollama (AI Engine), WSL (Kali Linux), and SSH Bridge.
+    Brain -->|5 - Prompt| LLM
+    LLM -->|Reasoning| Brain
 
----
+    Brain -->|6 - Strategy| Modules
+    Modules -->|7 - Invoke| Tools
+    Tools -->|8 - Execute| Kali
+    Kali -->|9 - Scan| Target
 
-## 📂 Project Structure
-
-```text
-Argus/
-├── 📄 README.md                           # Project overview
-├── 📄 Argus_Master_Documentation.md       # Technical reference
-├── .env.example                           # Environment template
-├── .gitignore                             # Git ignore rules
-│
-├── 📁 scripts/                            # Operational scripts & launchers
-│   ├── LAUNCH_STUDIO.bat                  # 🚀 One-click system start
-│   ├── LAUNCH_CLI.bat                     # CLI agent launcher
-│   ├── CHECK_HEALTH.bat                   # 🔍 System health diagnostics
-│   ├── INSTALL_EVERYTHING.ps1             # Master installer
-│   └── run_argus_cli.py                   # CLI entry point
-│
-├── 📁 app/                                # Main application core
-│   ├── GUI/                               # 🖥️ Streamlit Web Command Center
-│   ├── core/                              # 🧠 AI Brain & Memory Logic
-│   ├── tools/                             # Security tools & modules
-│   └── modules/                           # Specialized exploit scripts
-│
-├── 📁 Setup/                              # 🌐 Installation scripts & resources
-│   ├── Step_1_Host_Setup.bat
-│   ├── Step_2_Python_AI.bat
-│   ├── Step_3_Kali_Tools.bat
-│   └── helpers/
-│
-├── 📁 docs/                               # Documentation
-│   ├── README.md                          # Doc index
-│   ├── STRUCTURE_GUIDE.md                 # Organization guide
-│   ├── GEMINI.md                          # Development standards
-│   └── arc42.md                           # Architecture documentation
-│
-├── 📁 tests/                              # 🧪 Test suites
-│   └── test_*.py                          # Test modules
-│
-├── 📁 data/                               # Data & databases
-│   └── argus_intelligence.db              # AI cache database
-│
-├── 📁 bin/                                # Executables
-│   └── Argus_Secure_Sync.exe
-│
-├── 📁 logs/                               # Application logs
-│   └── .gitkeep
-│
-└── 📁 archive/                            # Legacy/deprecated code
+    Target -->|Results| Kali
+    Kali -->|stdout| Tools
+    Tools -->|Persist| Mem
+    Mem -->|Update| Brain
 ```
 
 ---
 
-## 🧩 Key Features
-*   **Parallel Reconnaissance:** Executes multiple tools (WhatWeb, Wafw00f, Nikto, etc.) simultaneously for maximum speed.
-*   **AI Intelligence:** Integrated with **WhiteRabbitNeo** for advanced security reasoning.
-*   **WSL Bridge:** Securely executes offensive tools inside a native Linux environment via SSH.
-*   **Report Export:** Download comprehensive security reports in Markdown format with one click.
+## Quick Start
+
+### 1. Install (First Time Only)
+
+Run the **Single-Click Installer** to set up WSL2, Kali Linux, Python, Ollama,
+AI models, and all security tools in one go.
+
+**File:** `INSTALL.bat` (at the project root)
+
+The installer will auto-elevate to Administrator and write a log to
+`logs\argus_install_<timestamp>.log`.
+
+A system reboot may be required after WSL2 features are enabled.
+
+### 2. Launch the Studio (Daily Use)
+
+**File:** `scripts\LAUNCH_STUDIO.bat`
+
+Starts the AI engine, activates the SSH bridge, and opens your browser at
+`http://localhost:12199`.
 
 ---
-*Maintained by: Argus Security Framework Team | May 2026*
+
+## System Diagnostics
+
+The installer runs an embedded health check automatically at the end of every
+install. To verify the system manually at any time:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\INSTALL_EVERYTHING.ps1 -SkipHealthCheck:$false
+```
+
+The health check verifies: Argus_venv, Ollama, Kali (WSL), and SSH bridge (port 22).
+
+---
+
+## Project Structure
+
+```text
+remote_Argus_PhilopaterSh/
++-- INSTALL.bat                     # Single-click master installer (launcher)
++-- scripts/
+|   +-- INSTALL_EVERYTHING.ps1      # Unified self-elevating installer
+|   +-- LAUNCH_STUDIO.bat            # Streamlit web UI launcher
+|   +-- LAUNCH_CLI.bat               # CLI agent launcher
+|   +-- run_argus_cli.py             # CLI entry point
+|   +-- README.md                   # Scripts usage guide
+|
++-- Setup/                          # Legacy installation scripts (manual fallback)
+|   +-- Step_1_Core_Foundation.bat
+|   +-- Step_2_AI_Python_Env.bat
+|   +-- Step_3_Kali_Tools_Setup.bat
+|   +-- check_and_install.sh        # Kali tools installer (run inside WSL)
+|   +-- requirements.txt            # Python dependencies
+|   +-- README.md                   # Legacy setup guide
+|
++-- app/                            # Main application
+|   +-- GUI/                        # Streamlit web UI
+|   +-- core/                       # AI brain, config
+|   +-- tools/                      # Security tool modules
+|   +-- modules/                    # Specialized exploit scripts
+|
++-- docs/                           # Technical documentation
++-- tests/                          # Test suites
++-- data/                           # Data & databases
++-- logs/                           # Installer & runtime logs
++-- bin/                            # Executables
++-- archive/                        # Deprecated code
++-- Plan md/                        # Implementation plans
+```
+
+---
+
+## Key Features
+
+- **Parallel Reconnaissance:** Executes multiple tools (WhatWeb, Wafw00f, Nikto, etc.)
+  simultaneously for maximum speed.
+- **AI Intelligence:** Integrated with WhiteRabbitNeo for advanced security reasoning.
+- **WSL Bridge:** Securely executes offensive tools inside a native Linux environment
+  via SSH (port 22).
+- **Report Export:** Download comprehensive security reports in Markdown format.
+
+---
+
+## Installation Modes
+
+The master installer (`scripts\INSTALL_EVERYTHING.ps1`) supports these modes:
+
+| Mode | Flag | Description |
+|------|------|-------------|
+| Default (full) | *(none)* | Full install with auto-elevation |
+| Dry Run | `-DryRun` | Simulate without system changes |
+| Offline | `-Offline` | Skip all network downloads |
+| Interactive | `-Interactive` | Confirm before each step |
+| Skip Health | `-SkipHealthCheck` | Skip final health check |
+
+You can pass modes via `INSTALL.bat` too: `INSTALL.bat dryrun`, `INSTALL.bat offline`.
+
+---
+
+*Maintained by: Argus Security Framework Team | June 2026*

@@ -1,16 +1,20 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Argus Security Framework - Single Master Installer.
+    Argus Security Framework - Self-Contained Single-File Installer.
 
 .DESCRIPTION
-    A single, self-contained module that self-elevates up front, then installs,
-    configures, and validates the entire Argus environment (Python + Ollama +
-    WSL2/Kali + AI venv + Kali tools + SSH bridge + embedded health check) and
-    leaves the project ready to run.
+    A single, self-contained PowerShell script that self-elevates up front, then
+    installs, configures, and validates the entire Argus environment (Python +
+    Ollama + WSL2/Kali + AI venv + Kali tools + SSH bridge + embedded health
+    check) and leaves the project ready to run.
 
-    This script supersedes the legacy Setup/Step_*.bat orchestration by embedding all
-    step logic in one idempotent, self-elevating PowerShell module.
+    This script embeds all external dependencies (requirements.txt,
+    check_and_install.sh, argus_recon_fixed.sh) internally as here-strings.
+    It has ZERO external file dependencies — copy this ONE file and run it.
+
+    After a successful first run, the old Setup/ directory is archived to
+    Setup_legacy/.
 
 .PARAMETER Offline
     Skip all network downloads (Python winget, Ollama install, ollama pull).
@@ -28,11 +32,11 @@
     Number of retry attempts per step (default 2).
 
 .EXAMPLE
-    powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\INSTALL_EVERYTHING.ps1
+    powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\ARGUS_INSTALLER.ps1
 .EXAMPLE
-    powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\INSTALL_EVERYTHING.ps1 -DryRun
+    powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\ARGUS_INSTALLER.ps1 -DryRun
 .EXAMPLE
-    powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\INSTALL_EVERYTHING.ps1 -Offline -Interactive
+    powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\ARGUS_INSTALLER.ps1 -Offline -Interactive
 #>
 
 [CmdletBinding()]
@@ -44,9 +48,471 @@ param(
     [int]$RetryCount = 2
 )
 
-# ---------------------------------------------------------------------------
-# CONFIG BLOCK  (single source of truth for all tunables)
-# ---------------------------------------------------------------------------
+# ============================================================================
+# EMBEDDED DEPENDENCIES (self-contained: no external files needed)
+# ============================================================================
+
+# requirements.txt — Python package dependencies
+$EMBEDDED_REQUIREMENTS = @"
+langchain
+langchain-ollama
+langchain-classic
+langchain-huggingface
+langchain-community
+langchain-core
+langchain-text-splitters
+streamlit
+duckduckgo-search
+faiss-cpu
+sentence-transformers
+pypdf
+python-dotenv
+paramiko
+torchvision
+"@
+
+# check_and_install.sh — Kali Linux tool installer (run inside WSL as root)
+$EMBEDDED_CHECK_INSTALL_SH = @'
+#!/usr/bin/env bash
+set -u
+
+echo "--------------------------------------------------------"
+echo "ARGUS KALI ADVANCED ENVIRONMENT SETUP"
+echo "--------------------------------------------------------"
+
+INSTALLED_COUNT=0
+ALREADY_COUNT=0
+FAILED_OPTIONAL=()
+
+retry() {
+    local max_attempts="$1"
+    local delay_seconds="$2"
+    shift 2
+
+    local attempt=1
+    while true; do
+        "$@"
+        local rc=$?
+        if [ "$rc" -eq 0 ]; then
+            return 0
+        fi
+        if [ "$attempt" -ge "$max_attempts" ]; then
+            return "$rc"
+        fi
+        echo "[WARN] Command failed with exit code $rc. Retrying in ${delay_seconds}s ($attempt/$max_attempts)..."
+        sleep "$delay_seconds"
+        attempt=$((attempt + 1))
+    done
+}
+
+fail() {
+    echo "[ERROR] $*"
+    exit 1
+}
+
+warn_optional() {
+    echo "[WARN] Optional install failed: $*"
+    FAILED_OPTIONAL+=("$*")
+}
+
+have_cmd() {
+    command -v "$1" >/dev/null 2>&1
+}
+
+apt_install_missing() {
+    local packages=("$@")
+    local missing=()
+
+    for package in "${packages[@]}"; do
+        if ! dpkg -s "$package" >/dev/null 2>&1; then
+            missing+=("$package")
+        else
+            ALREADY_COUNT=$((ALREADY_COUNT + 1))
+        fi
+    done
+
+    if [ "${#missing[@]}" -eq 0 ]; then
+        echo "[OK] APT packages already present: ${packages[*]}"
+        return 0
+    fi
+
+    echo "[INFO] Installing APT packages: ${missing[*]}"
+    retry 3 10 apt-get install -y "${missing[@]}" || return 1
+    INSTALLED_COUNT=$((INSTALLED_COUNT + ${#missing[@]}))
+}
+
+install_go_tool() {
+    local binary="$1"
+    local module="$2"
+
+    if have_cmd "$binary"; then
+        echo "[OK] $binary already installed."
+        ALREADY_COUNT=$((ALREADY_COUNT + 1))
+        return 0
+    fi
+
+    echo "[INFO] Installing Go tool: $binary"
+    retry 3 10 go install "$module" || return 1
+
+    local go_bin
+    go_bin="$(go env GOPATH 2>/dev/null)/bin/$binary"
+    if [ -x "$go_bin" ]; then
+        ln -sf "$go_bin" "/usr/local/bin/$binary"
+    elif [ -x "/root/go/bin/$binary" ]; then
+        ln -sf "/root/go/bin/$binary" "/usr/local/bin/$binary"
+    else
+        return 1
+    fi
+
+    INSTALLED_COUNT=$((INSTALLED_COUNT + 1))
+}
+
+install_pipx_tool() {
+    local binary="$1"
+    local package="$2"
+
+    if have_cmd "$binary"; then
+        echo "[OK] $binary already installed."
+        ALREADY_COUNT=$((ALREADY_COUNT + 1))
+        return 0
+    fi
+
+    echo "[INFO] Installing Python tool with pipx: $package"
+    retry 3 10 pipx install "$package" || return 1
+    if [ -d "/root/.local/bin" ]; then
+        find /root/.local/bin -maxdepth 1 -type f -executable -exec ln -sf {} /usr/local/bin/ \;
+    fi
+    have_cmd "$binary" || return 1
+    INSTALLED_COUNT=$((INSTALLED_COUNT + 1))
+}
+
+install_git_repo() {
+    local name="$1"
+    local repo="$2"
+    local target="$3"
+
+    if [ -d "$target/.git" ] || [ -d "$target" ]; then
+        echo "[OK] $name already present at $target."
+        ALREADY_COUNT=$((ALREADY_COUNT + 1))
+        return 0
+    fi
+
+    echo "[INFO] Cloning $name..."
+    mkdir -p "$(dirname "$target")"
+    retry 3 10 git clone --depth 1 "$repo" "$target" || return 1
+    INSTALLED_COUNT=$((INSTALLED_COUNT + 1))
+}
+
+echo "[INFO] Running preflight checks..."
+[ "$(id -u)" -eq 0 ] || fail "Run this script as root inside Kali/WSL."
+have_cmd apt-get || fail "apt-get is not available. This installer expects Kali/Debian."
+
+echo "[INFO] Waiting for APT/dpkg locks..."
+while fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 || fuser /var/lib/dpkg/lock >/dev/null 2>&1; do
+    echo "[WARN] Another package manager is running. Waiting..."
+    sleep 3
+done
+
+# Optimized: Only run apt update if it hasn't been run in the last 24 hours
+UPDATE_MARKER="/var/lib/apt/periodic/update-success-stamp"
+SHOULD_UPDATE=true
+if [ -f "$UPDATE_MARKER" ]; then
+    last_update=$(stat -c %Y "$UPDATE_MARKER")
+    now=$(date +%s)
+    if [ $((now - last_update)) -lt 86400 ]; then
+        SHOULD_UPDATE=false
+    fi
+fi
+
+if [ "$SHOULD_UPDATE" = true ]; then
+    echo "[INFO] Updating APT metadata..."
+    retry 3 10 apt-get update -y || fail "apt-get update failed."
+else
+    echo "[OK] APT metadata is fresh (skip update)."
+fi
+
+CRITICAL_APT=(
+    ca-certificates curl wget git python3 python3-pip python3-venv pipx
+    golang nodejs npm build-essential make libpcap-dev jq unzip openssh-server
+    dnsutils nmap gobuster ffuf whois
+)
+
+OPTIONAL_APT=(
+    whatweb wafw00f nikto theharvester recon-ng spiderfoot amass fierce dnsenum dnsrecon
+)
+
+apt_install_missing "${CRITICAL_APT[@]}" || fail "Failed to install critical APT dependencies."
+apt_install_missing "${OPTIONAL_APT[@]}" || warn_optional "some optional APT tools"
+
+export PIPX_HOME="${PIPX_HOME:-/opt/pipx}"
+export PIPX_BIN_DIR="${PIPX_BIN_DIR:-/usr/local/bin}"
+pipx ensurepath --global >/dev/null 2>&1 || true
+
+echo "[INFO] Configuring SSH for WSL bridge..."
+mkdir -p /run/sshd
+ssh-keygen -A >/dev/null 2>&1 || true
+if [ -f /etc/ssh/sshd_config ]; then
+    sed -i 's/^#PasswordAuthentication .*/PasswordAuthentication yes/' /etc/ssh/sshd_config
+    sed -i 's/^#Port .*/Port 22/' /etc/ssh/sshd_config
+fi
+
+echo "[INFO] Installing ProjectDiscovery tool manager..."
+if ! have_cmd pdtm; then
+    install_go_tool pdtm github.com/projectdiscovery/pdtm/cmd/pdtm@latest || warn_optional "pdtm"
+fi
+if have_cmd pdtm; then
+    PDTM_MARKER="/root/.pdtm_last_sync"
+    SHOULD_PDTM=true
+    if [ -f "$PDTM_MARKER" ]; then
+        last_pdtm=$(cat "$PDTM_MARKER")
+        now=$(date +%s)
+        if [ $((now - last_pdtm)) -lt 604800 ]; then
+            SHOULD_PDTM=false
+        fi
+    fi
+
+    if [ "$SHOULD_PDTM" = true ]; then
+        echo "[INFO] Installing/Updating ProjectDiscovery tools via pdtm..."
+        PDTM_LOG="/tmp/argus_pdtm_install.log"
+        if ! retry 2 10 pdtm -ia > "$PDTM_LOG" 2>&1; then
+            warn_optional "ProjectDiscovery tool bundle"
+            tail -n 25 "$PDTM_LOG" 2>/dev/null || true
+        else
+            date +%s > "$PDTM_MARKER"
+        fi
+    else
+        echo "[OK] ProjectDiscovery tools are recently synced (skip)."
+    fi
+
+    if [ -d "/root/.pdtm/go/bin" ]; then
+        find /root/.pdtm/go/bin -maxdepth 1 -type f -executable -exec ln -sf {} /usr/local/bin/ \;
+    fi
+fi
+
+echo "[INFO] Installing Go utilities..."
+install_go_tool assetfinder github.com/tomnomnom/assetfinder@latest || warn_optional "assetfinder"
+install_go_tool anew github.com/tomnomnom/anew@latest || warn_optional "anew"
+install_go_tool puredns github.com/d3mondev/puredns/v2@latest || warn_optional "puredns"
+install_go_tool goaltdns github.com/subfinder/goaltdns@latest || warn_optional "goaltdns"
+install_go_tool Ph.Sh_url github.com/PhilopaterSh/Ph.Sh_url@latest || warn_optional "Ph.Sh_url"
+install_go_tool alterx github.com/projectdiscovery/alterx/cmd/alterx@latest || warn_optional "alterx"
+
+echo "[INFO] Installing Python utilities with pipx..."
+install_pipx_tool dnsgen dnsgen || warn_optional "dnsgen"
+install_pipx_tool altdns py-altdns || warn_optional "py-altdns"
+
+echo "[INFO] Installing Findomain..."
+if ! have_cmd findomain; then
+    tmp_dir="$(mktemp -d)"
+    if retry 3 10 curl -fsSL -o "$tmp_dir/findomain-linux.zip" https://github.com/Findomain/Findomain/releases/latest/download/findomain-linux.zip &&
+       unzip -q "$tmp_dir/findomain-linux.zip" -d "$tmp_dir" &&
+       [ -f "$tmp_dir/findomain" ]; then
+        chmod +x "$tmp_dir/findomain"
+        mv "$tmp_dir/findomain" /usr/local/bin/findomain
+        INSTALLED_COUNT=$((INSTALLED_COUNT + 1))
+    else
+        warn_optional "findomain"
+    fi
+    rm -rf "$tmp_dir"
+else
+    echo "[OK] findomain already installed."
+    ALREADY_COUNT=$((ALREADY_COUNT + 1))
+fi
+
+echo "[INFO] Installing MassDNS..."
+if [ ! -x "/usr/local/bin/massdns" ]; then
+    if install_git_repo MassDNS https://github.com/blechschmidt/massdns.git /opt/massdns &&
+       make -C /opt/massdns &&
+       ln -sf /opt/massdns/bin/massdns /usr/local/bin/massdns; then
+        echo "[OK] massdns installed."
+    else
+        warn_optional "massdns"
+    fi
+else
+    echo "[OK] massdns already installed."
+    ALREADY_COUNT=$((ALREADY_COUNT + 1))
+fi
+
+echo "[INFO] Installing optional repositories..."
+if [ ! -d "/opt/Ph.Sh-Subdomain" ]; then
+    if install_git_repo Ph.Sh-Subdomain https://github.com/PhilopaterSh/Ph.Sh-Subdomain.git /opt/Ph.Sh-Subdomain; then
+        python3 -m venv /opt/Ph.Sh-Subdomain/.venv || warn_optional "Ph.Sh-Subdomain venv"
+        if [ -x /opt/Ph.Sh-Subdomain/.venv/bin/pip ] && [ -f /opt/Ph.Sh-Subdomain/requirements.txt ]; then
+            /opt/Ph.Sh-Subdomain/.venv/bin/pip install -r /opt/Ph.Sh-Subdomain/requirements.txt || warn_optional "Ph.Sh-Subdomain Python requirements"
+        fi
+        (cd /opt/Ph.Sh-Subdomain && go build) && ln -sf /opt/Ph.Sh-Subdomain/Ph.Sh-Subdomain /usr/local/bin/Ph.Sh-Subdomain || warn_optional "Ph.Sh-Subdomain build"
+    else
+        warn_optional "Ph.Sh-Subdomain"
+    fi
+fi
+
+if [ ! -d "/opt/finalrecon" ]; then
+    if install_git_repo FinalRecon https://github.com/thewhiteh4t/FinalRecon.git /opt/finalrecon; then
+        python3 -m venv /opt/finalrecon/.venv || warn_optional "FinalRecon venv"
+        if [ -x /opt/finalrecon/.venv/bin/pip ] && [ -f /opt/finalrecon/requirements.txt ]; then
+            /opt/finalrecon/.venv/bin/pip install -r /opt/finalrecon/requirements.txt || warn_optional "FinalRecon Python requirements"
+        fi
+        cat > /usr/local/bin/finalrecon <<'WRAPPER'
+#!/usr/bin/env bash
+exec /opt/finalrecon/.venv/bin/python /opt/finalrecon/finalrecon.py "$@"
+WRAPPER
+        chmod +x /usr/local/bin/finalrecon
+    else
+        warn_optional "FinalRecon"
+    fi
+fi
+
+install_git_repo PayloadsAllTheThings https://github.com/swisskyrepo/PayloadsAllTheThings.git /opt/payloads/PayloadsAllTheThings || warn_optional "PayloadsAllTheThings"
+install_git_repo SecLists https://github.com/danielmiessler/SecLists.git /usr/share/seclists || warn_optional "SecLists"
+[ -d /usr/share/seclists ] && ln -sf /usr/share/seclists "$HOME/seclists"
+
+echo "[INFO] Creating Argus native recon command..."
+cat > /usr/local/bin/argus_recon <<'ARGUSRECON'
+#!/usr/bin/env bash
+set -u
+
+DOMAIN="${1:-}"
+if [ -z "$DOMAIN" ]; then
+    echo "Usage: argus_recon <domain>"
+    exit 1
+fi
+
+RAW_FILE="/tmp/argus_raw_${DOMAIN}.txt"
+ALIVE_FILE="/tmp/argus_alive_${DOMAIN}.txt"
+UNIQUE_FILE="/tmp/argus_unique_${DOMAIN}.txt"
+WORDLIST="/usr/share/seclists/Discovery/DNS/subdomains-top1million-5000.txt"
+if [ ! -f "$WORDLIST" ]; then
+    WORDLIST="/tmp/argus_mini_wordlist.txt"
+    echo "www" > "$WORDLIST"
+fi
+
+: > "$RAW_FILE"
+
+echo "[INFO] Phase 1: Passive OSINT..."
+command -v subfinder >/dev/null 2>&1 && subfinder -d "$DOMAIN" -silent >> "$RAW_FILE" || true
+command -v assetfinder >/dev/null 2>&1 && assetfinder --subs-only "$DOMAIN" >> "$RAW_FILE" || true
+command -v findomain >/dev/null 2>&1 && findomain -t "$DOMAIN" -q >> "$RAW_FILE" || true
+command -v amass >/dev/null 2>&1 && amass enum -passive -d "$DOMAIN" >> "$RAW_FILE" || true
+
+echo "[INFO] Phase 2: Active brute force..."
+command -v gobuster >/dev/null 2>&1 && gobuster dns -d "$DOMAIN" -w "$WORDLIST" -z --quiet | awk '/Found:/ {print $2}' >> "$RAW_FILE" || true
+
+sort -u "$RAW_FILE" -o "$RAW_FILE"
+
+echo "[INFO] Phase 3: Permutations..."
+if command -v dnsgen >/dev/null 2>&1; then
+    dnsgen "$RAW_FILE" >> "$RAW_FILE" || true
+    sort -u "$RAW_FILE" -o "$RAW_FILE"
+fi
+
+echo "[INFO] Phase 4: Resolution and validation..."
+if command -v anew >/dev/null 2>&1; then
+    anew "$UNIQUE_FILE" < "$RAW_FILE" >/dev/null
+else
+    cp "$RAW_FILE" "$UNIQUE_FILE"
+fi
+
+if command -v httpx >/dev/null 2>&1; then
+    httpx -silent -fc 404,500,502 -threads 50 < "$UNIQUE_FILE" > "$ALIVE_FILE"
+elif command -v puredns >/dev/null 2>&1; then
+    puredns resolve "$UNIQUE_FILE" --quiet > "$ALIVE_FILE"
+else
+    xargs -r -I{} host -W 2 {} < "$UNIQUE_FILE" | awk '/has address/ {print $1}' > "$ALIVE_FILE"
+fi
+
+ALIVE_COUNT="$(wc -l < "$ALIVE_FILE" 2>/dev/null || echo 0)"
+echo "--- ARGUS SUBDOMAIN DISCOVERY: $DOMAIN ---"
+echo "[INFO] Total potential: $(wc -l < "$RAW_FILE" 2>/dev/null || echo 0)"
+echo "[INFO] Total verified alive: $ALIVE_COUNT"
+echo ""
+echo "[INFO] Top verified subdomains:"
+head -n 50 "$ALIVE_FILE" 2>/dev/null || true
+echo ""
+echo "[INFO] Infrastructure pointers:"
+head -n 10 "$ALIVE_FILE" 2>/dev/null | while read -r sub; do
+    clean_sub="$(echo "$sub" | sed -E 's|https?://||; s|/.*$||')"
+    cname="$(dig CNAME +short +time=3 +tries=2 "$clean_sub")"
+    [ -n "$cname" ] && echo "[CNAME] $sub -> $cname"
+    mx="$(dig MX +short +time=3 +tries=2 "$clean_sub")"
+    [ -n "$mx" ] && echo "[MX] $sub -> $mx"
+done
+
+rm -f "$RAW_FILE" "$ALIVE_FILE" "$UNIQUE_FILE"
+ARGUSRECON
+chmod +x /usr/local/bin/argus_recon
+
+echo ""
+echo "========================================================"
+echo "INSTALLATION SUMMARY (KALI TOOLS)"
+echo "========================================================"
+echo "[OK] Tools already present: $ALREADY_COUNT"
+echo "[OK] New tools installed:   $INSTALLED_COUNT"
+if [ "${#FAILED_OPTIONAL[@]}" -gt 0 ]; then
+    echo "[WARN] Optional failures:"
+    printf ' - %s\n' "${FAILED_OPTIONAL[@]}"
+else
+    echo "[OK] Optional tools completed without recorded failures."
+fi
+echo "[OK] Argus environment is synchronized."
+echo "========================================================"
+'@
+
+# argus_recon_fixed.sh — standalone recon script (legacy, embedded for reference)
+$EMBEDDED_ARGUS_RECON_SH = @'
+#!/bin/bash
+# Argus Recon Engine - Robust Version
+DOMAIN=$1
+[ -z "$DOMAIN" ] && echo "Usage: argus_recon <domain>" && exit 1
+
+# Setup Paths
+export PATH=$PATH:/home/kali/go/bin:/home/kali/.pdtm/go/bin
+RAW_FILE="/tmp/argus_raw_$DOMAIN.txt"
+ALIVE_FILE="/tmp/argus_alive_$DOMAIN.txt"
+
+rm -f $RAW_FILE $ALIVE_FILE
+
+echo "[INFO] Phase 1: OSINT Discovery..."
+subfinder -d $DOMAIN -silent >> $RAW_FILE
+assetfinder --subs-only $DOMAIN >> $RAW_FILE
+findomain -t $DOMAIN -q >> $RAW_FILE
+
+echo "[INFO] Phase 2: Brute-Force..."
+WORDLIST="/usr/share/seclists/Discovery/DNS/subdomains-top1million-5000.txt"
+[ ! -f "$WORDLIST" ] && echo "www" > /tmp/mini.txt && WORDLIST="/tmp/mini.txt"
+gobuster dns --domain $DOMAIN -w $WORDLIST --quiet | grep "Found:" | awk '{print $2}' >> $RAW_FILE
+
+echo "[INFO] Phase 3: Validation..."
+sort -u $RAW_FILE -o $RAW_FILE
+
+# Use ProjectDiscovery httpx if possible
+HTTPX="/home/kali/.pdtm/go/bin/httpx"
+[ ! -x "$HTTPX" ] && HTTPX=$(which httpx)
+
+if [ -f "$RAW_FILE" ] && [ -s "$RAW_FILE" ]; then
+    cat $RAW_FILE | $HTTPX -silent -threads 50 > $ALIVE_FILE
+fi
+
+echo "--- ARGUS SUBDOMAIN DISCOVERY: $DOMAIN ---"
+echo "[INFO] Total potential: $(wc -l < $RAW_FILE 2>/dev/null || echo "0")"
+echo "[INFO] Total verified alive: $(wc -l < $ALIVE_FILE 2>/dev/null || echo "0")"
+echo ""
+echo "[INFO] TOP VERIFIED SUBDOMAINS:"
+cat $ALIVE_FILE | head -n 50
+echo ""
+echo "[INFO] INFRASTRUCTURE POINTERS:"
+cat $ALIVE_FILE | head -n 10 | while read sub; do
+    clean_sub=$(echo "$sub" | sed -E 's|https?://||; s|/.*$||')
+    cname=$(dig CNAME +short "$clean_sub" | head -n 1)
+    [ -n "$cname" ] && echo "[CNAME] $sub -> $cname"
+done
+
+# DO NOT delete ALIVE_FILE so Argus can read it
+rm -f $RAW_FILE 2>/dev/null
+'@
+
+# ============================================================================
+# CONFIG BLOCK (single source of truth for all tunables)
+# ============================================================================
 $MIN_RAM_GB            = 8
 $MIN_DISK_GB           = 20
 $PYTHON_REQUIRED       = "3.12"
@@ -54,16 +520,14 @@ $KALI_DISTRO           = "kali-linux"
 $OLLAMA_MODEL          = if ($env:ARGUS_MODEL) { $env:ARGUS_MODEL } else { "WhiteRabbitNeo/WhiteRabbitNeo-V3-7B:latest" }  # default AI model
 $OLLAMA_MODEL_MIN_GB   = if ($env:ARGUS_MODEL_MIN_GB) { [int]$env:ARGUS_MODEL_MIN_GB } else { 8 }
 $MODEL_PULL_RETRIES    = if ($env:ARGUS_MODEL_PULL_RETRIES) { [int]$env:ARGUS_MODEL_PULL_RETRIES } else { 3 }
-$SETUP_DIR             = "Setup"   # contains check_and_install.sh + requirements.txt
 $VENV_NAME             = "Argus_venv"
 
-# ---------------------------------------------------------------------------
+# ============================================================================
 # ENVIRONMENT / PATHS
-# ---------------------------------------------------------------------------
+# ============================================================================
 $ErrorActionPreference = "Stop"
 $ScriptDir   = Split-Path -Parent $MyInvocation.MyCommand.Definition
 $ProjectRoot = Split-Path -Parent $ScriptDir
-$SetupRoot   = Join-Path $ProjectRoot $SETUP_DIR
 $LogsDir     = Join-Path $ProjectRoot "logs"
 $null = New-Item -ItemType Directory -Force -Path $LogsDir -ErrorAction SilentlyContinue
 $LogFile     = Join-Path $LogsDir ("argus_install_{0}.log" -f (Get-Date -Format "yyyyMMdd_HHmmss"))
@@ -77,9 +541,9 @@ Set-Location -LiteralPath $ProjectRoot
 # Track per-step results for the final report
 $script:StepResults = New-Object System.Collections.Generic.List[object]
 
-# ---------------------------------------------------------------------------
+# ============================================================================
 # LOGGING HELPERS
-# ---------------------------------------------------------------------------
+# ============================================================================
 function Write-Log {
     param(
         [string]$Level,
@@ -113,9 +577,9 @@ function Record-Step {
     $script:StepResults.Add([pscustomobject]@{ Id = $Id; Name = $Name; Status = $Status; Detail = $Detail })
 }
 
-# ---------------------------------------------------------------------------
-# SELF-ELEVATION  (Admin-first principle - happens once at the very start)
-# ---------------------------------------------------------------------------
+# ============================================================================
+# SELF-ELEVATION (Admin-first principle - happens once at the very start)
+# ============================================================================
 function Test-IsAdministrator {
     $currentPrincipal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
     return $currentPrincipal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
@@ -143,9 +607,9 @@ function Invoke-SelfElevation {
     exit 0
 }
 
-# ---------------------------------------------------------------------------
+# ============================================================================
 # GENERIC UTILITIES
-# ---------------------------------------------------------------------------
+# ============================================================================
 function Test-CommandWorks {
     param(
         [Parameter(Mandatory)][string]$CommandPath,
@@ -199,9 +663,9 @@ function Invoke-WithRetry {
     return $false
 }
 
-# ---------------------------------------------------------------------------
+# ============================================================================
 # STEP 0 - SYSTEM READINESS
-# ---------------------------------------------------------------------------
+# ============================================================================
 function Test-SystemReadiness {
     Write-Step 0 "Verifying System Readiness"
     $ok = $true
@@ -238,9 +702,9 @@ function Test-SystemReadiness {
     return $ok
 }
 
-# ---------------------------------------------------------------------------
+# ============================================================================
 # STEP 1 - PYTHON 3.12 (bootstrap once, used by all later steps)
-# ---------------------------------------------------------------------------
+# ============================================================================
 function Get-UsablePython {
     $candidates = New-Object System.Collections.Generic.List[string]
 
@@ -323,9 +787,9 @@ function Install-Python {
     return $true
 }
 
-# ---------------------------------------------------------------------------
+# ============================================================================
 # STEP 2 - HOST FOUNDATION (WSL2 + Kali distro + Ollama)
-# ---------------------------------------------------------------------------
+# ============================================================================
 function Enable-WindowsFeature {
     param([string]$FeatureName)
     if ($DryRun) {
@@ -350,7 +814,6 @@ function Enable-WindowsFeature {
 function Test-WslCommand {
     $cmd = Get-Command wsl.exe -ErrorAction SilentlyContinue
     if ($null -eq $cmd) {
-        # Fall back to bare 'wsl' which Get-Command may surface differently on older builds
         $cmd = Get-Command wsl -ErrorAction SilentlyContinue
     }
     return $null -ne $cmd
@@ -438,16 +901,9 @@ function Start-OllamaIfNeeded {
         return $true
     }
     try {
-        $ollamaApp = Get-Command "ollama app.exe" -ErrorAction SilentlyContinue
-        if ($null -ne $ollamaApp) {
-            Start-Process -FilePath $ollamaApp.Source -ErrorAction Stop
-            Start-Sleep -Seconds 5
-            Write-OK "Ollama engine started."
-        } else {
-            Start-Process -FilePath "ollama" -ArgumentList "serve" -ErrorAction SilentlyContinue
-            Start-Sleep -Seconds 5
-            Write-OK "Ollama engine started (serve mode)."
-        }
+        Start-Process -FilePath "ollama" -ArgumentList "serve" -ErrorAction SilentlyContinue
+        Start-Sleep -Seconds 5
+        Write-OK "Ollama engine started."
         return $true
     } catch {
         Write-Warn "Could not auto-start Ollama: $($_.Exception.Message)"
@@ -488,9 +944,9 @@ function Invoke-StepHostFoundation {
     return $true
 }
 
-# ---------------------------------------------------------------------------
+# ============================================================================
 # STEP 3 - AI ENVIRONMENT (Argus_venv + pip + model pull)
-# ---------------------------------------------------------------------------
+# ============================================================================
 function Invoke-StepAiEnvironment {
     Write-Step 3 "AI Environment (venv + pip + model pull)"
     if (-not (Confirm-Step 3 "AI Environment")) { Record-Step 3 "AI Environment" "SKIPPED" ""; return $true }
@@ -526,12 +982,18 @@ function Invoke-StepAiEnvironment {
         }
     }
 
-    # --- pip install ---
-    $reqPath = Join-Path $SetupRoot "requirements.txt"
+    # --- pip install (using embedded requirements) ---
+    # Write embedded requirements to a temp file inside the venv
+    $reqPath = Join-Path $venvPath "requirements_embedded.txt"
     if (-not (Test-Path -LiteralPath $reqPath)) {
-        Write-Err "requirements.txt not found at $reqPath"
-        Record-Step 3 "AI Environment" "FAILED" "requirements.txt missing"
-        return $false
+        if ($DryRun) {
+            Write-Info "[DryRun] Would write embedded requirements.txt to $reqPath"
+        } else {
+            Set-Content -LiteralPath $reqPath -Value $EMBEDDED_REQUIREMENTS -ErrorAction Stop
+            Write-OK "Embedded requirements written to $reqPath"
+        }
+    } else {
+        Write-OK "Embedded requirements file already exists (will use it)."
     }
 
     $marker = Join-Path $venvPath ".requirements_installed"
@@ -547,7 +1009,7 @@ function Invoke-StepAiEnvironment {
     $venvPython = Join-Path $venvPath "Scripts\python.exe"
     if ($runPip) {
         if ($DryRun) {
-            Write-Info "[DryRun] Would run pip install -r requirements.txt"
+            Write-Info "[DryRun] Would run pip install -r $reqPath"
         } else {
             Write-Info "Synchronizing Python libraries (this may take a moment)..."
             $action = {
@@ -569,8 +1031,8 @@ function Invoke-StepAiEnvironment {
     }
 
     # --- model pull ---
-    $modelOk = $true
-    if (Test-Ollama) {
+    $modelOk = (Test-Ollama)
+    if ($modelOk) {
         if ($DryRun) {
             Write-Info "[DryRun] Would verify/pull model '$OLLAMA_MODEL'"
         } else {
@@ -613,19 +1075,13 @@ function Invoke-StepAiEnvironment {
     return $true
 }
 
-# ---------------------------------------------------------------------------
-# STEP 4 - KALI TOOLS (run check_and_install.sh inside WSL)
-# ---------------------------------------------------------------------------
+# ============================================================================
+# STEP 4 - KALI TOOLS (run embedded check_and_install.sh inside WSL)
+# ============================================================================
 function Invoke-StepKaliTools {
     Write-Step 4 "Kali Security Tools (inside WSL)"
     if (-not (Confirm-Step 4 "Kali Tools")) { Record-Step 4 "Kali Tools" "SKIPPED" ""; return $true }
 
-    $shScript = Join-Path $SetupRoot "check_and_install.sh"
-    if (-not (Test-Path -LiteralPath $shScript)) {
-        Write-Err "Missing Kali installer script: $shScript"
-        Record-Step 4 "Kali Tools" "FAILED" "check_and_install.sh missing"
-        return $false
-    }
     if (-not (Test-KaliDistro)) {
         Write-Err "WSL distro '$KALI_DISTRO' not installed/functional. Run host foundation first."
         Record-Step 4 "Kali Tools" "FAILED" "Kali distro missing"
@@ -633,34 +1089,40 @@ function Invoke-StepKaliTools {
     }
 
     if ($DryRun) {
-        Write-Info "[DryRun] Would translate path and run bash '$shScript' inside WSL root."
-        Record-Step 4 "Kali Tools" "DRYRUN" "check_and_install.sh (simulated)"
+        Write-Info "[DryRun] Would write embedded check_and_install.sh to /tmp/ inside WSL and execute."
+        Record-Step 4 "Kali Tools" "DRYRUN" "embedded script (simulated)"
         return $true
     }
 
-    # Translate Windows path -> /mnt/... WSL path
     try {
-        $wslPath = (& wsl wslpath -u $shScript).Trim()
-    } catch {
-        # Manual fallback
-        $drive = $shScript.Substring(0,1).ToLowerInvariant()
-        $rest  = $shScript.Substring(2).Replace('\','/')
-        $wslPath = "/mnt/$drive$rest"
-    }
-    Write-Info "Linux script path: $wslPath"
+        # Step A: Write embedded script to a Windows temp file (avoids complex quoting in WSL heredoc)
+        $tempSh = Join-Path $env:TEMP "argus_check_and_install.sh"
+        Set-Content -LiteralPath $tempSh -Value $EMBEDDED_CHECK_INSTALL_SH -Force -Encoding ASCII -ErrorAction Stop
+        Write-Info "Embedded script written to Windows temp: $tempSh"
 
-    try {
-        Write-Info "Normalizing line endings..."
-        wsl -u root bash -lc "sed -i 's/\r$//' '$wslPath'" 2>&1 | ForEach-Object { Write-Info $_ }
+        # Step B: Convert Windows path to WSL /mnt/... path
+        $drive = $tempSh.Substring(0, 1).ToLowerInvariant()
+        $rest  = $tempSh.Substring(2).Replace('\', '/')
+        $wslSrcPath = "/mnt/$drive$rest"
+        $wslDstPath = "/tmp/argus_check_and_install.sh"
+
+        Write-Info "Copying script from $wslSrcPath to $wslDstPath inside WSL..."
+        wsl -u root bash -lc "cp '$wslSrcPath' '$wslDstPath'" 2>&1 | ForEach-Object { Write-Info $_ }
+
+        Write-Info "Normalizing line endings and making executable..."
+        wsl -u root bash -lc "sed -i 's/\r$//' '$wslDstPath' && chmod +x '$wslDstPath'" 2>&1 | ForEach-Object { Write-Info $_ }
+
         Write-Info "Running Kali tool installer..."
-        wsl -u root bash -lc "bash '$wslPath'" 2>&1 | ForEach-Object { Write-Info $_ }
-        if ($LASTEXITCODE -ne 0) {
-            Write-Warn "Kali tool setup exited with code $LASTEXITCODE (some optional tools may have failed)."
-            Record-Step 4 "Kali Tools" "WARN" "exit $LASTEXITCODE (optional tools may be partial)"
+        $wslOutput = wsl -u root bash -lc "bash '$wslDstPath'" 2>&1
+        $wslExit = $LASTEXITCODE
+        $wslOutput | ForEach-Object { Write-Info $_ }
+        if ($wslExit -ne 0) {
+            Write-Warn "Kali tool setup exited with code $wslExit (some optional tools may have failed)."
+            Record-Step 4 "Kali Tools" "WARN" "exit $wslExit (optional tools may be partial)"
             return $true
         }
         Write-OK "Kali tool setup completed."
-        Record-Step 4 "Kali Tools" "OK" "check_and_install.sh ran"
+        Record-Step 4 "Kali Tools" "OK" "embedded check_and_install.sh ran"
         return $true
     } catch {
         Write-Err "Kali tool setup failed: $($_.Exception.Message)"
@@ -669,9 +1131,9 @@ function Invoke-StepKaliTools {
     }
 }
 
-# ---------------------------------------------------------------------------
+# ============================================================================
 # STEP 5 - SSH BRIDGE
-# ---------------------------------------------------------------------------
+# ============================================================================
 function Invoke-StepSshBridge {
     Write-Step 5 "SSH Bridge to WSL (Kali)"
     if (-not (Confirm-Step 5 "SSH Bridge")) { Record-Step 5 "SSH Bridge" "SKIPPED" ""; return $true }
@@ -706,9 +1168,9 @@ function Invoke-StepSshBridge {
     }
 }
 
-# ---------------------------------------------------------------------------
+# ============================================================================
 # STEP 6 - INLINE HEALTH CHECK (no external file)
-# ---------------------------------------------------------------------------
+# ============================================================================
 function Invoke-HealthCheck {
     Write-Header "SYSTEM HEALTH CHECK (Embedded)"
     $healthy = $true
@@ -748,9 +1210,53 @@ function Invoke-HealthCheck {
     return $healthy
 }
 
-# ---------------------------------------------------------------------------
+# ============================================================================
+# STEP 7 - CLEANUP (archive Setup/ to Setup_legacy/ after first success)
+# ============================================================================
+function Invoke-StepCleanup {
+    Write-Step 7 "Archiving legacy Setup/ directory"
+    if ($DryRun) {
+        $setupPath = Join-Path $ProjectRoot "Setup"
+        $legacyPath = Join-Path $ProjectRoot "Setup_legacy"
+        if (Test-Path -LiteralPath $setupPath) {
+            Write-Info "[DryRun] Would rename '$setupPath' -> '$legacyPath'"
+        } else {
+            Write-Info "[DryRun] Setup/ directory not found; nothing to archive."
+        }
+        Record-Step 7 "Archive Setup/" "DRYRUN" ""
+        return $true
+    }
+
+    $setupPath  = Join-Path $ProjectRoot "Setup"
+    $legacyPath = Join-Path $ProjectRoot "Setup_legacy"
+
+    if (-not (Test-Path -LiteralPath $setupPath)) {
+        Write-OK "Setup/ directory not found; nothing to archive."
+        Record-Step 7 "Archive Setup/" "OK" "not needed"
+        return $true
+    }
+
+    if (Test-Path -LiteralPath $legacyPath) {
+        Write-Warn "Setup_legacy/ already exists. Skipping archive to avoid overwrite."
+        Record-Step 7 "Archive Setup/" "WARN" "Setup_legacy already exists"
+        return $true
+    }
+
+    try {
+        Rename-Item -LiteralPath $setupPath -NewName "Setup_legacy" -ErrorAction Stop
+        Write-OK "Setup/ directory archived as Setup_legacy/."
+        Record-Step 7 "Archive Setup/" "OK" "Setup -> Setup_legacy"
+        return $true
+    } catch {
+        Write-Warn "Could not archive Setup/ directory: $($_.Exception.Message)"
+        Record-Step 7 "Archive Setup/" "WARN" $_.Exception.Message
+        return $true
+    }
+}
+
+# ============================================================================
 # FINAL REPORT
-# ---------------------------------------------------------------------------
+# ============================================================================
 function Show-FinalReport {
     param([string[]]$Failed)
     Write-Header "ARGUS INSTALLATION SUMMARY"
@@ -775,10 +1281,10 @@ function Show-FinalReport {
     return 0
 }
 
-# ===========================================================================
+# ============================================================================
 # MAIN PIPELINE
-# ===========================================================================
-Write-Header "ARGUS SECURITY FRAMEWORK - INSTALLER (Unified)"
+# ============================================================================
+Write-Header "ARGUS SECURITY FRAMEWORK - INSTALLER (Self-Contained)"
 if ($DryRun) { Write-Warn "DRY RUN mode: no system changes will be made." }
 
 # Admin-first: self-elevate before anything mutating happens.
@@ -787,10 +1293,11 @@ Invoke-SelfElevation
 # At this point we are guaranteed to be elevated (or the user declined elevation).
 if (-not (Test-IsAdministrator)) {
     Write-Err "Administrator privileges are required. Aborting."
-    Write-Info "Right-click PowerShell -> 'Run as administrator' and rerun, or run INSTALL.bat."
+    Write-Info "Right-click PowerShell -> 'Run as administrator' and rerun."
     exit 1
 }
 Write-OK "Running with Administrator privileges."
+Write-OK "This script is fully self-contained - no external file dependencies."
 
 $null = Test-SystemReadiness
 
@@ -801,7 +1308,7 @@ if (-not (Install-Python)) {
     exit 10
 }
 
-# Steps 2..5 - orchestrated, non-critical failures collected
+# Steps 2..7 - orchestrated, non-critical failures collected
 $failed = @()
 
 $ok2 = Invoke-StepHostFoundation
@@ -822,6 +1329,10 @@ if (-not $SkipHealthCheck) {
 } else {
     Write-Info "Health check skipped (-SkipHealthCheck)."
 }
+
+# Step 7 - cleanup (archive Setup/ to Setup_legacy/)
+$ok7 = Invoke-StepCleanup
+if (-not $ok7) { $failed += 7 }
 
 $exitCode = Show-FinalReport -Failed $failed
 exit $exitCode

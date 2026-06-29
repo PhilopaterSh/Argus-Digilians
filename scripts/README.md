@@ -1,106 +1,123 @@
-# 🛠️ Scripts & Automation
+# Scripts & Automation
 
-This directory contains all launch scripts, installers, and automation tools for the Argus framework.
+This directory contains launch scripts, the unified master installer, and CLI
+entry points for the Argus framework.
+
+---
+
+## Master Installer
+
+### `ARGUS_INSTALLER.ps1` (Recommended)
+
+A fully self-contained PowerShell script that embeds all dependencies
+(requirements.txt, check_and_install.sh) internally as here-strings.
+It has ZERO external file dependencies — copy this ONE file and run it.
+
+After a successful first run, the legacy `Setup/` directory is automatically
+archived to `Setup_legacy/`.
+
+**Execution (from project root):**
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\ARGUS_INSTALLER.ps1
+```
+
+**Parameters:**
+
+| Parameter | Description |
+|-----------|-------------|
+| `-Offline` | Skip all network downloads |
+| `-Interactive` | Prompt before each critical step |
+| `-DryRun` | Simulate without making system changes |
+| `-SkipHealthCheck` | Skip the embedded final health check |
+| `-RetryCount N` | Retry failed steps N times (default: 2) |
+
+**Embedded Steps (in order):**
+
+1. Self-Elevation (Admin-first)
+2. System Readiness (OS, RAM, Disk, Internet)
+3. Python 3.12 bootstrap
+4. Host Foundation (WSL2, Kali distro, Ollama)
+5. AI Environment (Argus_venv, pip, model pull)
+6. Kali Security Tools (embedded check_and_install.sh inside WSL)
+7. SSH Bridge (sshd + port 22 test)
+8. Embedded Health Check (venv, Ollama, Kali, SSH)
+9. Cleanup (archive Setup/ to Setup_legacy/)
+
+### `INSTALL_EVERYTHING.ps1` (Legacy)
+
+The previous master installer. Still functional but requires the `Setup/`
+directory for external dependencies. Replaced by `ARGUS_INSTALLER.ps1`.
+
+---
 
 ## Launch Scripts
 
 ### `LAUNCH_STUDIO.bat`
-- **Purpose**: Start the Streamlit web UI (Argus Studio)
-- **Syntax**: `LAUNCH_STUDIO.bat [option]`
-- **Options**:
-  - `A`: Run with default Streamlit settings
-  - `B`: Run with performance optimizations
-  - `C`: Run with GPU support (if available) / CPU-only fallback
-- **Default Port**: 12199
 
-**Example**:
+Starts the Streamlit web UI (Argus Studio).
+
 ```batch
-LAUNCH_STUDIO.bat C
+LAUNCH_STUDIO.bat        # Default mode (GPU)
+LAUNCH_STUDIO.bat C      # Force CPU mode
+LAUNCH_STUDIO.bat R      # Clean restart Ollama
+LAUNCH_STUDIO.bat G      # Standard GPU mode
 ```
+
+**Port:** 12199
 
 ### `LAUNCH_CLI.bat`
-- **Purpose**: Start the autonomous CLI agent
-- **Syntax**: `LAUNCH_CLI.bat [option]`
-- **Options**:
-  - `A`: Standard CLI mode
-  - `B`: Debug mode (verbose output)
-  - `C`: Enhanced mode (full features)
-- **Entry Point**: `scripts/run_argus_cli.py`
 
-**Example**:
+Starts the autonomous CLI agent.
+
 ```batch
-LAUNCH_CLI.bat C
+LAUNCH_CLI.bat           # Standard CLI mode
+LAUNCH_CLI.bat C         # Enhanced mode
 ```
 
-## Installation Scripts
+**Entry Point:** `scripts/run_argus_cli.py`
 
-### `INSTALL_EVERYTHING.ps1`
-- **Purpose**: Master installer orchestrating all setup steps
-- **Execution**:
-  ```powershell
-  .\INSTALL_EVERYTHING.ps1
-  ```
-- **Steps Performed**:
-  1. **Step 1**: Host environment setup (Windows, WSL2, dependencies)
-  2. **Step 2**: Python virtual environment and AI dependencies
-  3. **Step 3**: Kali Linux tools installation and configuration
-
-**Path Resolution**:
-- Searches: `root\Setup\` → `scripts\Setup\` → relative paths
-- Automatically adapts to different installation scenarios
-
-### Individual Setup Steps
-Located in `Setup/` directory (root level):
-- `Step_1_Host_Setup.bat` - Environment and system dependencies
-- `Step_2_Python_AI.bat` - Python venv and AI packages
-- `Step_3_Kali_Tools.bat` - Kali Linux integration
-
-## Helper Scripts
-
-### `Check_Requirements.ps1`
-- Validates system requirements before installation
-- Checks for: Python, WSL2, Kali, Ollama, SSH bridge
-
-### `Initialize_Folders.bat`
-- Creates required directory structure
-- Sets up proper folder permissions
+---
 
 ## Directory Structure
 
-```
+```text
 scripts/
-├── LAUNCH_CLI.bat              # CLI launcher
-├── LAUNCH_STUDIO.bat           # Streamlit launcher
-├── INSTALL_EVERYTHING.ps1      # Master installer
-├── Check_Requirements.ps1      # Pre-flight checks
-├── Initialize_Folders.bat      # Folder setup
-├── run_argus_cli.py            # CLI entry point (moved here)
-└── README.md                    # This file
++-- ARGUS_INSTALLER.ps1        # Self-contained installer (recommended)
++-- INSTALL_EVERYTHING.ps1     # Legacy installer (requires Setup/ directory)
++-- LAUNCH_STUDIO.bat          # Streamlit web UI launcher
++-- LAUNCH_CLI.bat             # CLI agent launcher
++-- run_argus_cli.py           # CLI Python entry point
++-- README.md                  # This file
 ```
+
+---
 
 ## Important Notes
 
-- **Working Directory**: Scripts should be run from `scripts/` directory
-- **Elevation**: Installation scripts require admin/elevated privileges
-- **Path Resolution**: All scripts use relative paths that adapt to project structure
-- **Deduplication**: `scripts/Setup/` has been removed - use `root/Setup/` as single source
+- **Single-Click:** Run `scripts\ARGUS_INSTALLER.ps1` for a one-command install
+  with auto-elevation.
+- **Elevation Required:** The installer handles Admin elevation internally.
+  No need to "Run as Administrator" manually.
+- **Self-Contained:** `ARGUS_INSTALLER.ps1` embeds all dependencies internally.
+  Copy ONE file and run it anywhere — no Setup/ directory needed.
+- **Post-Install:** After a successful run, `Setup/` is archived to `Setup_legacy/`.
+  The legacy files remain as a debugging fallback.
+- **Idempotent:** Re-running the installer is safe; completed steps are skipped.
+- **Log File:** Every run writes to `logs/argus_install_<timestamp>.log`.
+
+---
 
 ## Troubleshooting
 
-### Script Not Found
-- **Cause**: Script executed from wrong directory
-- **Solution**: Run from `scripts/` directory or use full path
+| Issue | Solution |
+|-------|----------|
+| "Not running as Administrator" | Accept the UAC prompt when it appears |
+| WSL2 not available after features | Reboot the system, then re-run |
+| Python 3.12 not found | Install from python.org, then re-run |
+| Ollama not starting | Check `LAUNCH_STUDIO.bat R` for a clean restart |
+| SSH bridge (port 22) down | Re-run installer; it auto-starts sshd in Kali |
 
-### Permission Denied
-- **Cause**: Script requires admin privileges
-- **Solution**: Right-click → "Run as administrator" or use `powershell -NoProfile -ExecutionPolicy Bypass`
+---
 
-### ModuleNotFoundError in CLI
-- **Cause**: Python path not set correctly
-- **Solution**: Ensure `scripts/run_argus_cli.py` is in scripts/ directory, and project root is accessible
-
-## Performance Tips
-
-- Use `LAUNCH_STUDIO.bat C` for optimal performance (auto-selects GPU or CPU mode)
-- Run `Check_Requirements.ps1` before first launch to identify issues early
-- Keep `Argus_venv/` in project root only (no duplication)
+*Maintained by: Argus Security Framework Team | June 2026*
