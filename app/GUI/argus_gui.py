@@ -2,7 +2,16 @@ import streamlit as st
 import os
 import sys
 import time
+import warnings
 from dotenv import load_dotenv
+
+# DEPRECATED: This file is kept for backward compatibility.
+# Please use app/GUI/dashboard.py instead.
+warnings.warn(
+    "app/GUI/argus_gui.py is deprecated. Use app/GUI/dashboard.py for the new unified dashboard.",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
 # Ensure project root is in path for core module access
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))

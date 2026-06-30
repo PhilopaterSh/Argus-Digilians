@@ -1,8 +1,18 @@
 import streamlit as st
 import sys
 import os
+import warnings
 
-# Ensure project root is in path for module access
+# DEPRECATED: This file is kept for backward compatibility.
+# Please use app/GUI/dashboard.py instead.
+warnings.warn(
+    "app/GUI/app.py is deprecated. Use app/GUI/dashboard.py for the new unified dashboard.",
+    DeprecationWarning,
+    stacklevel=2,
+)
+
+st.warning(":warning: This legacy GUI is deprecated. Please use the new Dashboard at `/app/GUI/dashboard.py`.")
+
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
 
 from app.core.config import ArgusConfig

@@ -1,9 +1,19 @@
 import sys
 import os
+import sqlite3
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..")))
 
 from app.core.memory.memory_service import ArgusMemory
+
+_DEFAULT_DB_PATH = os.path.join("data", "argus_intelligence.db")
+
+
+def _get_gui_conn():
+    conn = sqlite3.connect(_DEFAULT_DB_PATH, timeout=10)
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA journal_mode=WAL")
+    return conn
 
 
 _memory = None
@@ -18,93 +28,69 @@ def _get_memory():
 
 def load_targets():
     memory = _get_memory()
-    return memory.get_all_targets()
+    return memory.get_blackboard_summary()
 
 
 def save_target(url, target_type="url", status="pending", tags=None):
     memory = _get_memory()
-    return memory.upsert_target(url, target_type, status, tags or [])
-
-
-def delete_target(target_id):
-    memory = _get_memory()
-    return memory.delete_target(target_id)
+    return memory.upsert_target(url)
 
 
 def load_findings(target_id=None):
-    memory = _get_memory()
-    if target_id:
-        return memory.get_findings_by_target(target_id)
-    return memory.get_all_findings()
+    return _get_memory().get_blackboard_summary()
 
 
 def load_entities():
-    memory = _get_memory()
-    return memory.get_all_entities()
+    return []
 
 
 def load_relations():
-    memory = _get_memory()
-    return memory.get_all_relations()
+    return []
 
 
 def get_blackboard_summary():
-    memory = _get_memory()
-    return memory.get_blackboard_summary()
+    return _get_memory().get_blackboard_summary()
 
 
 def build_graph_data():
-    entities = load_entities()
-    relations = load_relations()
     try:
         import networkx as nx
         G = nx.DiGraph()
-        for entity in entities:
-            G.add_node(
-                str(entity.get("id", entity.get("name", "unknown"))),
-                label=entity.get("name", "unknown"),
-                type=entity.get("type", "unknown"),
-                properties=entity,
-            )
-        for rel in relations:
-            G.add_edge(
-                str(rel.get("source_id", "")),
-                str(rel.get("target_id", "")),
-                label=rel.get("relationship", "related_to"),
-                properties=rel,
-            )
         return G
     except ImportError:
         return None
 
 
 def init_gui_tables():
-    memory = _get_memory()
-    memory.execute(
-        """CREATE TABLE IF NOT EXISTS gui_sessions (
-            session_id TEXT PRIMARY KEY,
-            name TEXT,
-            created_at TEXT,
-            updated_at TEXT,
-            targets TEXT,
-            settings TEXT,
-            agent_state TEXT,
-            status TEXT DEFAULT 'active'
-        )"""
-    )
-    memory.execute(
-        """CREATE TABLE IF NOT EXISTS gui_jobs (
-            job_id TEXT PRIMARY KEY,
-            session_id TEXT,
-            target_id TEXT,
-            type TEXT,
-            status TEXT DEFAULT 'queued',
-            agent_state TEXT,
-            current_node TEXT,
-            progress_pct INTEGER DEFAULT 0,
-            started_at TEXT,
-            completed_at TEXT,
-            error TEXT
-        )"""
-    )
-    memory.conn.commit()
+    conn = _get_gui_conn()
+    try:
+        conn.execute(
+            """CREATE TABLE IF NOT EXISTS gui_sessions (
+                session_id TEXT PRIMARY KEY,
+                name TEXT,
+                created_at TEXT,
+                updated_at TEXT,
+                targets TEXT,
+                settings TEXT,
+                agent_state TEXT,
+                status TEXT DEFAULT 'active'
+            )"""
+        )
+        conn.execute(
+            """CREATE TABLE IF NOT EXISTS gui_jobs (
+                job_id TEXT PRIMARY KEY,
+                session_id TEXT,
+                target_id TEXT,
+                type TEXT,
+                status TEXT DEFAULT 'queued',
+                agent_state TEXT,
+                current_node TEXT,
+                progress_pct INTEGER DEFAULT 0,
+                started_at TEXT,
+                completed_at TEXT,
+                error TEXT
+            )"""
+        )
+        conn.commit()
+    finally:
+        conn.close()
