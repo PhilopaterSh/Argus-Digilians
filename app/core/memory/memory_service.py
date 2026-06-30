@@ -179,6 +179,33 @@ class ArgusMemory:
                         updated_at DATETIME
                     )
                 """)
+                conn.execute("""
+                    CREATE TABLE IF NOT EXISTS gui_sessions (
+                        session_id TEXT PRIMARY KEY,
+                        name TEXT,
+                        created_at TEXT,
+                        updated_at TEXT,
+                        targets TEXT,
+                        settings TEXT,
+                        agent_state TEXT,
+                        status TEXT DEFAULT 'active'
+                    )
+                """)
+                conn.execute("""
+                    CREATE TABLE IF NOT EXISTS gui_jobs (
+                        job_id TEXT PRIMARY KEY,
+                        session_id TEXT,
+                        target_id TEXT,
+                        type TEXT,
+                        status TEXT DEFAULT 'queued',
+                        agent_state TEXT,
+                        current_node TEXT,
+                        progress_pct INTEGER DEFAULT 0,
+                        started_at TEXT,
+                        completed_at TEXT,
+                        error TEXT
+                    )
+                """)
                 current = self._get_schema_version()
                 if current < _SCHEMA_VERSION:
                     self._set_schema_version(_SCHEMA_VERSION)
