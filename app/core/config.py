@@ -56,6 +56,7 @@ class ArgusConfig:
     model_name: str = "WhiteRabbitNeo/WhiteRabbitNeo-V3-7B:latest"
     command_timeout_seconds: int = 600
     recon_truncate_chars: int = 1000
+    max_retries: int = 3
 
     rag: RAGSettings = field(default_factory=RAGSettings)
     streamlit: StreamlitSettings = field(default_factory=StreamlitSettings)

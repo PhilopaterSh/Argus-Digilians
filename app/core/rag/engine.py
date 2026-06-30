@@ -1,3 +1,4 @@
+# DEPRECATED: This file is deprecated. Use app/core/rag/rag_engine.py instead.
 from langchain_community.llms import Ollama
 from langchain_core.prompts import PromptTemplate
 from langchain_core.output_parsers import StrOutputParser

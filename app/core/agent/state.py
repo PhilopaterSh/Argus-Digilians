@@ -1,4 +1,6 @@
-from typing import TypedDict, List, Dict, Any, Optional
+from typing import TypedDict, List, Dict, Any, Optional, Annotated
+from langchain_core.messages import BaseMessage
+from langgraph.graph.message import add_messages
 
 class AgentState(TypedDict):
     """
@@ -18,3 +20,7 @@ class AgentState(TypedDict):
     extracted_data: Dict[str, Any]
     error_log: List[str]
     retry_count: int
+    
+    # Message History for LLM reasoning and routing
+    messages: Annotated[List[BaseMessage], add_messages]
+

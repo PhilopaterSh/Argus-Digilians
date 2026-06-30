@@ -5,6 +5,7 @@ early_stopping_method: stop
 model_name: "WhiteRabbitNeo/WhiteRabbitNeo-V3-7B:latest"
 command_timeout_seconds: 600
 recon_truncate_chars: 1000
+max_retries: 3
 
 # RAG (Retrieval-Augmented Generation) settings
 rag:

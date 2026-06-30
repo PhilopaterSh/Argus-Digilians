@@ -1,3 +1,4 @@
+# DEPRECATED: This file is deprecated. Use app/core/rag/vector_store.py instead.
 from typing import List
 from langchain_core.documents import Document
 from langchain_community.vectorstores import FAISS

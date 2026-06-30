@@ -1,4 +1,6 @@
+# DEPRECATED: This module is deprecated. Use app/core/agent/graph.py instead.
 import logging
+import warnings
 from typing import Optional
 
 from app.core.registry.tool_registry import ToolRegistry
@@ -28,6 +30,26 @@ def create_brain(
     registry: Optional[ToolRegistry] = None,
     model_name: Optional[str] = None,
 ) -> ArgusBrainV2:
+    warnings.warn(
+        "create_brain is deprecated in favor of build_tactical_graph in app.core.agent.graph",
+        DeprecationWarning,
+        stacklevel=2
+    )
     if registry is None:
         registry = create_default_registry()
     return ArgusBrainV2(registry=registry, model_name=model_name)
+
+
+def build_tactical_agent():
+    """
+    Deprecated helper to get the compiled tactical agent graph.
+    Use app.core.agent.graph.build_tactical_graph directly.
+    """
+    warnings.warn(
+        "build_tactical_agent is deprecated. Use app.core.agent.graph.build_tactical_graph() instead.",
+        DeprecationWarning,
+        stacklevel=2
+    )
+    from app.core.agent.graph import build_tactical_graph
+    return build_tactical_graph()
+
