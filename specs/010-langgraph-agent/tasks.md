@@ -10,7 +10,7 @@
 
 **Purpose**: Project initialization and basic structure
 
-- [ ] T001 [P] Create initial package structure: `app/core/rag/__init__.py` and `app/core/agent/__init__.py`
+- [X] T001 [P] Create initial package structure: `app/core/rag/__init__.py` and `app/core/agent/__init__.py`
 
 ---
 
@@ -20,8 +20,8 @@
 
 **⚠️ CRITICAL**: No user story work can begin until this phase is complete
 
-- [ ] T002 Verify Python dependencies (langchain, langgraph, faiss-cpu, sqlite3) in project environment.
-- [ ] T003 Setup Blackboard SQLite schema connection logic (for later use by Post-Exploit)
+- [X] T002 Verify Python dependencies (langchain, langgraph, faiss-cpu, sqlite3) in project environment.
+- [X] T003 Setup Blackboard SQLite schema connection logic (for later use by Post-Exploit)
 
 **Checkpoint**: Foundation ready - user story implementation can now begin in parallel
 
@@ -35,10 +35,10 @@
 
 ### Implementation for User Story 1
 
-- [ ] T004 [P] [US1] Create RAG Document Chunk schema in `app/core/rag/processor.py`
-- [ ] T005 [US1] Implement LangChain text splitters and loaders in `app/core/rag/processor.py`
-- [ ] T006 [P] [US1] Implement FAISS vector store and OllamaEmbeddings integration in `app/core/rag/vectorstore.py`
-- [ ] T007 [US1] Implement linear RAG querying flow chain in `app/core/rag/engine.py` (depends on T005, T006)
+- [X] T004 [P] [US1] Create RAG Document Chunk schema in `app/core/rag/processor.py`
+- [X] T005 [US1] Implement LangChain text splitters and loaders in `app/core/rag/processor.py`
+- [X] T006 [P] [US1] Implement FAISS vector store and OllamaEmbeddings integration in `app/core/rag/vectorstore.py`
+- [X] T007 [US1] Implement linear RAG querying flow chain in `app/core/rag/engine.py` (depends on T005, T006)
 
 **Checkpoint**: At this point, User Story 1 (RAG Engine) should be fully functional and testable independently.
 
@@ -52,13 +52,13 @@
 
 ### Implementation for User Story 2
 
-- [ ] T008 [P] [US2] Define Tactical Agent State (`TypedDict`) in `app/core/agent/state.py`
-- [ ] T009 [P] [US2] Implement Recon Node function in `app/core/agent/nodes/recon.py`
-- [ ] T010 [P] [US2] Implement Scanner Node function in `app/core/agent/nodes/scanner.py`
-- [ ] T011 [P] [US2] Implement Exploit Node function in `app/core/agent/nodes/exploit.py`
-- [ ] T012 [P] [US2] Implement Reflective Node (Verify/Modify) function in `app/core/agent/nodes/reflective.py`
-- [ ] T013 [P] [US2] Implement Post-Exploit Node function in `app/core/agent/nodes/post_exploit.py`
-- [ ] T014 [US2] Compile LangGraph workflow and state transitions in `app/core/agent/graph.py` (depends on T008-T013)
+- [X] T008 [P] [US2] Define Tactical Agent State (`TypedDict`) in `app/core/agent/state.py`
+- [X] T009 [P] [US2] Implement Recon Node function in `app/core/agent/nodes/recon.py`
+- [X] T010 [P] [US2] Implement Scanner Node function in `app/core/agent/nodes/scanner.py`
+- [X] T011 [P] [US2] Implement Exploit Node function in `app/core/agent/nodes/exploit.py`
+- [X] T012 [P] [US2] Implement Reflective Node (Verify/Modify) function in `app/core/agent/nodes/reflective.py`
+- [X] T013 [P] [US2] Implement Post-Exploit Node function in `app/core/agent/nodes/post_exploit.py`
+- [X] T014 [US2] Compile LangGraph workflow and state transitions in `app/core/agent/graph.py` (depends on T008-T013)
 
 **Checkpoint**: At this point, User Stories 1 AND 2 should both work independently.
 
@@ -68,9 +68,9 @@
 
 **Purpose**: Improvements that affect multiple user stories
 
-- [ ] T015 [P] Create standalone test script `scripts/test_rag.py` to validate US1
-- [ ] T016 [P] Create standalone test script `scripts/test_agent.py` to validate US2
-- [ ] T017 Validate architectural rules are strictly followed (no loops in RAG, explicit state in Agent)
+- [X] T015 [P] Create standalone test script `scripts/test_rag.py` to validate US1
+- [X] T016 [P] Create standalone test script `scripts/test_agent.py` to validate US2
+- [X] T017 Validate architectural rules are strictly followed (no loops in RAG, explicit state in Agent)
 
 ---
 
