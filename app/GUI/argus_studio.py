@@ -13,15 +13,11 @@ st.set_page_config(
 
 from app.GUI.components.status_bar import render_status_bar
 from app.GUI.utils.blackboard import init_gui_tables
-from app.GUI.utils.agent_controller import AgentController
 
 try:
     init_gui_tables()
 except Exception:
     pass
-
-if "agent_controller" not in st.session_state:
-    st.session_state.agent_controller = AgentController()
 
 if "targets" not in st.session_state:
     st.session_state.targets = []
@@ -39,6 +35,9 @@ if "active_session" not in st.session_state:
     st.session_state.active_session = None
 if "agent_running" not in st.session_state:
     st.session_state.agent_running = False
+if "agent_controller" not in st.session_state:
+    from app.GUI.utils.agent_controller import AgentController
+    st.session_state.agent_controller = AgentController()
 
 st.markdown("""
     <style>
@@ -56,26 +55,27 @@ page = st.sidebar.radio(
     "Navigation",
     ["Dashboard", "Targets", "Agent", "Knowledge Graph", "Reports", "Settings"],
     label_visibility="collapsed",
+    key="nav_radio",
 )
 
 st.sidebar.markdown("---")
 render_status_bar()
 
 if page == "Dashboard":
-    from app.GUI.tabs.overview import render_dashboard as render_overview
-    render_overview()
+    from app.GUI.pages.dashboard import render_dashboard
+    render_dashboard()
 elif page == "Targets":
-    from app.GUI.tabs.targets import render_targets
+    from app.GUI.pages.targets import render_targets
     render_targets()
 elif page == "Agent":
-    from app.GUI.tabs.agent import render_agent
+    from app.GUI.pages.agent import render_agent
     render_agent()
 elif page == "Knowledge Graph":
-    from app.GUI.tabs.knowledge_graph import render_knowledge_graph
+    from app.GUI.pages.knowledge_graph import render_knowledge_graph
     render_knowledge_graph()
 elif page == "Reports":
-    from app.GUI.tabs.reports import render_reports
+    from app.GUI.pages.reports import render_reports
     render_reports()
 elif page == "Settings":
-    from app.GUI.tabs.settings import render_settings
+    from app.GUI.pages.settings import render_settings
     render_settings()
