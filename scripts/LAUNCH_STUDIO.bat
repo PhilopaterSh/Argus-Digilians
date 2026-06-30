@@ -93,6 +93,6 @@ echo [INFO] The browser will open automatically. Please wait 10 seconds.
 
 cd /d "%PROJECT_ROOT%"
 start http://localhost:12199
-Argus_venv\Scripts\python.exe -m streamlit run app/GUI/argus_studio.py --server.port 12199 --server.headless true --server.enableCORS false --server.enableXsrfProtection false
+Argus_venv\Scripts\python.exe -m streamlit run app/GUI/dashboard.py --server.port 12199 --server.headless true --server.enableCORS false --server.enableXsrfProtection false
 
 pause
