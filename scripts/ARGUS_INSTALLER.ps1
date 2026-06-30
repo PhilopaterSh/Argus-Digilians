@@ -1318,62 +1318,64 @@ function Show-FinalReport {
 # ============================================================================
 # MAIN PIPELINE
 # ============================================================================
-Write-Header "ARGUS SECURITY FRAMEWORK - INSTALLER (Self-Contained)"
-if ($DryRun) { Write-Warn "DRY RUN mode: no system changes will be made." }
+if ($MyInvocation.InvocationName -ne '.') {
+    Write-Header "ARGUS SECURITY FRAMEWORK - INSTALLER (Self-Contained)"
+    if ($DryRun) { Write-Warn "DRY RUN mode: no system changes will be made." }
 
-# -OnlyHealthCheck: fast diagnostic, no elevation, no install steps.
-if ($OnlyHealthCheck) {
-    Write-Info "OnlyHealthCheck mode — skipping self-elevation and all install steps."
-    $healthy = Invoke-HealthCheck
-    exit $(if ($healthy) { 0 } else { 1 })
+    # -OnlyHealthCheck: fast diagnostic, no elevation, no install steps.
+    if ($OnlyHealthCheck) {
+        Write-Info "OnlyHealthCheck mode — skipping self-elevation and all install steps."
+        $healthy = Invoke-HealthCheck
+        exit $(if ($healthy) { 0 } else { 1 })
+    }
+
+    # Admin-first: self-elevate before anything mutating happens.
+    Invoke-SelfElevation
+
+    # At this point we are guaranteed to be elevated (or the user declined elevation).
+    if (-not (Test-IsAdministrator)) {
+        Write-Err "Administrator privileges are required. Aborting."
+        Write-Info "Right-click PowerShell -> 'Run as administrator' and rerun."
+        exit 1
+    }
+    Write-OK "Running with Administrator privileges."
+    Write-OK "This script is fully self-contained - no external file dependencies."
+
+    $null = Test-SystemReadiness
+
+    # Step 1 - Python (critical prerequisite)
+    if (-not (Install-Python)) {
+        Write-Err "Python prerequisite not satisfied. Aborting before system-changing steps."
+        $null = Show-FinalReport -Failed @(1)
+        exit 10
+    }
+
+    # Steps 2..7 - orchestrated, non-critical failures collected
+    $failed = @()
+
+    $ok2 = Invoke-StepHostFoundation
+    if (-not $ok2) { $failed += 2 }
+
+    $ok3 = Invoke-StepAiEnvironment
+    if (-not $ok3) { $failed += 3 }
+
+    $ok4 = Invoke-StepKaliTools
+    if (-not $ok4) { $failed += 4 }
+
+    $ok5 = Invoke-StepSshBridge
+    if (-not $ok5) { $failed += 5 }
+
+    # Step 6 - embedded health check
+    if (-not $SkipHealthCheck) {
+        $null = Invoke-HealthCheck
+    } else {
+        Write-Info "Health check skipped (-SkipHealthCheck)."
+    }
+
+    # Step 7 - cleanup (archive Setup/ to Setup_legacy/)
+    $ok7 = Invoke-StepCleanup
+    if (-not $ok7) { $failed += 7 }
+
+    $exitCode = Show-FinalReport -Failed $failed
+    exit $exitCode
 }
-
-# Admin-first: self-elevate before anything mutating happens.
-Invoke-SelfElevation
-
-# At this point we are guaranteed to be elevated (or the user declined elevation).
-if (-not (Test-IsAdministrator)) {
-    Write-Err "Administrator privileges are required. Aborting."
-    Write-Info "Right-click PowerShell -> 'Run as administrator' and rerun."
-    exit 1
-}
-Write-OK "Running with Administrator privileges."
-Write-OK "This script is fully self-contained - no external file dependencies."
-
-$null = Test-SystemReadiness
-
-# Step 1 - Python (critical prerequisite)
-if (-not (Install-Python)) {
-    Write-Err "Python prerequisite not satisfied. Aborting before system-changing steps."
-    $null = Show-FinalReport -Failed @(1)
-    exit 10
-}
-
-# Steps 2..7 - orchestrated, non-critical failures collected
-$failed = @()
-
-$ok2 = Invoke-StepHostFoundation
-if (-not $ok2) { $failed += 2 }
-
-$ok3 = Invoke-StepAiEnvironment
-if (-not $ok3) { $failed += 3 }
-
-$ok4 = Invoke-StepKaliTools
-if (-not $ok4) { $failed += 4 }
-
-$ok5 = Invoke-StepSshBridge
-if (-not $ok5) { $failed += 5 }
-
-# Step 6 - embedded health check
-if (-not $SkipHealthCheck) {
-    $null = Invoke-HealthCheck
-} else {
-    Write-Info "Health check skipped (-SkipHealthCheck)."
-}
-
-# Step 7 - cleanup (archive Setup/ to Setup_legacy/)
-$ok7 = Invoke-StepCleanup
-if (-not $ok7) { $failed += 7 }
-
-$exitCode = Show-FinalReport -Failed $failed
-exit $exitCode
