@@ -11,7 +11,7 @@
 
     This script embeds all external dependencies (requirements.txt,
     check_and_install.sh, argus_recon_fixed.sh) internally as here-strings.
-    It has ZERO external file dependencies — copy this ONE file and run it.
+    It has ZERO external file dependencies ??? copy this ONE file and run it.
 
     After a successful first run, the old Setup/ directory is archived to
     Setup_legacy/.
@@ -29,7 +29,7 @@
     Skip the embedded final health check.
 
 .PARAMETER OnlyHealthCheck
-    Run ONLY the embedded health check — no self-elevation, no install steps,
+    Run ONLY the embedded health check ??? no self-elevation, no install steps,
     no cleanup. Exits with 0 if healthy, non-zero otherwise.
 
 .PARAMETER RetryCount
@@ -59,7 +59,7 @@ param(
 # EMBEDDED DEPENDENCIES (self-contained: no external files needed)
 # ============================================================================
 
-# requirements.txt — Python package dependencies
+# requirements.txt ??? Python package dependencies
 $EMBEDDED_REQUIREMENTS = @"
 langchain
 langchain-ollama
@@ -78,7 +78,7 @@ paramiko
 torchvision
 "@
 
-# check_and_install.sh — Kali Linux tool installer (run inside WSL as root)
+# check_and_install.sh ??? Kali Linux tool installer (run inside WSL as root)
 $EMBEDDED_CHECK_INSTALL_SH = @'
 #!/usr/bin/env bash
 set -u
@@ -464,7 +464,7 @@ echo "[OK] Argus environment is synchronized."
 echo "========================================================"
 '@
 
-# argus_recon_fixed.sh — standalone recon script (legacy, embedded for reference)
+# argus_recon_fixed.sh ??? standalone recon script (legacy, embedded for reference)
 $EMBEDDED_ARGUS_RECON_SH = @'
 #!/bin/bash
 # Argus Recon Engine - Robust Version
@@ -1324,7 +1324,7 @@ if ($MyInvocation.InvocationName -ne '.') {
 
     # -OnlyHealthCheck: fast diagnostic, no elevation, no install steps.
     if ($OnlyHealthCheck) {
-        Write-Info "OnlyHealthCheck mode — skipping self-elevation and all install steps."
+        Write-Info "OnlyHealthCheck mode ??? skipping self-elevation and all install steps."
         $healthy = Invoke-HealthCheck
         exit $(if ($healthy) { 0 } else { 1 })
     }
