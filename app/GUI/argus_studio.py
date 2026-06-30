@@ -62,20 +62,20 @@ st.sidebar.markdown("---")
 render_status_bar()
 
 if page == "Dashboard":
-    from app.GUI.pages.dashboard import render_dashboard
-    render_dashboard()
+    from app.GUI.tabs.overview import render_dashboard as render_overview
+    render_overview()
 elif page == "Targets":
-    from app.GUI.pages.targets import render_targets
+    from app.GUI.tabs.targets import render_targets
     render_targets()
 elif page == "Agent":
-    from app.GUI.pages.agent import render_agent
+    from app.GUI.tabs.agent import render_agent
     render_agent()
 elif page == "Knowledge Graph":
-    from app.GUI.pages.knowledge_graph import render_knowledge_graph
+    from app.GUI.tabs.knowledge_graph import render_knowledge_graph
     render_knowledge_graph()
 elif page == "Reports":
-    from app.GUI.pages.reports import render_reports
+    from app.GUI.tabs.reports import render_reports
     render_reports()
 elif page == "Settings":
-    from app.GUI.pages.settings import render_settings
+    from app.GUI.tabs.settings import render_settings
     render_settings()
