@@ -21,6 +21,7 @@ ARGUS_INSTALLATION.log
 streamlit.err.log
 streamlit.out.log
 logs/*.log  # Ignore generated logs
+logs/agent_runs/*.json  # Agent run state files
 
 # Project Specific
 reports/
