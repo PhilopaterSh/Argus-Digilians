@@ -13,11 +13,15 @@ st.set_page_config(
 
 from app.GUI.components.status_bar import render_status_bar
 from app.GUI.utils.blackboard import init_gui_tables
+from app.GUI.utils.agent_controller import AgentController
 
 try:
     init_gui_tables()
 except Exception:
     pass
+
+if "agent_controller" not in st.session_state:
+    st.session_state.agent_controller = AgentController()
 
 if "targets" not in st.session_state:
     st.session_state.targets = []
