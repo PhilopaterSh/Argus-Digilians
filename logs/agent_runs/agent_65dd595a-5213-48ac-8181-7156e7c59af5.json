@@ -1,0 +1,57 @@
+{
+  "status": "completed",
+  "current_node": "post_exploit",
+  "target": "https://example.com",
+  "events": [
+    {
+      "node": "recon",
+      "status": "running",
+      "detail": "Starting reconnaissance on https://example.com",
+      "timestamp": "2026-06-30T11:55:04.975466"
+    },
+    {
+      "node": "recon",
+      "status": "completed",
+      "detail": "Recon complete",
+      "timestamp": "2026-06-30T11:55:04.998812"
+    },
+    {
+      "node": "scanner",
+      "status": "running",
+      "detail": "Scanning for vulnerabilities",
+      "timestamp": "2026-06-30T11:55:05.006719"
+    },
+    {
+      "node": "scanner",
+      "status": "completed",
+      "detail": "Scan complete",
+      "timestamp": "2026-06-30T11:55:06.015884"
+    },
+    {
+      "node": "exploit",
+      "status": "running",
+      "detail": "Attempting exploitation",
+      "timestamp": "2026-06-30T11:55:06.026351"
+    },
+    {
+      "node": "exploit",
+      "status": "completed",
+      "detail": "Exploitation complete",
+      "timestamp": "2026-06-30T11:55:06.037184"
+    },
+    {
+      "node": "post_exploit",
+      "status": "running",
+      "detail": "Processing results",
+      "timestamp": "2026-06-30T11:55:06.042217"
+    },
+    {
+      "node": "post_exploit",
+      "status": "completed",
+      "detail": "Post-exploit complete",
+      "timestamp": "2026-06-30T11:55:06.047217"
+    }
+  ],
+  "started_at": "2026-06-30T08:55:00.000020+00:00",
+  "progress_pct": 100
+}

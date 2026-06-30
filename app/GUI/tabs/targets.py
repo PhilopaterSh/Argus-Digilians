@@ -68,7 +68,11 @@ def render_targets():
             with cols[3]:
                 if st.button(":rocket: Run", key=f"run_{target['id']}"):
                     target["status"] = "running"
-                    st.session_state.agent_target = target
+                    controller = st.session_state.get("agent_controller")
+                    if controller:
+                        controller.start(target["url"])
+                    st.session_state.agent_running = True
+                    st.session_state.current_agent_target = target["url"]
                     st.rerun()
             with cols[4]:
                 if st.button(":wastebasket:", key=f"del_{target['id']}"):

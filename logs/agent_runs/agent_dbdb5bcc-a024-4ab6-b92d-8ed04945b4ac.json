@@ -1,0 +1,7 @@
+{
+  "status": "stopped",
+  "current_node": "terminated",
+  "target": "http://test.com:8080",
+  "events": [],
+  "started_at": "2026-06-30T09:12:38.966598+00:00"
+}
