@@ -9,5 +9,3 @@ warnings.warn(
     DeprecationWarning,
     stacklevel=2,
 )
-
-from app.GUI.dashboard import *

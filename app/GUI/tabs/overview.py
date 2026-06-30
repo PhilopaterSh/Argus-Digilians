@@ -26,16 +26,20 @@ def render_dashboard():
     qc1, qc2, qc3, qc4 = st.columns(4)
     with qc1:
         if st.button(":dart: New Target", use_container_width=True):
-            st.switch_page("app/GUI/pages/targets.py")
+            st.session_state.targets_tab_open = True
+            st.rerun()
     with qc2:
         if st.button(":rocket: Start Agent", use_container_width=True):
-            st.switch_page("app/GUI/pages/agent.py")
+            st.session_state.agent_tab_open = True
+            st.rerun()
     with qc3:
         if st.button(":page_facing_up: Generate Report", use_container_width=True):
-            st.switch_page("app/GUI/pages/reports.py")
+            st.session_state.reports_tab_open = True
+            st.rerun()
     with qc4:
         if st.button(":gear: Settings", use_container_width=True):
-            st.switch_page("app/GUI/pages/settings.py")
+            st.session_state.settings_tab_open = True
+            st.rerun()
 
     st.markdown("---")
     st.subheader(":clock3: Recent Activity")

@@ -11,13 +11,13 @@ def test_dashboard_imports():
 
 
 def test_pages_imports():
-    from app.GUI.pages.dashboard import render_dashboard
-    from app.GUI.pages.targets import render_targets
-    from app.GUI.pages.agent import render_agent
-    from app.GUI.pages.reports import render_reports
-    from app.GUI.pages.settings import render_settings
-    from app.GUI.pages.knowledge_graph import render_knowledge_graph
-    assert callable(render_dashboard)
+    from app.GUI.tabs.overview import render_dashboard as render_overview
+    from app.GUI.tabs.targets import render_targets
+    from app.GUI.tabs.agent import render_agent
+    from app.GUI.tabs.reports import render_reports
+    from app.GUI.tabs.settings import render_settings
+    from app.GUI.tabs.knowledge_graph import render_knowledge_graph
+    assert callable(render_overview)
     assert callable(render_targets)
     assert callable(render_agent)
     assert callable(render_reports)
