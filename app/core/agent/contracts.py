@@ -1,25 +1,16 @@
-"""Canonical runtime contracts for the tactical agent.
-
-Production mode is the default runtime:
-- execute the real LangGraph workflow
-- write truthful state snapshots
-- fail clearly on timeout or dependency errors
-
-Demo/Test modes are explicit opt-in paths:
-- they may simulate progress for UI or smoke testing
-- they must never be the default production behavior
-"""
+"""Canonical runtime contracts for the tactical agent."""
 
 from __future__ import annotations
 
+import json
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Dict, List, NotRequired, Optional, TypedDict
 
 from langchain_core.messages import HumanMessage
 
 AGENT_RUNNER_ENTRYPOINT = "scripts/run_agent.py"
 STREAMLIT_DASHBOARD_ENTRYPOINT = "app/GUI/argus_studio.py"
-
 AGENT_RUN_MODE_PRODUCTION = "production"
 AGENT_RUN_MODE_DEMO = "demo"
 AGENT_RUN_MODE_TEST = "test"
@@ -63,21 +54,8 @@ def normalize_run_mode(value: Optional[str]) -> str:
     return DEFAULT_AGENT_RUN_MODE
 
 
-def build_run_event(
-    node: str,
-    status: str,
-    detail: str,
-    *,
-    run_id: Optional[str] = None,
-    target: Optional[str] = None,
-    mode: Optional[str] = None,
-) -> AgentRunEvent:
-    event: AgentRunEvent = {
-        "node": node,
-        "status": status,
-        "detail": detail,
-        "timestamp": utc_now_iso(),
-    }
+def build_run_event(node: str, status: str, detail: str, *, run_id: Optional[str] = None, target: Optional[str] = None, mode: Optional[str] = None) -> AgentRunEvent:
+    event: AgentRunEvent = {"node": node, "status": status, "detail": detail, "timestamp": utc_now_iso()}
     if run_id:
         event["run_id"] = run_id
     if target:
@@ -87,20 +65,7 @@ def build_run_event(
     return event
 
 
-def build_run_snapshot(
-    run_id: str,
-    target: str,
-    mode: str,
-    *,
-    status: str = "starting",
-    current_node: str = "init",
-    progress_pct: int = 0,
-    final_state: Optional[Dict[str, Any]] = None,
-    error: Optional[str] = None,
-    started_at: Optional[str] = None,
-    updated_at: Optional[str] = None,
-    events: Optional[List[AgentRunEvent]] = None,
-) -> AgentRunSnapshot:
+def build_run_snapshot(run_id: str, target: str, mode: str, *, status: str = "starting", current_node: str = "init", progress_pct: int = 0, final_state: Optional[Dict[str, Any]] = None, error: Optional[str] = None, started_at: Optional[str] = None, updated_at: Optional[str] = None, events: Optional[List[AgentRunEvent]] = None) -> AgentRunSnapshot:
     now = utc_now_iso()
     return {
         "run_id": run_id,
@@ -117,10 +82,11 @@ def build_run_snapshot(
     }
 
 
-def build_initial_agent_state(target: str, run_id: str, mode: str) -> Dict[str, Any]:
+def build_initial_agent_state(target: str, run_id: str, mode: str, state_file: str) -> Dict[str, Any]:
     now = utc_now_iso()
     return {
         "run_id": run_id,
+        "state_file": state_file,
         "target_ip": target,
         "mode": mode,
         "status": "starting",
@@ -128,6 +94,7 @@ def build_initial_agent_state(target: str, run_id: str, mode: str) -> Dict[str, 
         "started_at": now,
         "updated_at": now,
         "progress_pct": 0,
+        "events": [],
         "open_ports": [],
         "vulnerabilities": [],
         "current_payload": None,
@@ -137,6 +104,58 @@ def build_initial_agent_state(target: str, run_id: str, mode: str) -> Dict[str, 
         "error_log": [],
         "retry_count": 0,
         "last_error": None,
+        "last_probe_output": None,
         "final_state": {},
         "messages": [HumanMessage(content=f"Execute pentest on {target}")],
     }
+
+
+def load_json_file(path: str) -> Dict[str, Any]:
+    file_path = Path(path)
+    if not file_path.exists():
+        return {}
+    try:
+        return json.loads(file_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return {}
+
+
+def write_json_file(path: str, payload: Dict[str, Any]) -> None:
+    file_path = Path(path)
+    file_path.parent.mkdir(parents=True, exist_ok=True)
+    file_path.write_text(json.dumps(payload, indent=2, default=str), encoding="utf-8")
+
+
+def append_run_event(state_file: str, event: AgentRunEvent) -> None:
+    state = load_json_file(state_file)
+    events = list(state.get("events", []))
+    events.append(event)
+    state["events"] = events
+    state["current_node"] = event.get("node", state.get("current_node", "unknown"))
+    state["status"] = event.get("status", state.get("status", "unknown"))
+    state["updated_at"] = event.get("timestamp", utc_now_iso())
+    if event.get("run_id"):
+        state["run_id"] = event["run_id"]
+    if event.get("target"):
+        state["target"] = event["target"]
+    if event.get("mode"):
+        state["mode"] = event["mode"]
+    write_json_file(state_file, state)
+
+
+def record_state_event(state: Dict[str, Any], node: str, status: str, detail: str) -> Dict[str, Any]:
+    event = build_run_event(node, status, detail, run_id=state.get("run_id"), target=state.get("target_ip"), mode=state.get("mode"))
+    events = list(state.get("events", []))
+    events.append(event)
+    state["events"] = events
+    state["current_node"] = node
+    state["status"] = status
+    state["updated_at"] = event["timestamp"]
+    state_file = state.get("state_file")
+    if state_file:
+        append_run_event(state_file, event)
+    return state
+
+
+def persist_run_snapshot(state_file: str, snapshot: AgentRunSnapshot) -> None:
+    write_json_file(state_file, snapshot)

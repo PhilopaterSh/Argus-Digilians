@@ -8,6 +8,7 @@ class AgentState(TypedDict):
     """Canonical runtime state passed between LangGraph nodes."""
 
     run_id: str
+    state_file: str
     target_ip: str
     mode: str
     status: str
@@ -15,6 +16,7 @@ class AgentState(TypedDict):
     started_at: str
     updated_at: str
     progress_pct: int
+    events: List[Dict[str, Any]]
     open_ports: List[int]
     vulnerabilities: List[Dict[str, Any]]
     current_payload: Optional[str]
@@ -24,5 +26,6 @@ class AgentState(TypedDict):
     error_log: List[str]
     retry_count: int
     last_error: Optional[str]
+    last_probe_output: Optional[str]
     final_state: Dict[str, Any]
     messages: Annotated[List[BaseMessage], add_messages]
