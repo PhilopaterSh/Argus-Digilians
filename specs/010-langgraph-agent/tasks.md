@@ -1,138 +1,59 @@
 # Tasks: LangGraph Agent & LangChain RAG Architecture
 
-**Input**: Design documents from `/specs/010-langgraph-agent/`
+**Input**: Updated plan from `/specs/010-langgraph-agent/plan.md`
 
-**Prerequisites**: plan.md (required), spec.md (required for user stories), research.md, data-model.md, quickstart.md
+**Goal**: deliver a reliable MVP first, then harden observability and resilience.
 
-**Organization**: Tasks are grouped by user story to enable independent implementation and testing of each story.
+## Phase 0: Foundation Alignment
 
-## Phase 1: Setup (Shared Infrastructure)
+- [ ] T001 Define the canonical runtime entrypoints for the Streamlit dashboard and the agent runner.
+- [ ] T002 Lock the `AgentState` schema to include durable messages, retry counters, and result fields.
+- [ ] T003 Define the JSON shape for agent run events and final snapshots.
+- [ ] T004 Document the production vs demo/test behavior split for fallbacks.
 
-**Purpose**: Project initialization and basic structure
+## Phase 1: RAG MVP
 
-- [X] T001 [P] Create initial package structure: `app/core/rag/__init__.py` and `app/core/agent/__init__.py`
+- [ ] T005 Implement document loading and chunk creation in `app/core/rag/processor.py`.
+- [ ] T006 Implement `RecursiveCharacterTextSplitter`-based splitting in `app/core/rag/processor.py`.
+- [ ] T007 Implement Ollama embeddings plus FAISS indexing in `app/core/rag/vectorstore.py`.
+- [ ] T008 Implement the linear retrieval/query flow in `app/core/rag/engine.py`.
+- [ ] T009 Add a smoke test script for retrieval and answer generation.
 
----
+## Phase 2: Tactical Agent MVP
 
-## Phase 2: Foundational (Blocking Prerequisites)
+- [ ] T010 Implement the recon node without synthetic success data in `app/core/agent/nodes/recon.py`.
+- [ ] T011 Implement the scanner node with real scan result ingestion in `app/core/agent/nodes/scanner.py`.
+- [ ] T012 Implement the exploit node with explicit success/failure reporting in `app/core/agent/nodes/exploit.py`.
+- [ ] T013 Implement the reflective node with real verification/context handling in `app/core/agent/nodes/reflective.py`.
+- [ ] T014 Implement the post-exploit node to persist final results to the blackboard in `app/core/agent/nodes/post_exploit.py`.
+- [ ] T015 Compile the LangGraph workflow in `app/core/agent/graph.py` with explicit termination rules and retry bounds.
+- [ ] T016 Add a configurable `MAX_RETRIES` / recursion limit guard to the agent graph.
 
-**Purpose**: Core infrastructure that MUST be complete before ANY user story can be implemented
+## Phase 3: Observability and UI
 
-**⚠️ CRITICAL**: No user story work can begin until this phase is complete
+- [ ] T017 Write structured run events from the agent runner in `scripts/run_agent.py`.
+- [ ] T018 Persist completed and failed run snapshots in `logs/agent_runs/`.
+- [ ] T019 Update the Agent tab to render completed and failed final_state data.
+- [ ] T020 Add UI refresh logic that does not rely only on in-memory session state.
+- [ ] T021 Surface blackboard counts and run status in the status bar.
 
-- [X] T002 Verify Python dependencies (langchain, langgraph, faiss-cpu, sqlite3) in project environment.
-- [X] T003 Setup Blackboard SQLite schema connection logic (for later use by Post-Exploit)
+## Phase 4: Hardening
 
-**Checkpoint**: Foundation ready - user story implementation can now begin in parallel
+- [ ] T022 Add JSON serialization safety for agent snapshots and blackboard writes.
+- [ ] T023 Add schema/version checks for the blackboard initialization path.
+- [ ] T024 Add dependency-failure handling for Ollama, WSL, and missing tools.
+- [ ] T025 Limit self-heal behavior to genuine dependency failures only.
 
----
+## Phase 5: Validation
 
-## Phase 3: User Story 1 - RAG Query Execution (Priority: P1) 🎯 MVP
+- [ ] T026 Add a test that proves the RAG pipeline returns grounded local context.
+- [ ] T027 Add a test that proves the agent terminates after success or retry exhaustion.
+- [ ] T028 Add a test that proves the UI can display the final_state after completion.
+- [ ] T029 Add a test that proves failed runs are not hidden as running.
+- [ ] T030 Run `py_compile` or equivalent syntax checks for edited Python modules.
 
-**Goal**: Execute deterministic, linear Retrieval-Augmented Generation operations to answer user queries based on indexed files without complex feedback loops.
+## Out Of Scope For MVP
 
-**Independent Test**: Can be tested by loading a sample document into FAISS, querying it, and verifying the LLM receives the correct chunks.
-
-### Implementation for User Story 1
-
-- [X] T004 [P] [US1] Create RAG Document Chunk schema in `app/core/rag/processor.py`
-- [X] T005 [US1] Implement LangChain text splitters and loaders in `app/core/rag/processor.py`
-- [X] T006 [P] [US1] Implement FAISS vector store and OllamaEmbeddings integration in `app/core/rag/vectorstore.py`
-- [X] T007 [US1] Implement linear RAG querying flow chain in `app/core/rag/engine.py` (depends on T005, T006)
-
-**Checkpoint**: At this point, User Story 1 (RAG Engine) should be fully functional and testable independently.
-
----
-
-## Phase 4: User Story 2 - Tactical PenTest Agent Execution (Priority: P1)
-
-**Goal**: Use a stateful, cyclical feedback loop (LangGraph) to execute tactical operations, react to defenses, and iteratively modify payloads.
-
-**Independent Test**: Can be tested by simulating a blocked payload and verifying the agent routes to the Reflective Node and re-attempts the exploit.
-
-### Implementation for User Story 2
-
-- [X] T008 [P] [US2] Define Tactical Agent State (`TypedDict`) in `app/core/agent/state.py`
-- [X] T009 [P] [US2] Implement Recon Node function in `app/core/agent/nodes/recon.py`
-- [X] T010 [P] [US2] Implement Scanner Node function in `app/core/agent/nodes/scanner.py`
-- [X] T011 [P] [US2] Implement Exploit Node function in `app/core/agent/nodes/exploit.py`
-- [X] T012 [P] [US2] Implement Reflective Node (Verify/Modify) function in `app/core/agent/nodes/reflective.py`
-- [X] T013 [P] [US2] Implement Post-Exploit Node function in `app/core/agent/nodes/post_exploit.py`
-- [X] T014 [US2] Compile LangGraph workflow and state transitions in `app/core/agent/graph.py` (depends on T008-T013)
-
-**Checkpoint**: At this point, User Stories 1 AND 2 should both work independently.
-
----
-
-## Phase 5: Polish & Cross-Cutting Concerns
-
-**Purpose**: Improvements that affect multiple user stories
-
-- [X] T015 [P] Create standalone test script `scripts/test_rag.py` to validate US1
-- [X] T016 [P] Create standalone test script `scripts/test_agent.py` to validate US2
-- [X] T017 Validate architectural rules are strictly followed (no loops in RAG, explicit state in Agent)
-
----
-
-## Dependencies & Execution Order
-
-### Phase Dependencies
-
-- **Setup (Phase 1)**: No dependencies - can start immediately
-- **Foundational (Phase 2)**: Depends on Setup completion - BLOCKS all user stories
-- **User Stories (Phase 3+)**: All depend on Foundational phase completion
-  - Both US1 and US2 are P1 priority and can run in parallel.
-- **Polish (Final Phase)**: Depends on all desired user stories being complete
-
-### User Story Dependencies
-
-- **User Story 1 (P1)**: Can start after Foundational (Phase 2)
-- **User Story 2 (P1)**: Can start after Foundational (Phase 2)
-
-### Parallel Opportunities
-
-- All Setup tasks marked [P] can run in parallel
-- Node creation inside US2 (T009-T013) can run completely in parallel before graph compilation.
-- Standalone test script creation (T015, T016) can run in parallel.
-
----
-
-## Implementation Strategy
-
-### Incremental Delivery
-
-1. Complete Setup + Foundational → Foundation ready
-2. Add User Story 1 (RAG) → Test independently → Validate linear flow
-3. Add User Story 2 (Tactical Agent) → Test independently → Validate cyclical execution
-4. Both architectures demonstrate their respective strengths side-by-side.
-
----
-
-## Phase 6: Convergence
-
-> **Generated by**: `/speckit.converge` on 2026-06-30  
-> **Outcome**: `tasks_appended` — 12 gaps found (3 CRITICAL, 5 HIGH, 2 MEDIUM, 1 LOW, 1 UNREQUESTED)
-
-### CRITICAL — Must fix before the agent can be considered functional
-
-- [ ] T018 [US2] Wire `recon_node` in `app/core/agent/nodes/recon.py` to call the real `ReconService.recon_suite()` from `app/tools/recon.py` via WSL bridge instead of hardcoded `state["open_ports"] = [8080]` per FR-002, spec US2/AC1 (contradicts)
-- [ ] T019 [US2] Replace string-matching logic in `app/core/agent/nodes/reflective.py` with a real LLM call using `ReflectiveVerificationService` from `app/tools/reflective_verification.py`, passing `state["error_log"]` as context per FR-003, spec US2/AC1 (contradicts)
-- [ ] T020 [P] Replace all `print()` statements in `app/core/agent/nodes/*.py` with `logging.getLogger(__name__)` structured logging to comply with Constitution V Observability (contradicts)
-
-### HIGH — Core functional gaps
-
-- [ ] T021 [US2] Add `messages: Annotated[List[BaseMessage], add_messages]` field to `AgentState` in `app/core/agent/state.py` to enable LLM message passing inside LangGraph nodes per FR-004, data-model.md (missing)
-- [ ] T022 [US1] Designate `app/core/rag/rag_engine.py` + `app/core/rag/vector_store.py` as the canonical RAG implementation and mark `app/core/rag/engine.py` and `app/core/rag/vectorstore.py` as deprecated (add `# DEPRECATED` header). Update `scripts/test_rag.py` to import from `rag_engine.py` per FR-001, plan.md (missing)
-- [ ] T023 Add JSON serialization safety to `save_entry()` in `app/core/agent/blackboard.py` by using `json.dumps(state_snapshot, default=str)` to prevent crashes on non-serializable state objects per FR-005, spec US2/AC2 (missing)
-- [ ] T024 [US2] Add a `self_heal` error handler edge in `app/core/agent/graph.py` that triggers `SelfHealingService.system_self_heal()` from `app/tools/self_heal.py` when a node raises a dependency exception per plan.md Architecture (missing)
-- [ ] T025 Integrate `build_tactical_graph()` from `app/core/agent/graph.py` into the agent factory; mark `app/core/agent/agent_factory_v2.py` and `app/core/agent/brain_v2.py` as deprecated per plan.md Project Structure (partial)
-
-### MEDIUM — Secondary gaps and configuration
-
-- [ ] T026 Extract `retry_count >= 3` in `app/core/agent/graph.py` into a named constant `MAX_RETRIES` configurable from `config.yaml` per spec Edge Cases (missing)
-- [ ] T027 Add schema version check to `init_schema()` in `app/core/agent/blackboard.py` to detect and handle schema drift across versions per Constitution III Idempotent (missing)
-
-### LOW — Polish
-
-- [ ] T028 Update `requirements.txt` with pinned versions for `langgraph`, `langchain-community`, and `faiss-cpu` reflecting the versions currently installed in `Argus_venv` per plan.md Technical Context (missing)
-- [ ] T029 Add `--no-llm` flag to `scripts/test_rag.py` to allow architecture validation tests to run without a live Ollama instance (unrequested complexity risk)
+- [ ] T031 Add advanced multi-agent orchestration.
+- [ ] T032 Add nonessential demo-only fallback behaviors to production runtime.
+- [ ] T033 Add UI polish that does not change observability or correctness.
