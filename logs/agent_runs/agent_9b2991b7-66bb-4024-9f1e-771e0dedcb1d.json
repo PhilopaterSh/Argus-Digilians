@@ -1,0 +1,75 @@
+{
+  "status": "completed",
+  "current_node": "post_exploit",
+  "target": "https://example.com",
+  "events": [
+    {
+      "node": "recon",
+      "status": "running",
+      "detail": "Starting reconnaissance on https://example.com",
+      "timestamp": "2026-07-04T17:02:53.249075"
+    },
+    {
+      "node": "recon",
+      "status": "running",
+      "detail": "Graph execution timed out after 120s. Running fallback simulation...",
+      "timestamp": "2026-07-04T17:04:53.267716"
+    },
+    {
+      "node": "recon",
+      "status": "completed",
+      "detail": "Recon complete",
+      "timestamp": "2026-07-04T17:04:54.275788"
+    },
+    {
+      "node": "scanner",
+      "status": "running",
+      "detail": "Scanning for vulnerabilities",
+      "timestamp": "2026-07-04T17:04:54.281801"
+    },
+    {
+      "node": "scanner",
+      "status": "completed",
+      "detail": "Scan complete",
+      "timestamp": "2026-07-04T17:04:55.284568"
+    },
+    {
+      "node": "exploit",
+      "status": "running",
+      "detail": "Attempting exploitation",
+      "timestamp": "2026-07-04T17:04:55.296569"
+    },
+    {
+      "node": "exploit",
+      "status": "completed",
+      "detail": "Exploitation complete",
+      "timestamp": "2026-07-04T17:04:56.303238"
+    },
+    {
+      "node": "post_exploit",
+      "status": "running",
+      "detail": "Processing results",
+      "timestamp": "2026-07-04T17:04:56.310946"
+    },
+    {
+      "node": "post_exploit",
+      "status": "completed",
+      "detail": "Post-exploit complete",
+      "timestamp": "2026-07-04T17:04:56.316998"
+    }
+  ],
+  "started_at": "2026-07-04T14:02:41.516976+00:00",
+  "progress_pct": 100,
+  "final_state": {
+    "open_ports": [
+      8080
+    ],
+    "vulnerabilities": [],
+    "exploit_success": false,
+    "extracted_data": {},
+    "error_log": [
+      "Graph timed out, ran fallback simulation"
+    ],
+    "retry_count": 0
+  }
+}

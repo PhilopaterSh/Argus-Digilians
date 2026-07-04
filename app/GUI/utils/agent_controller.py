@@ -120,3 +120,4 @@ class AgentController:
                 json.dump(state, handle, indent=2, default=str)
         except (OSError, json.JSONDecodeError):
             pass
+
