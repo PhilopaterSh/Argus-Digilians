@@ -1,0 +1,14 @@
+from core.tools import WSLBridgeTools
+import sys
+
+def main():
+    bridge = WSLBridgeTools()
+    target = "testasp.vulnweb.com"
+    paths = ["index.aspx", "login.aspx", "admin.aspx", "config.aspx", "search.aspx", "categories.aspx", "product.aspx"]
+    print(f"[*] Mapping entry points for {target}...")
+    for p in paths:
+        res = bridge.run(f"curl -o /dev/null -s -w '%{{http_code}}' http://{target}/{p}")
+        print(f"{p}: {res}")
+
+if __name__ == "__main__":
+    main()
