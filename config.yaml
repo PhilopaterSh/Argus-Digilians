@@ -2,7 +2,7 @@ log_level: INFO
 max_web_search_attempts: 3
 web_search_timeout_seconds: 10
 early_stopping_method: stop
-model_name: "WhiteRabbitNeo/WhiteRabbitNeo-V3-7B:latest"
+model_name: "whiterabbitneo-v3:latest"
 command_timeout_seconds: 600
 recon_truncate_chars: 1000
 max_retries: 3
