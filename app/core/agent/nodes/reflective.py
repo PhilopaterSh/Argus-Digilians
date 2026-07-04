@@ -1,5 +1,6 @@
 import logging
 from app.core.agent.state import AgentState
+from app.core.config import ArgusConfig
 from app.core.llm_factory import build_llm
 from app.tools.tool_registry import WSLBridgeTools
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -35,8 +36,8 @@ def reflective_node(state: AgentState) -> AgentState:
     # 2. Make real LLM call to suggest a new bypass payload
     next_payload = None
     try:
-        # Use WhiteRabbitNeo or a default model
-        llm = build_llm("WhiteRabbitNeo/WhiteRabbitNeo-V3-7B:latest")
+        # Use the configured LLM model from central config
+        llm = build_llm(ArgusConfig.load().model_name)
         
         system_instruction = (
             "You are an expert penetration tester. A payload was blocked/failed. "

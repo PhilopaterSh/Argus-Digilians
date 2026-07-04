@@ -1,6 +1,7 @@
 import streamlit as st
 import socket
 import subprocess
+from app.core.config import ArgusConfig
 
 
 def check_ollama_status():
@@ -53,5 +54,5 @@ def render_status_bar():
             st.markdown(":bar_chart: **Blackboard**: N/A")
     with col4:
         import os
-        model = os.getenv("SELECTED_MODEL", "WhiteRabbitNeo-V3-7B")
+        model = os.getenv("SELECTED_MODEL") or ArgusConfig.load().model_name
         st.markdown(f":robot_face: **Model**: {model.split('/')[-1]}")

@@ -55,7 +55,7 @@ Summary:"""
 
 class RAGEngine:
     def __init__(self, config: Optional[RAGConfig] = None, model_name: Optional[str] = None):
-        self.config = config or RAGConfig()
+        self.config = config or RAGConfig.from_central()
         self.embeddings = EmbeddingFactory.get_embeddings(self.config)
         self.processor = DocumentProcessor(self.config)
         self.vector_store = VectorStore(self.config)

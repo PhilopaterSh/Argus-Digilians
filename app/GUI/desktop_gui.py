@@ -16,6 +16,7 @@ except ImportError:
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 
+from app.core.config import ArgusConfig
 from app.tools.tool_registry import WSLBridgeTools
 from app.core.brain import ArgusBrain
 from langchain_core.tools import Tool
@@ -93,7 +94,7 @@ class DesktopArgusGUI:
         self.status_var.set(" Running analysis...")
 
         try:
-            model = "WhiteRabbitNeo/WhiteRabbitNeo-V3-7B:latest"
+            model = ArgusConfig.load().model_name
             tools = [
                 Tool(name="Check_Reachability", func=self.bridge.check_reachability,
                      description="Check target reachability"),

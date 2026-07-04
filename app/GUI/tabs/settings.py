@@ -1,5 +1,6 @@
 import streamlit as st
 import os
+from app.core.config import ArgusConfig
 from app.GUI.components.session_manager import list_sessions, save_session, load_session, delete_session
 
 
@@ -10,7 +11,8 @@ def render_settings():
     settings = st.session_state.get("settings", {})
 
     st.subheader(":brain: Model Configuration")
-    settings["model"] = st.text_input("Model Name", value=settings.get("model", "WhiteRabbitNeo/WhiteRabbitNeo-V3-7B:latest"))
+    default_model = os.getenv("SELECTED_MODEL") or ArgusConfig.load().model_name
+    settings["model"] = st.text_input("Model Name", value=settings.get("model", default_model))
     settings["ollama_endpoint"] = st.text_input("Ollama Endpoint", value=settings.get("ollama_endpoint", "http://localhost:11434"))
 
     st.markdown("---")

@@ -11,7 +11,7 @@ class DocumentProcessor:
     SUPPORTED_EXTENSIONS = {".txt", ".md", ".pdf", ".json", ".csv", ".html", ".yaml", ".yml", ".xml"}
 
     def __init__(self, config: Optional[RAGConfig] = None):
-        self.config = config or RAGConfig()
+        self.config = config or RAGConfig.from_central()
 
     def load_from_directory(self, directory: Optional[str] = None) -> List[Document]:
         target_dir = directory or self.config.knowledge_base_dir

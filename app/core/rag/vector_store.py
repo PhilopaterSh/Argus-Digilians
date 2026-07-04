@@ -9,7 +9,7 @@ from app.core.rag.document_processor import DocumentProcessor
 
 class VectorStore:
     def __init__(self, config: Optional[RAGConfig] = None):
-        self.config = config or RAGConfig()
+        self.config = config or RAGConfig.from_central()
         self.embeddings = EmbeddingFactory.get_embeddings(self.config)
         self._store = None
         self._ensure_store_dir()

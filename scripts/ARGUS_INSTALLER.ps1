@@ -524,7 +524,7 @@ $MIN_RAM_GB            = 8
 $MIN_DISK_GB           = 20
 $PYTHON_REQUIRED       = "3.12"
 $KALI_DISTRO           = "kali-linux"
-$OLLAMA_MODEL          = if ($env:ARGUS_MODEL) { $env:ARGUS_MODEL } else { "WhiteRabbitNeo/WhiteRabbitNeo-V3-7B:latest" }  # default AI model
+$OLLAMA_MODEL          = if ($env:ARGUS_MODEL) { $env:ARGUS_MODEL } else { "WhiteRabbitNeo/WhiteRabbitNeo-V3-7B:latest" }  # default AI model; overridden by config.yaml at runtime if present
 $OLLAMA_MODEL_MIN_GB   = if ($env:ARGUS_MODEL_MIN_GB) { [int]$env:ARGUS_MODEL_MIN_GB } else { 8 }
 $MODEL_PULL_RETRIES    = if ($env:ARGUS_MODEL_PULL_RETRIES) { [int]$env:ARGUS_MODEL_PULL_RETRIES } else { 3 }
 $VENV_NAME             = "Argus_venv"
@@ -1052,6 +1052,17 @@ function Invoke-StepAiEnvironment {
     }
 
     # --- model pull ---
+    # Override model from config.yaml if available (keeps installer in sync with Python config)
+    $resolvedModel = $OLLAMA_MODEL
+    $cfgPath = Join-Path $ProjectRoot "config.yaml"
+    if (-not $env:ARGUS_MODEL -and (Test-Path -LiteralPath $cfgPath)) {
+        try {
+            $yaml = Get-Content -LiteralPath $cfgPath -Raw
+            if ($yaml -match 'model_name:\s*"(.+)"') { $resolvedModel = $Matches[1] }
+        } catch { }
+    }
+    $OLLAMA_MODEL = $resolvedModel
+
     $modelOk = (Test-Ollama)
     if ($modelOk) {
         if ($DryRun) {

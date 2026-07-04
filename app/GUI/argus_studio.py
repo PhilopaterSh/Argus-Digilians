@@ -11,6 +11,7 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
+from app.core.config import ArgusConfig
 from app.GUI.components.status_bar import render_status_bar
 from app.GUI.utils.blackboard import init_gui_tables
 
@@ -25,7 +26,7 @@ if "jobs" not in st.session_state:
     st.session_state.jobs = []
 if "settings" not in st.session_state:
     st.session_state.settings = {
-        "model": os.getenv("SELECTED_MODEL", "WhiteRabbitNeo/WhiteRabbitNeo-V3-7B:latest"),
+        "model": os.getenv("SELECTED_MODEL") or ArgusConfig.load().model_name,
         "ollama_endpoint": "http://localhost:11434",
         "ssh_user": os.getenv("WSL_USER", "kali"),
         "ssh_pass": os.getenv("WSL_PASS", "kali"),

@@ -17,7 +17,7 @@ class EmbeddingFactory:
             return cls._embedding_model
 
         if config is None:
-            config = RAGConfig()
+            config = RAGConfig.from_central()
 
         cls._embedding_model = cls._try_ollama(config)
 

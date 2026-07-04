@@ -89,12 +89,9 @@ class ArgusBrain:
     @staticmethod
     def _load_rag_config() -> Optional[Dict[str, Any]]:
         try:
-            import yaml
-            config_path = os.getenv("ARGUS_CONFIG", "config.yaml")
-            if os.path.exists(config_path):
-                with open(config_path) as f:
-                    cfg = yaml.safe_load(f)
-                return cfg.get("rag")
+            from app.core.config import ArgusConfig
+            cfg = ArgusConfig.load()
+            return cfg.to_rag_dict() if cfg.rag.enabled else None
         except Exception:
             pass
         return None

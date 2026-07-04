@@ -16,6 +16,7 @@ warnings.warn(
 # Ensure project root is in path for core module access
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
+from app.core.config import ArgusConfig
 from app.tools.tool_registry import WSLBridgeTools
 from app.core.brain import ArgusBrain
 from langchain_core.tools import Tool
@@ -109,7 +110,7 @@ st.markdown("""
 
 # --- Initialization ---
 bridge = WSLBridgeTools()
-MODEL_NAME = os.getenv("SELECTED_MODEL", "WhiteRabbitNeo/WhiteRabbitNeo-V3-7B:latest")
+MODEL_NAME = os.getenv("SELECTED_MODEL") or ArgusConfig.load().model_name
 
 @st.cache_resource
 def get_brain():

@@ -20,9 +20,25 @@ class RAGConfig:
     similarity_threshold: float = 0.5
 
     @classmethod
+    def from_central(cls) -> "RAGConfig":
+        from app.core.config import ArgusConfig
+        cfg = ArgusConfig.load()
+        return cls(
+            embedding_model=cfg.rag.embedding_model,
+            embedding_device=cfg.rag.embedding_device,
+            chunk_size=cfg.rag.chunk_size,
+            chunk_overlap=cfg.rag.chunk_overlap,
+            retriever_k=cfg.rag.retriever_k,
+            knowledge_base_dir=cfg.rag.knowledge_base_dir,
+            vector_store_dir=os.path.join(os.getcwd(), "app", "core", "rag", "store"),
+            auto_rebuild=cfg.rag.auto_rebuild,
+            similarity_threshold=cfg.rag.similarity_threshold,
+        )
+
+    @classmethod
     def from_dict(cls, config_dict: Optional[dict] = None) -> "RAGConfig":
         if config_dict is None:
-            return cls()
+            return cls.from_central()
         return cls(
             embedding_model=config_dict.get("embedding_model", cls.embedding_model),
             embedding_device=config_dict.get("embedding_device", cls.embedding_device),
