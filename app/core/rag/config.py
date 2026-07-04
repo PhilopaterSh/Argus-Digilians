@@ -39,14 +39,17 @@ class RAGConfig:
     def from_dict(cls, config_dict: Optional[dict] = None) -> "RAGConfig":
         if config_dict is None:
             return cls.from_central()
+
+        defaults = cls()
         return cls(
-            embedding_model=config_dict.get("embedding_model", cls.embedding_model),
-            embedding_device=config_dict.get("embedding_device", cls.embedding_device),
-            chunk_size=config_dict.get("chunk_size", cls.chunk_size),
-            chunk_overlap=config_dict.get("chunk_overlap", cls.chunk_overlap),
-            retriever_k=config_dict.get("retriever_k", cls.retriever_k),
-            knowledge_base_dir=config_dict.get("knowledge_base_dir", cls.knowledge_base_dir),
-            vector_store_dir=config_dict.get("vector_store_dir", cls.vector_store_dir),
-            auto_rebuild=config_dict.get("auto_rebuild", cls.auto_rebuild),
-            similarity_threshold=config_dict.get("similarity_threshold", cls.similarity_threshold),
+            embedding_model=config_dict.get("embedding_model", defaults.embedding_model),
+            embedding_device=config_dict.get("embedding_device", defaults.embedding_device),
+            chunk_size=config_dict.get("chunk_size", defaults.chunk_size),
+            chunk_overlap=config_dict.get("chunk_overlap", defaults.chunk_overlap),
+            retriever_k=config_dict.get("retriever_k", defaults.retriever_k),
+            knowledge_base_dir=config_dict.get("knowledge_base_dir", defaults.knowledge_base_dir),
+            vector_store_dir=config_dict.get("vector_store_dir", defaults.vector_store_dir),
+            auto_rebuild=config_dict.get("auto_rebuild", defaults.auto_rebuild),
+            similarity_threshold=config_dict.get("similarity_threshold", defaults.similarity_threshold),
         )
+

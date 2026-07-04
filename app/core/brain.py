@@ -75,6 +75,8 @@ class ArgusBrain:
             return self._simple_chain
 
         try:
+            from app.core.agent_factory import build_agent_executor
+
             self._simple_chain = build_agent_executor(
                 llm=self.llm,
                 tools=self.tools,
@@ -243,3 +245,4 @@ class ArgusBrain:
     def simple_ask(self, prompt):
         response = self.llm.invoke(prompt)
         return {"output": response}
+

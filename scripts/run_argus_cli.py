@@ -1,14 +1,17 @@
 import os
 import sys
 import argparse
+
+# Ensure the project root is on the import path before importing app modules.
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
+
 from app.tools.tool_registry import WSLBridgeTools
 from app.core.brain import ArgusBrain
 from app.core.config import ArgusConfig
 from langchain_core.tools import Tool
 from dotenv import load_dotenv
-
-# Ensure project root is in path
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 load_dotenv()
 config = ArgusConfig.load()
@@ -45,7 +48,7 @@ def run_analysis(target_url):
         result = brain.ask(query)
         
         print("\n" + "="*60)
-        print("🛡️ ARGUS AGENT FINAL REPORT")
+        print("[REPORT] ARGUS AGENT FINAL REPORT")
         print("="*60)
         
         if isinstance(result, dict) and "output" in result:
@@ -68,3 +71,5 @@ if __name__ == "__main__":
     parser.add_argument("target", nargs="?", default="https://cultbeauty.co.uk/", help="Target URL")
     args = parser.parse_args()
     run_analysis(args.target)
+
+
