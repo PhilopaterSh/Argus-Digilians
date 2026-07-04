@@ -1,10 +1,14 @@
+import logging
 import os
-import pickle
 from typing import List, Optional
+
 from langchain_core.documents import Document
+
 from app.core.rag.config import RAGConfig
-from app.core.rag.embeddings import EmbeddingFactory
 from app.core.rag.document_processor import DocumentProcessor
+from app.core.rag.embeddings import EmbeddingFactory
+
+logger = logging.getLogger(__name__)
 
 
 class VectorStore:
@@ -19,22 +23,18 @@ class VectorStore:
 
     @property
     def _index_path(self):
-        return os.path.join(self.config.vector_store_dir, "index.faiss")
-
-    @property
-    def _metadata_path(self):
-        return os.path.join(self.config.vector_store_dir, "metadata.pkl")
+        return os.path.join(self.config.vector_store_dir, 'index.faiss')
 
     def build_index(self, chunks: List[Document]) -> int:
         if not chunks:
-            print("[RAG] No chunks to index")
+            logger.warning('[RAG] No chunks to index')
             return 0
 
         from langchain_community.vectorstores import FAISS
 
         self._store = FAISS.from_documents(chunks, self.embeddings)
         self._persist()
-        print(f"[RAG] Indexed {len(chunks)} chunks into FAISS")
+        logger.info('[RAG] Indexed %s chunks into FAISS', len(chunks))
         return len(chunks)
 
     def rebuild_from_directory(self, directory: Optional[str] = None) -> int:
@@ -49,54 +49,39 @@ class VectorStore:
         try:
             from langchain_community.vectorstores import FAISS
 
-            if os.path.exists(self._metadata_path):
-                with open(self._metadata_path, "rb") as f:
-                    docstore, index_to_docstore_id = pickle.load(f)
-                self._store = FAISS.load_local(
-                    self.config.vector_store_dir,
-                    self.embeddings,
-                    allow_dangerous_deserialization=True,
-                )
-            else:
-                self._store = FAISS.load_local(
-                    self.config.vector_store_dir,
-                    self.embeddings,
-                    allow_dangerous_deserialization=True,
-                )
-            print(f"[RAG] Loaded existing FAISS index from {self.config.vector_store_dir}")
+            self._store = FAISS.load_local(
+                self.config.vector_store_dir,
+                self.embeddings,
+                allow_dangerous_deserialization=True,
+            )
+            logger.info('[RAG] Loaded existing FAISS index from %s', self.config.vector_store_dir)
             return True
         except Exception as e:
-            print(f"[RAG] Failed to load index: {e}")
+            logger.warning('[RAG] Failed to load index: %s', e)
             return False
 
     def _persist(self):
         if self._store is None:
             return
-        from langchain_community.vectorstores import FAISS
-        FAISS.save_local(self._store, self.config.vector_store_dir)
-        print(f"[RAG] Saved FAISS index to {self.config.vector_store_dir}")
+        self._store.save_local(self.config.vector_store_dir)
+        logger.info('[RAG] Saved FAISS index to %s', self.config.vector_store_dir)
 
     def similarity_search(self, query: str, k: Optional[int] = None) -> List[Document]:
-        if self._store is None:
-            if not self.load_index():
-                return []
+        if self._store is None and not self.load_index():
+            return []
         k = k or self.config.retriever_k
         return self._store.similarity_search(query, k=k)
 
     def similarity_search_with_score(self, query: str, k: Optional[int] = None) -> List[tuple]:
-        if self._store is None:
-            if not self.load_index():
-                return []
+        if self._store is None and not self.load_index():
+            return []
         k = k or self.config.retriever_k
         return self._store.similarity_search_with_score(query, k=k)
 
     def get_retriever(self, k: Optional[int] = None):
-        if self._store is None:
-            self.load_index()
-        from langchain_core.vectorstores import VectorStoreRetriever
-        return self._store.as_retriever(
-            search_kwargs={"k": k or self.config.retriever_k}
-        )
+        if self._store is None and not self.load_index():
+            raise ValueError('Vector store has not been initialized or loaded.')
+        return self._store.as_retriever(search_kwargs={'k': k or self.config.retriever_k})
 
     @property
     def is_loaded(self) -> bool:
