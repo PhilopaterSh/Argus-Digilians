@@ -7,7 +7,7 @@ from app.core.rag.processor import DocumentProcessor
 from app.core.rag.vectorstore import VectorStoreManager
 
 class RAGEngine:
-    def __init__(self, llm_model: str = "whiterabbitneo-v3:latest", embed_model: str = "nomic-embed-text"):
+    def __init__(self, llm_model: str = "WhiteRabbitNeo/WhiteRabbitNeo-V3-7B:latest", embed_model: str = "nomic-embed-text"):
         self.processor = DocumentProcessor()
         self.vector_manager = VectorStoreManager(model_name=embed_model)
         self.llm = Ollama(model=llm_model)
