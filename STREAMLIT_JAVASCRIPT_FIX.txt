@@ -1,0 +1,176 @@
+================================================================================
+                    STREAMLIT GUI - JAVASCRIPT ERROR FIX
+================================================================================
+
+PROBLEM:
+--------
+"TypeError: Failed to fetch dynamically imported module: TextInput.D3Tz_H2g.js"
+
+This is a browser-side JavaScript error that prevents the GUI from loading
+properly. It usually indicates a cache or static asset loading issue.
+
+================================================================================
+                          QUICK FIXES (Try in Order)
+================================================================================
+
+FIX #1: CLEAR BROWSER CACHE (MOST COMMON SOLUTION)
+---------------------------------------------------
+1. Open your browser (Chrome, Edge, Firefox, etc.)
+2. Press: Ctrl + Shift + Delete
+3. Select "All time" for time range
+4. Check: Cookies, Cache, Cached images/files
+5. Click "Clear data"
+6. Refresh page: F5 or Ctrl+R
+7. Wait 10 seconds for assets to reload
+
+Expected Result: ✓ GUI loads normally with "Target Selection" form visible
+
+
+FIX #2: HARD REFRESH BROWSER
+-----------------------------
+1. Open browser console: F12
+2. Hold Shift and click Refresh button (or Ctrl+Shift+R)
+3. Wait 15 seconds for full asset reload
+
+Expected Result: ✓ JavaScript modules load correctly
+
+
+FIX #3: RESTART STREAMLIT SERVER
+---------------------------------
+1. Stop the LAUNCH_STUDIO.bat process (Ctrl+C)
+2. Wait 5 seconds
+3. Relaunch: C:\...\Argus\scripts\LAUNCH_STUDIO.bat G
+4. Wait for browser to open (~10 seconds)
+5. Refresh the page
+
+Expected Result: ✓ Fresh cache, new static assets
+
+
+FIX #4: USE DIFFERENT BROWSER
+------------------------------
+1. Try a different browser (Chrome → Edge, Firefox, etc.)
+2. Navigate to: http://localhost:8501
+3. Clear cache in new browser if needed
+
+Expected Result: ✓ Browser-specific cache issue identified
+
+
+FIX #5: RESET STREAMLIT CACHE COMPLETELY
+------------------------------------------
+Method 1 (Automatic in latest LAUNCH_STUDIO.bat):
+  The launcher now clears Streamlit cache automatically
+
+Method 2 (Manual):
+  1. Delete folder: C:\Users\{YOUR_USER}\AppData\Local\streamlit
+  2. Restart LAUNCH_STUDIO.bat
+
+Expected Result: ✓ Fresh Streamlit installation
+
+
+FIX #6: DISABLE HARDWARE ACCELERATION
+--------------------------------------
+In Chrome/Edge:
+  1. Settings → Advanced
+  2. System
+  3. Toggle OFF "Use hardware acceleration"
+  4. Restart browser
+
+Expected Result: ✓ JavaScript rendering works differently
+
+================================================================================
+                        IF PROBLEM PERSISTS
+================================================================================
+
+Check Environment:
+  1. Python version: python --version (Should be 3.9+)
+  2. Streamlit version: pip show streamlit
+  3. Virtual env active: Check path contains "Argus_venv"
+
+Try CPU Mode:
+  C:\...\Argus\scripts\LAUNCH_STUDIO.bat C
+
+Check Browser Console:
+  1. F12 to open Developer Tools
+  2. Go to "Console" tab
+  3. Look for other error messages
+  4. Screenshot and report
+
+Restart Everything:
+  1. taskkill /F /IM python.exe
+  2. taskkill /F /IM ollama.exe
+  3. Restart LAUNCH_STUDIO.bat
+
+================================================================================
+                      WHY THIS HAPPENS
+================================================================================
+
+Root Causes:
+  1. Browser cache contains outdated static assets
+  2. Streamlit version mismatch
+  3. Network timeout during initial asset load
+  4. CORS policy restrictions
+  5. Temporary filesystem issues
+
+Prevention:
+  - Always use Ctrl+Shift+Delete after Streamlit updates
+  - Clear cache weekly
+  - Use incognito/private mode for testing
+  - Keep browser updated
+
+================================================================================
+                        ADVANCED TROUBLESHOOTING
+================================================================================
+
+Enable Verbose Logging:
+  1. Set environment variable: set STREAM_LOG_LEVEL=debug
+  2. Restart LAUNCH_STUDIO.bat
+  3. Look for more detailed error messages
+
+Check Network Tab:
+  1. F12 → Network tab
+  2. Reload page
+  3. Look for failed requests (red)
+  4. Check the JS file status codes
+
+Port Conflict:
+  netstat -ano | findstr :8501
+  If port 8501 is in use, kill process:
+  taskkill /PID {PID} /F
+
+================================================================================
+                          FINAL RESORT
+================================================================================
+
+If nothing works:
+
+1. Check Virtual Environment:
+   C:\AI_PenTest_Project\Argus\Argus_venv\Scripts\activate.bat
+   pip install --upgrade streamlit
+
+2. Reinstall Dependencies:
+   pip install -r requirements.txt --force-reinstall
+
+3. Completely Reset:
+   - Delete .streamlit/cache
+   - Delete Argus_venv
+   - Run INSTALL_EVERYTHING.bat again
+
+4. Report Bug:
+   - Include screenshot of error
+   - Include output of: streamlit run app/GUI/gui_app.py --logger.level=debug
+   - Include browser console errors (F12)
+
+================================================================================
+                        CONTACT SUPPORT
+================================================================================
+
+If issue persists after trying all fixes:
+  1. Save browser console output (F12 → Console → Copy All)
+  2. Save Streamlit logs from terminal
+  3. Report in project issues with:
+     - Browser + version
+     - OS + version  
+     - Error message
+     - Steps tried
+
+================================================================================
