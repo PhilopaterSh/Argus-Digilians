@@ -1,0 +1,148 @@
+{
+  "meta": {
+    "target": "sketchfab.com",
+    "scan_mode": "aggressive",
+    "generated_at": "2026-06-29T17:23:14.436199",
+    "tool": "Argus Security Framework v2.0",
+    "risk_score": 9
+  },
+  "summary": {
+    "total_findings": 21,
+    "severity_breakdown": {
+      "Critical": 0,
+      "High": 4,
+      "Medium": 1,
+      "Low": 0,
+      "Info": 16
+    },
+    "knowledge_graph": "(img.email1.sketchfab.com) --[EXPOSES]--> (abuse@sendinblue.com)\n(r.email1.sketchfab.com) --[EXPOSES]--> (abuse@sendinblue.com)\n(sketchfab.com) --[HAS_SUBDOMAIN]--> (click.sketchfab.com)\n(sketchfab.com) --[HAS_SUBDOMAIN]--> (landings.sketchfab.com)\n(sketchfab.com) --[HAS_SUBDOMAIN]--> (www.blog.sketchfab.com)\n(sketchfab.com) --[HAS_SUBDOMAIN]--> (img.email2.sketchfab.com)\n(sketchfab.com) --[HAS_SUBDOMAIN]--> (static.sketchfab.com)\n(sketchfab.com) --[HAS_SUBDOMAIN]--> (www.sketchfab.com)\n(sketchfab.com) --[HAS_SUBDOMAIN]--> (api.sketchfab.com)\n(sketchfab.com) --[HAS_SUBDOMAIN]--> (r.email3.sketchfab.com)\n(sketchfab.com) --[HAS_SUBDOMAIN]--> (staging1.blog.sketchfab.com)\n(sketchfab.com) --[HAS_SUBDOMAIN]--> (blog.sketchfab.com)\n(sketchfab.com) --[HAS_SUBDOMAIN]--> (massive.sketchfab.com)\n(sketchfab.com) --[HAS_SUBDOMAIN]--> (staging-enterprise.blog.sketchfab.com)\n(sketchfab.com) --[HAS_SUBDOMAIN]--> (www.staging-enterprise.blog.sketchfab.com)\n(sketchfab.com) --[HAS_SUBDOMAIN]--> (media.sketchfab.com)\n(sketchfab.com) --[HAS_SUBDOMAIN]--> (r.email2.sketchfab.com)\n(sketchfab.com) --[HAS_SUBDOMAIN]--> (www.staging1.blog.sketchfab.com)\n(sketchfab.com) --[HAS_SUBDOMAIN]--> (e6f79c614c67.sketchfab.com)\n(sketchfab.com) --[HAS_SUBDOMAIN]--> (img.email3.sketchfab.com)\n(sketchfab.com) --[HAS_SUBDOMAIN]--> (forum.sketchfab.com)\n(sketchfab.com) --[HAS_SUBDOMAIN]--> (www.staging2.blog.sketchfab.com)\n(sketchfab.com) --[HAS_SUBDOMAIN]--> (staging2.blog.sketchfab.com)\n(sketchfab.com) --[HAS_SUBDOMAIN]--> (help.sketchfab.com)\n(sketchfab.com) --[HAS_SUBDOMAIN]--> (r.email1.sketchfab.com)\n(sketchfab.com) --[HAS_SUBDOMAIN]--> (img.email1.sketchfab.com)\n(sketchfab.com) --[HAS_SUBDOMAIN]--> (labs.sketchfab.com)\n(sketchfab.com) --[HOSTS]--> (108.159.102.125)"
+  },
+  "findings": [
+    {
+      "target": "api.sketchfab.com",
+      "tool": "ports",
+      "severity": "Info",
+      "summary": "Open ports: 80, 443"
+    },
+    {
+      "target": "api.sketchfab.com",
+      "tool": "tech",
+      "severity": "Info",
+      "summary": "Tech: CloudFront"
+    },
+    {
+      "target": "api.sketchfab.com",
+      "tool": "waf",
+      "severity": "Info",
+      "summary": "WAF: Not detected"
+    },
+    {
+      "target": "api.sketchfab.com",
+      "tool": "headers",
+      "severity": "Info",
+      "summary": "HTTP Headers captured"
+    },
+    {
+      "target": "img.email1.sketchfab.com",
+      "tool": "secrets",
+      "severity": "High",
+      "summary": "Secrets in HTML"
+    },
+    {
+      "target": "img.email1.sketchfab.com",
+      "tool": "leak",
+      "severity": "High",
+      "summary": "Sensitive files found!"
+    },
+    {
+      "target": "img.email1.sketchfab.com",
+      "tool": "ports",
+      "severity": "Info",
+      "summary": "Open ports: 80, 443, 8080, 8443"
+    },
+    {
+      "target": "img.email1.sketchfab.com",
+      "tool": "tech",
+      "severity": "Info",
+      "summary": "Tech: cloudflare"
+    },
+    {
+      "target": "img.email1.sketchfab.com",
+      "tool": "waf",
+      "severity": "Info",
+      "summary": "WAF: Cloudflare"
+    },
+    {
+      "target": "img.email1.sketchfab.com",
+      "tool": "headers",
+      "severity": "Info",
+      "summary": "HTTP Headers captured"
+    },
+    {
+      "target": "r.email1.sketchfab.com",
+      "tool": "secrets",
+      "severity": "High",
+      "summary": "Secrets in HTML"
+    },
+    {
+      "target": "r.email1.sketchfab.com",
+      "tool": "leak",
+      "severity": "High",
+      "summary": "Sensitive files found!"
+    },
+    {
+      "target": "r.email1.sketchfab.com",
+      "tool": "ports",
+      "severity": "Info",
+      "summary": "Open ports: 80, 443"
+    },
+    {
+      "target": "r.email1.sketchfab.com",
+      "tool": "tech",
+      "severity": "Info",
+      "summary": "Tech: cloudflare"
+    },
+    {
+      "target": "r.email1.sketchfab.com",
+      "tool": "waf",
+      "severity": "Info",
+      "summary": "WAF: Cloudflare"
+    },
+    {
+      "target": "r.email1.sketchfab.com",
+      "tool": "headers",
+      "severity": "Info",
+      "summary": "HTTP Headers captured"
+    },
+    {
+      "target": "sketchfab.com",
+      "tool": "vulnerability",
+      "severity": "Medium",
+      "summary": "Nikto finding"
+    },
+    {
+      "target": "sketchfab.com",
+      "tool": "ports",
+      "severity": "Info",
+      "summary": "Open ports: 80, 443"
+    },
+    {
+      "target": "sketchfab.com",
+      "tool": "tech",
+      "severity": "Info",
+      "summary": "Tech: CloudFront"
+    },
+    {
+      "target": "sketchfab.com",
+      "tool": "waf",
+      "severity": "Info",
+      "summary": "WAF: Not detected"
+    },
+    {
+      "target": "sketchfab.com",
+      "tool": "headers",
+      "severity": "Info",
+      "summary": "HTTP Headers captured"
+    }
+  ]
+}
