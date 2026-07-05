@@ -129,60 +129,8 @@ def run_analysis(target_url):
         _write_progress(target_url, f'Error: {e}')
         print(f"\n[!] An error occurred during execution: {e}")
 
-def run_graph_analysis(target_url):
-    """Run analysis using LangGraph workflow (graph_ask)."""
-    bridge = WSLBridgeTools()
-    model = "WhiteRabbitNeo/WhiteRabbitNeo-V3-7B:latest"
-
-    tools = [
-        Tool(name="Check_Reachability", func=bridge.check_reachability, description="Verify if the target domain is reachable before scanning."),
-        Tool(name="Subdomain_Enumeration", func=bridge.enumerate_subdomains, description="Discover subdomains to map the target's attack surface."),
-        Tool(name="Recon_Suite", func=bridge.recon_suite, description="Execute parallel advanced recon (WAF, Nmap, WhatWeb, HTTP Headers, Spider) inside Kali."),
-        Tool(name="Smart_Web_Search", func=bridge.smart_web_search, description="Search internet for CVEs/Exploits/Security info."),
-        Tool(name="Run_Nikto", func=bridge.run_nikto, description="Run Nikto vulnerability scanner against a web target."),
-        Tool(name="Run_FFUF", func=bridge.run_ffuf_discovery, description="Run FFUF for fast hidden path discovery."),
-    ]
-
-    brain = ArgusBrain(model, tools)
-
-    print(f"\n[!] ARGUS GRAPH MODE ACTIVATED")
-    print(f"[*] Target: {target_url}")
-    print(f"[*] Model: {model}")
-    print("[*] Initializing LangGraph workflow...\n")
-    print("-" * 60)
-
-    try:
-        result = brain.graph_ask(
-            f"Perform a comprehensive security analysis for {target_url}. "
-            f"Start with reachability, then map the attack surface, and finally provide a deep risk assessment."
-        )
-
-        print("\n" + "=" * 60)
-        print("🛡️ ARGUS AGENT GRAPH REPORT")
-        print("=" * 60)
-
-        if isinstance(result, dict) and "output" in result:
-            output = result["output"]
-            if isinstance(output, dict):
-                import json
-                print(json.dumps(output, indent=4))
-            else:
-                print(output)
-        else:
-            print(result)
-    except KeyboardInterrupt:
-        print("\n[!] Analysis interrupted by user.")
-    except Exception as e:
-        print(f"\n[!] Error during graph analysis: {e}")
-
-
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Argus AI CLI")
     parser.add_argument("target", nargs="?", default="https://cultbeauty.co.uk/", help="Target URL")
-    parser.add_argument("--graph", action="store_true", help="Use LangGraph workflow")
     args = parser.parse_args()
-
-    if args.graph:
-        run_graph_analysis(args.target)
-    else:
-        run_analysis(args.target)
+    run_analysis(args.target)

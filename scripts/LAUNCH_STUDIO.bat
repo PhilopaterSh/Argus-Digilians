@@ -84,7 +84,11 @@ set "TRANSFORMERS_VERBOSITY=error"
 set "STREAM_LOG_LEVEL=error"
 set "PYTHONWARNINGS=ignore"
 
-start http://localhost:8501
-..\Argus_venv\Scripts\python.exe -m streamlit run ..\app\GUI\gui_app.py --server.port 8501 --server.headless true --server.enableCORS false --server.enableXsrfProtection false
+:: Read port from config.yaml
+for /f %%p in ('..\Argus_venv\Scripts\python.exe get_port.py') do set "PORT=%%p"
+echo [*] Using port %PORT% from config.yaml
+
+start http://localhost:%PORT%
+..\Argus_venv\Scripts\python.exe -m streamlit run ..\app\GUI\app.py --server.port %PORT% --server.headless true --server.enableCORS false --server.enableXsrfProtection false
 
 pause

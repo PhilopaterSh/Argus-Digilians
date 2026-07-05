@@ -17,7 +17,7 @@ if os.path.exists(_CONFIG_PATH):
         pass
 
 DEFAULT_MAX_ITERATIONS: int = 50
-_EARLY_STOPPING  = _cfg.get("early_stopping_method", "stop")
+_EARLY_STOPPING  = _cfg.get("early_stopping_method", "generate")
 _MAX_ITERATIONS  = int(_cfg.get("max_iterations", DEFAULT_MAX_ITERATIONS))
 
 def build_agent_executor(

@@ -9,14 +9,14 @@ recon_truncate_chars: 1000
 # Streamlit / GUI settings (editable, non-sensitive)
 streamlit:
   host: localhost
-  port: 8501
+  port: 8199
   headless: true
   enableCORS: false
   enableXsrfProtection: false
 
 paths:
   venv_python: "..\\Argus_venv\\Scripts\\python.exe"
-  gui_entry: "..\\app\\GUI\\gui_app.py"
+  gui_entry: "..\\app\\GUI\\app.py"
 
 logging:
   transformers_verbosity: error

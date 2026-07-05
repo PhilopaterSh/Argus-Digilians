@@ -12,8 +12,9 @@ if not exist "..\..\Argus_venv" (
     exit
 )
 
-:: Set Port
-set PORT=12189
+:: Read port from config.yaml
+for /f %%p in ('..\..\Argus_venv\Scripts\python.exe ..\..\scripts\get_port.py') do set "PORT=%%p"
+echo [*] Using port %PORT% from config.yaml
 
 echo [*] Activating environment...
 :: Updated path to activate.bat

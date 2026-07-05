@@ -5,7 +5,6 @@ langchain-huggingface
 langchain-community
 langchain-core
 langchain-text-splitters
-langgraph>=0.2.0
 streamlit
 # Added duckduckgo_search for web search capability
 duckduckgo_search
