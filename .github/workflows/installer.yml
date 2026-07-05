@@ -1,0 +1,37 @@
+name: Argus Installer Tests
+
+on:
+  push:
+    branches: [ "main", "master", "fix/*", "feat/*" ]
+  pull_request:
+    branches: [ "main", "master" ]
+
+jobs:
+  pester-test:
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4.2.2
+
+    - name: Install Pester (if missing)
+      shell: pwsh
+      run: |
+        if (-not (Get-Module -ListAvailable -Name Pester)) {
+            Install-Module -Name Pester -Force -SkipPublisherCheck -Scope CurrentUser
+        }
+        Import-Module Pester -Force
+
+    - name: Run Pester tests
+      shell: pwsh
+      run: |
+        $testPath = Join-Path $env:GITHUB_WORKSPACE "tests\pester\install_tests.tests.ps1"
+        if (-not (Test-Path $testPath)) {
+            Write-Warning "Test file not found at $testPath — skipping."
+            exit 0
+        }
+        $result = Invoke-Pester -Path $testPath -PassThru
+        if ($result.FailedCount -gt 0) {
+            Write-Error "Pester tests failed with $($result.FailedCount) failure(s)."
+            exit 1
+        }

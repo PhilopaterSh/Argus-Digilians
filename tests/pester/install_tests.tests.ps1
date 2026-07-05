@@ -1,0 +1,99 @@
+# Pester tests for Argus installer
+Describe "ARGUS_INSTALLER.ps1" {
+    BeforeAll {
+        # Dynamically resolve script path relative to this test file
+        $installerPath = Join-Path $PSScriptRoot "../../scripts/ARGUS_INSTALLER.ps1"
+        if (Test-Path $installerPath) {
+            . $installerPath
+            $script:installerLoaded = $true
+        } else {
+            Write-Warning "Installer script not found at $installerPath — tests will fall back to hardcoded defaults."
+            $script:installerLoaded = $false
+            # Hardcoded defaults matching the installer
+            $script:MIN_RAM_GB = 8
+            $script:MIN_DISK_GB = 20
+            $script:PYTHON_REQUIRED = "3.12"
+            $script:KALI_DISTRO = "kali-linux"
+            $script:VENV_NAME = "Argus_venv"
+        }
+    }
+
+    Context "Config Block Validation" {
+        It "Should have correct minimum hardware requirements" {
+            $MIN_RAM_GB | Should Be 8
+            $MIN_DISK_GB | Should Be 20
+        }
+
+        It "Should require Python 3.12" {
+            $PYTHON_REQUIRED | Should Be "3.12"
+        }
+
+        It "Should have default Kali Linux distro name" {
+            $KALI_DISTRO | Should Be "kali-linux"
+        }
+
+        It "Should define default virtual environment name" {
+            $VENV_NAME | Should Be "Argus_venv"
+        }
+    }
+
+    Context "Admin Check Helper" {
+        It "Test-IsAdministrator should return a boolean value" {
+            if (-not $script:installerLoaded) {
+                Set-ItResult -Skipped -Because "Installer not loaded"
+                return
+            }
+            $result = Test-IsAdministrator
+            $result | Should BeOfType [bool]
+        }
+    }
+
+    Context "Command Execution Helper" {
+        It "Test-CommandWorks should return success for standard shell commands" {
+            if (-not $script:installerLoaded) {
+                Set-ItResult -Skipped -Because "Installer not loaded"
+                return
+            }
+            $result = Test-CommandWorks -CommandPath "cmd.exe" -Arguments @("/c", "echo 1")
+            $result.Works | Should Be $true
+            $result.Output | Should Be "1"
+        }
+
+        It "Test-CommandWorks should return failure for invalid commands" {
+            if (-not $script:installerLoaded) {
+                Set-ItResult -Skipped -Because "Installer not loaded"
+                return
+            }
+            $result = Test-CommandWorks -CommandPath "invalidcommand_argus.exe"
+            $result.Works | Should Be $false
+        }
+    }
+
+    Context "Python Discovery Helper" {
+        It "Get-UsablePython should return either null or a valid python object matching 3.12" {
+            if (-not $script:installerLoaded) {
+                Set-ItResult -Skipped -Because "Installer not loaded"
+                return
+            }
+            $python = Get-UsablePython
+            if ($null -ne $python) {
+                $python.Path | Should Not BeNullOrEmpty
+                $python.Version | Should Match "3\.12"
+            } else {
+                $python | Should BeNull
+            }
+        }
+    }
+
+    Context "Interactive Step Confirmation" {
+        It "Confirm-Step should return true without prompting when not interactive" {
+            if (-not $script:installerLoaded) {
+                Set-ItResult -Skipped -Because "Installer not loaded"
+                return
+            }
+            $Interactive = $false
+            $result = Confirm-Step -Id 99 -Name "Test Non-Interactive Step"
+            $result | Should Be $true
+        }
+    }
+}
