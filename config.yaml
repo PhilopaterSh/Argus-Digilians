@@ -22,7 +22,7 @@ rag:
 # Streamlit / GUI settings (editable, non-sensitive)
 streamlit:
   host: localhost
-  port: 8501
+  port: 8199
   headless: true
   enableCORS: false
   enableXsrfProtection: false

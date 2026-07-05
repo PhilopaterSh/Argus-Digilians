@@ -27,7 +27,7 @@ class RAGSettings:
 @dataclass
 class StreamlitSettings:
     host: str = "localhost"
-    port: int = 8501
+    port: int = 12199
     headless: bool = True
     enable_cors: bool = False
     enable_xsrf_protection: bool = False

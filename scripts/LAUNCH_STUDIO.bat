@@ -88,11 +88,15 @@ set "STREAM_LOG_LEVEL=error"
 set "PYTHONWARNINGS=ignore"
 
 :: 5. Launch dashboard
+cd /d "%PROJECT_ROOT%"
+
+:: Read port from config.yaml (single source of truth)
+for /f "delims=" %%i in ('Argus_venv\Scripts\python.exe scripts\get_port.py') do set "STREAMLIT_PORT=%%i"
+
 echo [*] Activating environment and launching Dashboard...
 echo [INFO] The browser will open automatically. Please wait 10 seconds.
 
-cd /d "%PROJECT_ROOT%"
-start http://localhost:12199
-Argus_venv\Scripts\python.exe -m streamlit run app/GUI/argus_studio.py --server.port 12199 --server.headless true --server.enableCORS false --server.enableXsrfProtection false
+start http://localhost:%STREAMLIT_PORT%
+Argus_venv\Scripts\python.exe -m streamlit run app/GUI/argus_studio.py --server.port %STREAMLIT_PORT% --server.headless true --server.enableCORS false --server.enableXsrfProtection false
 
 pause
