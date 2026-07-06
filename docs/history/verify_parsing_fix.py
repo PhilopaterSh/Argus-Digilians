@@ -1,8 +1,15 @@
 #!/usr/bin/env python
 """
-Test Script for Argus Parsing Error Fix
+Historical verification script for the Argus Parsing Error Fix (see
+PARSING_ERROR_FIX.md / JSON_PARSING_FIX.md in this same directory).
 
-Tests:
+NOT a live test: `ArgusBrain` no longer branches `use_react` per model (it
+always defaults to SimpleChain, per app/core/agent/brain.py's own docstring),
+and `app.core.agent_factory_v2` was removed per specs/012-spec-reconciliation
+T027. Kept here for historical reference only - intentionally named so
+pytest's `test_*.py` discovery pattern does not pick it up.
+
+Tests (as originally written, against the architecture at the time):
 1. WhiteRabbitNeo model detection
 2. SimpleChain fallback mechanism
 3. Error handling in GUI
@@ -12,12 +19,12 @@ Tests:
 import sys
 import os
 
-# Add project root to path
-sys.path.insert(0, os.path.dirname(__file__))
+# Add project root to path (this file lives in tests/, one level below root)
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 def test_brain_initialization():
     """Test that brain correctly detects WhiteRabbitNeo and defaults to SimpleChain."""
-    from app.core.brain import ArgusBrain
+    from app.core.agent.brain import ArgusBrain
     from langchain_core.tools import Tool
     
     print("\n" + "="*60)
@@ -94,7 +101,7 @@ def test_output_format():
 
 def test_error_detection():
     """Test that brain correctly detects and handles format errors."""
-    from app.core.brain import ArgusBrain
+    from app.core.agent.brain import ArgusBrain
     from langchain_core.tools import Tool
     from unittest.mock import Mock, patch
     

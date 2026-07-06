@@ -1,11 +1,14 @@
+import os
 import sys
-sys.path.insert(0, 'C:/AI_PenTest_Project/Argus')
+
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, REPO_ROOT)
 errors = []
 
 # Test 1: config.yaml loads correctly
 try:
-    import yaml, os
-    with open('C:/AI_PenTest_Project/Argus/config.yaml') as f:
+    import yaml
+    with open(os.path.join(REPO_ROOT, 'config.yaml')) as f:
         cfg = yaml.safe_load(f)
     print('[OK] config.yaml loaded:', cfg)
 except Exception as e:
@@ -19,9 +22,10 @@ except Exception as e:
     errors.append(f'[FAIL] app.__init__: {e}')
 
 # Test 3: agent_factory reads config
+# NOTE: moved to app.core.agent.agent_factory per specs/012-spec-reconciliation T027
 try:
-    from app.core import agent_factory
-    print(f'[OK] agent_factory: early_stopping={agent_factory._EARLY_STOPPING}, max_iter={agent_factory._MAX_ITERATIONS}')
+    from app.core.agent import agent_factory
+    print(f'[OK] agent_factory: max_iter={agent_factory.DEFAULT_MAX_ITERATIONS}')
 except Exception as e:
     errors.append(f'[FAIL] agent_factory: {e}')
 
@@ -82,8 +86,8 @@ except Exception as e:
 # Test 10: argus_reasoning imports correct (utf-8 safe read)
 try:
     import pathlib
-    src = pathlib.Path('C:/AI_PenTest_Project/Argus/app/modules/argus_reasoning.py').read_text(encoding='utf-8', errors='ignore')
-    assert 'from app.core.brain import ArgusBrain' in src
+    src = pathlib.Path(REPO_ROOT, 'app', 'modules', 'argus_reasoning.py').read_text(encoding='utf-8', errors='ignore')
+    assert 'from app.core.agent.brain import ArgusBrain' in src
     assert 'from app.tools.tool_registry import WSLBridgeTools' in src
     print('[OK] argus_reasoning: correct imports')
 except Exception as e:

@@ -14,14 +14,26 @@ wsl_output.txt
 
 # Databases
 *.db
-!data/argus_intelligence.db  # Keep the skeleton DB
+# Keep the skeleton DB
+!data/argus_intelligence.db
 
 # Logs
 ARGUS_INSTALLATION.log
 streamlit.err.log
 streamlit.out.log
-logs/*.log  # Ignore generated logs
-logs/agent_runs/*.json  # Agent run state files
+# Ignore generated logs
+logs/*.log
+# Agent run state files
+# NOTE: this rule (and the two above with trailing "# comment" text) were
+# previously written as `pattern  # comment` on one line - git does NOT strip
+# inline trailing comments from .gitignore patterns, so all three were dead
+# rules matching nothing. This is how the agent_runs/*.json files and the
+# artifacts/*.zip ended up committed despite "looking" gitignored. Fixed
+# 2026-07-06 by moving comments to their own line.
+logs/agent_runs/*.json
+
+# Generated build/GUI snapshots - never track these
+artifacts/*.zip
 
 # Project Specific
 reports/
