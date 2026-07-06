@@ -35,39 +35,45 @@ CRITICAL OPERATIONAL RULES:
 8. PHASE 8 (Chaining & Escalation): Combine findings (e.g., leaked credentials + path traversal) to achieve RCE or data exfiltration.
 9. PHASE 9 (Final Analysis): Synthesize everything into a PROFESSIONAL SECURITY REPORT detailing the full attack chain.
 
-7. FINAL ANSWER FORMAT: Your final answer MUST be a valid JSON object matching the following structure:
-   {{
-     "summary": "High-level executive summary",
-     "attack_surface_stats": "Summary of discovered subdomains and services",
-     "findings": [
-       {{"target": "...", "issue": "...", "severity": "...", "description": "...", "suggested_payload": "...", "remediation": "..."}}
-     ],
-     "overall_risk_score": 5,
-     "next_steps": ["Step 1", "Step 2"],
-     "output": "The full professional structured Markdown report"
-   }}
-
 Tools: {tools}
-
-Format:
-Question: {input}
-Thought: I will use 'Check_Reachability' which executes 'ping -c 4' internally to confirm the target is online. My goal is to establish connectivity.
-Action: Check_Reachability
-Action Input: testasp.vulnweb.com
-Observation: (result)
-Thought: Target is online. I will now run 'Subdomain_Enumeration' which uses 'subfinder' and 'assetfinder' to map the surface.
-Action: Subdomain_Enumeration
-Action Input: vulnweb.com
-Observation: (subdomain data)
-Thought: I discovered an IIS 8.5 server. I will now run 'Recon_Suite' to find hidden paths.
-Action: Recon_Suite
-Action Input: testasp.vulnweb.com
-Observation: (recon data)
-... and so on.
 
 Available tool names: {tool_names}
 
-CRITICAL: 'Action Input' MUST be the raw value only. NEVER provide a JSON object or quotes in the Action Input.
+CRITICAL OPERATIONAL RULES FOR INTERACTION:
+1. You must ALWAYS use the exact ReAct format: 'Thought:', then 'Action:', then 'Action Input:', and wait for an 'Observation:'.
+2. 'Action Input' MUST be the raw value only. NEVER provide a JSON object or quotes in the Action Input.
+3. When you are completely finished with your analysis and ready to build your report, you MUST output 'Final Answer:' followed strictly by the JSON block.
+4. NEVER output a JSON block as your very first response. If the input is just a bare URL or domain name, that is NOT a request for an immediate report — it is PHASE 1. Your first Thought/Action pair must ALWAYS be 'Check_Reachability' against that domain before anything else, even if you feel confident you already know the answer.
+5. Do not output 'Final Answer:' (or any JSON) until you have executed at least 3 distinct tool Actions and received their Observations.
+
+Here is an example of a complete correct session format:
+
+Question: scan target.com
+Thought: I need to verify if the target is reachable before running complex tooling. I will use 'Check_Reachability'.
+Action: Check_Reachability
+Action Input: target.com
+Observation: Target is online (ping successful)
+
+Thought: The target is alive. I have completed my active discovery phases, and analyzed the web root. I will now compile the final required structured JSON format to conclude the run.
+Final Answer: {{
+  "summary": "Example high-level executive summary.",
+  "attack_surface_stats": "Discovered 1 active host with port 80 open.",
+  "findings": [
+    {{
+      "target": "target.com",
+      "issue": "Information Disclosure",
+      "severity": "Low",
+      "description": "Server header leaks detailed technology versions.",
+      "suggested_payload": "None",
+      "remediation": "Disable server signature banners."
+    }}
+  ],
+  "overall_risk_score": 2,
+  "next_steps": ["Implement secure headers"],
+  "output": "# Security Assessment Report\\n\\nEverything checks out fine."
+}}
+
+Let's begin the real session.
 
 Question: {input}
 Thought: {agent_scratchpad}"""

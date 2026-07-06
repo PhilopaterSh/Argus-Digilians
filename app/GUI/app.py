@@ -9,7 +9,6 @@ from app.core.config import ArgusConfig
 from app.tools.tool_registry import WSLBridgeTools
 from app.core.brain import ArgusBrain
 from langchain_core.tools import Tool
-from langchain_community.callbacks.streamlit import StreamlitCallbackHandler
 
 config = ArgusConfig.load()
 
@@ -54,6 +53,7 @@ def load_brain(model_name):
         Tool(name="Check_Reachability", func=bridge.check_reachability, description="Verify if the target domain is reachable before scanning."),
         Tool(name="Subdomain_Enumeration", func=bridge.enumerate_subdomains, description="Discover subdomains to map the target's attack surface."),
         Tool(name="Recon_Suite", func=bridge.recon_suite, description="Execute parallel advanced recon (WAF, Nmap, WhatWeb, HTTP Headers, Spider) inside Kali."),
+        Tool(name="Crawl_Target", func=bridge.crawl_target, description="Discover internal links and entry points via curl/grep to expand the attack surface."),
         Tool(name="Query_Memory", func=bridge.get_intelligence_summary, description="Query the internal Shared Memory (Blackboard) for a summary of all findings."),
         Tool(name="Query_Knowledge_Graph", func=bridge.query_knowledge_graph, description="Access the Knowledge Graph to find cross-target relationships, shared infrastructure, and lateral movement paths."),
         Tool(name="Exploit_Suggester", func=bridge.suggest_payloads, description="Search PayloadsAllTheThings for test payloads."),
@@ -72,52 +72,67 @@ target = st.text_input("🎯 Target URL", "https://example.com")
 if st.button("RUN ANALYSIS"):
     if target:
         brain = load_brain(model)
-        
+
         with st.status("🕵️ Argus Agent is thinking...", expanded=True) as status:
             try:
                 st.write("Initializing autonomous security reasoning...")
-                st_callback = StreamlitCallbackHandler(st.container())
-                
-                # The Agent now takes full control and shows its thoughts live in the UI
-                analysis = brain.ask(
-                    f"CONSULT MEMORY FIRST using 'Query_Memory'. Then perform a comprehensive security analysis for {target}. "
-                    f"If findings like SQLi, Path Traversal, or sensitive files already exist in memory, use 'Exploit_Suggester' and 'Smart_Web_Search' to CHAIN them and reach maximum impact (RCE). "
-                    f"Finally, provide a deep risk assessment including the full attack chain.",
-                    callbacks=[st_callback]
-                )
-                
+
+                # Live per-phase progress: run_deterministic_recon calls this
+                # right after each tool finishes, so results appear here as
+                # they happen instead of only after the whole pipeline ends.
+                def show_phase_progress(index, total, tool_name, observation):
+                    st.write(f"**[{index}/{total}] {tool_name}**")
+                    preview = observation if len(observation) <= 1500 else observation[:1500] + "\n... (truncated)"
+                    st.code(preview, language="text")
+
+                # The deterministic pipeline runs the fixed recon phases
+                # itself in Python - it just needs the target, not an
+                # elaborate instruction paragraph (there's no agent left
+                # to interpret one).
+                analysis = brain.ask(target, on_phase=show_phase_progress)
+
                 st.markdown("### 📋 Final Security Report")
-                
-                # Check if we got a parsed dictionary or raw string
+
+                report_dict = analysis.get("output")
                 final_report = ""
-                if isinstance(analysis.get("output"), dict):
-                    # It's the parsed Pydantic dict
-                    report_dict = analysis["output"]
-                    final_report = report_dict.get("output", str(report_dict))
-                    
-                    # Display metrics in columns
+
+                if isinstance(report_dict, dict) and "error" in report_dict:
+                    # Synthesis failed outright (LLM error, or it echoed
+                    # the schema instead of writing a real report after
+                    # all retries) - say so plainly instead of dumping
+                    # whatever garbage came back as if it were the report.
+                    st.error(f"❌ Report synthesis failed: {report_dict.get('error')}")
+                    st.warning(report_dict.get("message", ""))
+                    with st.expander("Raw tool output (recon still ran successfully)"):
+                        st.json(report_dict.get("raw_tool_observations", {}))
+                    status.update(label="Analysis Failed", state="error")
+                    final_report = None
+
+                elif isinstance(report_dict, dict):
+                    final_report = report_dict.get("output") or "(model returned no markdown output field)"
+
                     col1, col2 = st.columns(2)
                     col1.metric("Overall Risk Score", f"{report_dict.get('overall_risk_score', 'N/A')}/10")
                     col2.metric("Findings Count", len(report_dict.get("findings", [])))
-                    
+
                     with st.expander("View Structured Data (JSON)"):
                         st.json(report_dict)
+
+                    st.markdown(final_report)
+                    status.update(label="Analysis Finished!", state="complete")
+
                 else:
-                    # It's the raw result string
-                    final_report = analysis.get("output", str(analysis))
-                
-                # Render the final Markdown report
-                st.markdown(final_report)
-                
-                status.update(label="Analysis Finished!", state="complete")
-                
-                # --- Export Feature ---
-                st.download_button(
-                    label="📥 Download Report (Markdown)",
-                    data=final_report,
-                    file_name=f"Argus_Report_{target.replace('https://', '').replace('http://', '').replace('/', '_')}.md",
-                    mime="text/markdown"
-                )
+                    final_report = str(analysis.get("output", analysis))
+                    st.markdown(final_report)
+                    status.update(label="Analysis Finished!", state="complete")
+
+                if final_report:
+                    st.download_button(
+                        label="📥 Download Report (Markdown)",
+                        data=final_report,
+                        file_name=f"Argus_Report_{target.replace('https://', '').replace('http://', '').replace('/', '_')}.md",
+                        mime="text/markdown"
+                    )
             except Exception as e:
                 st.error(f"❌ Critical Error during AI Analysis: {str(e)}")
                 st.warning("🔄 Suggestion: Restart Argus and try 'Force CPU Mode' if this is a GPU/CUDA error.")

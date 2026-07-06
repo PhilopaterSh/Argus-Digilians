@@ -69,7 +69,7 @@ if %errorlevel% neq 0 (
 
 :: 3. Launching Studio
 echo [*] Activating Environment and Launching Web Interface...
-if not exist "Argus_venv\Scripts\activate.bat" (
+if not exist "..\Argus_venv\Scripts\activate.bat" (
     echo [ERROR] Virtual Environment missing! Run INSTALL_EVERYTHING.bat first.
     pause & exit /b
 )
@@ -85,6 +85,6 @@ set "STREAM_LOG_LEVEL=error"
 set "PYTHONWARNINGS=ignore"
 
 start http://localhost:12199
-Argus_venv\Scripts\python.exe -m streamlit run GUI\app.py --server.port 12199 --server.headless true --server.enableCORS false --server.enableXsrfProtection false
+..\Argus_venv\Scripts\python.exe -m streamlit run ..\app\GUI\app.py --server.port 12199 --server.headless true --server.enableCORS false --server.enableXsrfProtection false
 
 pause
