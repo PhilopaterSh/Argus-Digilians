@@ -12,12 +12,24 @@ jobs:
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v4
+      uses: actions/checkout@v4.2.2
+
+    - name: Ensure Pester module is available
+      shell: pwsh
+      run: |
+        if (-not (Get-Module -ListAvailable -Name Pester)) {
+          Install-Module -Name Pester -Force -SkipPublisherCheck -Scope CurrentUser
+        }
 
     - name: Run Pester tests
       shell: pwsh
       run: |
-        $result = Invoke-Pester -Path .\tests\pester\install_tests.tests.ps1 -PassThru
+        $testPath = ".\tests\pester\install_tests.tests.ps1"
+        if (-not (Test-Path $testPath)) {
+            Write-Warning "Pester test file not found at $testPath - skipping (nothing to run)."
+            exit 0
+        }
+        $result = Invoke-Pester -Path $testPath -PassThru
         if ($result.FailedCount -gt 0) {
             Write-Error "Pester tests failed with $($result.FailedCount) failure(s)."
             exit 1

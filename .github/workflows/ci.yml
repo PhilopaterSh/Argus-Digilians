@@ -42,7 +42,7 @@ jobs:
       - name: Ruff lint (syntax + undefined names)
         run: ruff check .
       - name: Mypy (typed modules)
-        run: mypy app/core/rag/manifest.py scripts/validate_specs.py scripts/validate_ascii.py scripts/get_port.py
+        run: mypy app/core/rag/manifest.py app/core/rag/vector_store.py app/core/rag/embeddings.py app/core/llm_factory.py app/core/agent/brain.py app/core/agent/agent_factory.py app/core/agent/react_workflow.py scripts/validate_specs.py scripts/validate_ascii.py scripts/get_port.py
 
   # Stage 6 (partial): build validation via byte-compilation. BLOCKING.
   build-validation:
