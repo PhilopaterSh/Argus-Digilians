@@ -2,6 +2,26 @@ import streamlit as st
 import time
 
 
+def _reconcile_agent_running_state(session_agent_running, controller):
+    """Resolve the true running/finished state against the controller's process
+    (specs/010 T029: failed runs must not be displayed as still running).
+
+    Guards against a stale session-state 'agent_running=True' surviving after the
+    underlying process has actually finished (completed or failed) - without this
+    check, a failed run would keep showing "Running" until the next full page
+    reload clears session_state.
+
+    Returns (new_agent_running, current_state).
+    """
+    if controller is None:
+        return session_agent_running, {}
+    current_state = controller.get_status()
+    process_running = controller.is_running()
+    if session_agent_running and not process_running:
+        return False, controller.get_status()
+    return session_agent_running, current_state
+
+
 def _render_events(events):
     feed_html = ''
     for event in events[-20:]:
@@ -54,11 +74,10 @@ def render_agent():
                 st.session_state.agent_running = False
                 st.rerun()
 
-    current_state = controller.get_status() if controller else {}
-    process_running = controller.is_running() if controller else False
-    if st.session_state.get('agent_running') and controller and not process_running:
-        st.session_state.agent_running = False
-        current_state = controller.get_status()
+    new_agent_running, current_state = _reconcile_agent_running_state(
+        st.session_state.get('agent_running', False), controller
+    )
+    st.session_state.agent_running = new_agent_running
 
     with col3:
         status_label = current_state.get('status', 'idle')

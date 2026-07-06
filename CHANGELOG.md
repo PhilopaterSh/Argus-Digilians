@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 - Initial structure proposals applied.
+- Closed the last two documented test gaps in `specs/010-langgraph-agent/tasks.md`
+  (T027, T029), evaluated as the one safe, purely-additive improvement available
+  after a conservative options review. `tests/test_modules/test_tactical_graph_termination.py`
+  (7 tests) exercises `app/core/agent/graph.py`'s `should_continue()` directly:
+  exploit-success termination, dependency-error retry routing, retry-budget
+  exhaustion, missing-payload termination, and a config-driven retry bound.
+  Extracted the stale-running reconciliation check in `app/GUI/tabs/agent.py`
+  into a pure `_reconcile_agent_running_state()` function (behavior-preserving)
+  and added `tests/test_gui/test_agent_tab_status.py` (5 tests) proving a
+  failed/completed run is never displayed as still running.
 - Completed the pending merge of `fix/setup-script-update` (all conflicts had been
   resolved in the working tree but never committed); fixed a missing `langgraph`
   dependency in `scripts/Setup/requirements.txt` surfaced during review.

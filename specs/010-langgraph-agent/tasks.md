@@ -52,9 +52,9 @@ below; see each item for evidence. Only T027 and T029 are genuine, real gaps.
 ## Phase 5: Validation
 
 - [x] T026 Add a test that proves the RAG pipeline returns grounded local context. `tests/test_rag/test_rag_engine_threshold.py` (threshold filtering + context fusion).
-- [ ] T027 Add a test that proves the agent terminates after success or retry exhaustion. **Genuine gap**: no test exercises `app/core/agent/graph.py`'s `build_tactical_graph()`/`should_continue()` directly (`tests/test_langgraph_workflow.py` covers the *other* graph - the ReAct workflow migrated into `app/core/agent/react_workflow.py` - not the tactical recon->exploit graph).
+- [x] T027 Add a test that proves the agent terminates after success or retry exhaustion. **Closed 2026-07-06**: `tests/test_modules/test_tactical_graph_termination.py` (7 tests) exercises `should_continue()` directly - exploit success, dependency-error retry routing, retry-budget exhaustion, missing-payload termination, and a config-driven (not hardcoded) retry bound.
 - [x] T028 Add a test that proves the UI can display the final_state after completion. `tests/test_gui/test_dashboard.py` + `app/GUI/tabs/agent.py`'s final_state rendering path.
-- [ ] T029 Add a test that proves failed runs are not hidden as running. **Genuine gap**: no dedicated test asserts a `status=failed` snapshot renders distinctly from `status=running` in the Agent tab.
+- [x] T029 Add a test that proves failed runs are not hidden as running. **Closed 2026-07-06**: extracted the stale-running reconciliation check in `app/GUI/tabs/agent.py` into a pure `_reconcile_agent_running_state()` function (behavior-preserving) and added `tests/test_gui/test_agent_tab_status.py` (5 tests) proving a `status=failed` (or `completed`) snapshot flips `agent_running` to `False` rather than continuing to display "Running".
 - [x] T030 Run `py_compile` or equivalent syntax checks for edited Python modules. `python -m compileall -q app scripts tests` is the BLOCKING `build-validation` CI job.
 
 ## Out Of Scope For MVP

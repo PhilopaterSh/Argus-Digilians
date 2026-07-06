@@ -159,7 +159,7 @@ canonical architecture doc. Tracked as Cleanup Manifest C6.
 | 007 Reflective verification | Implemented | `app/tools/reflective_verification.py` | `tests/test_tools/` | - |
 | 008 Self-healing | Implemented | `app/tools/self_heal.py` | `tests/test_tools/` | - |
 | 009 GUI (Tkinter) | Implemented (UI superseded by 011) | `app/GUI/desktop_gui.py` | `tests/test_gui/` | fallback only |
-| 010 LangGraph agent | Implemented (30/33 tasks; T027/T029 test gaps) | `app/core/agent/graph.py`, `nodes/` | `tests/test_modules/test_agent_contracts.py`, `tests/test_gui/` | tasks.md reconciled 2026-07-06 - it read 0/33 despite the graph being built |
+| 010 LangGraph agent | Implemented (32/33 tasks; T031-T033 explicitly out-of-scope-for-MVP) | `app/core/agent/graph.py`, `nodes/` | `tests/test_modules/{test_agent_contracts,test_tactical_graph_termination}.py`, `tests/test_gui/{test_dashboard,test_agent_tab_status}.py` | tasks.md reconciled 2026-07-06 - it read 0/33 despite the graph being built; T027/T029 test gaps closed same day |
 | 011 GUI dashboard | Draft (entrypoint done, tabs partial) | `app/GUI/dashboard.py` | `tests/test_gui/` | renamed 2026-07-06 (C3 done) |
 | 012 Reconciliation | Canonical | (governance) | validation scripts | complete artifact set |
 | 013 LangGraph workflow | Fully superseded | `app/core/agent/react_workflow.py` (was `app/core/workflow/*`) | `tests/test_langgraph_workflow.py` | migration completed 2026-07-06 (C4/T028) |
