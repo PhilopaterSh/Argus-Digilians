@@ -40,21 +40,34 @@ No behavior change - `.gitignore` only affects what git tracks; no source or con
 
 ## 2. Area Reviewed: GUI subsystem (`app/GUI/`)
 
-### Problems found
+### STATUS: C3 done (2026-07-06)
+`argus_studio.py` renamed to `app/GUI/dashboard.py` (`STREAMLIT_DASHBOARD_ENTRYPOINT` in
+`app/core/agent/contracts.py`, `config.yaml`'s `gui_entry`, and `app/core/config.py`'s
+`PathSettings.gui_entry` default all updated to match - the latter two had been silently
+pointing at `gui_app.py`, a single-purpose demo script, not the real dashboard). Launchers
+(`scripts/LAUNCH_STUDIO.bat`, `scripts/TEST_ARGUS.bat`) repointed. `app.py`, `argus_gui.py`,
+`gui_main.py`, `gui_root.py` now carry the same `DeprecationWarning` + in-page banner pattern
+`app.py` already used (their functional bodies were left intact rather than gutted, to avoid
+behavior risk); `studio.py` re-exports `dashboard.py` directly instead of chaining through the
+deprecated `app.py`. `gui_app.py` also deprecated the same way but NOT wired anywhere anymore -
+note its body unconditionally runs a live agent analysis against a hardcoded target on import
+(no button gate), so it must never be added to an import-based smoke test. Full physical removal
+of the 6 shims deferred to a follow-up pass (needs a broader UI regression check first).
+Validated via `tests/test_gui/` (17 passed) and the full suite (144 passed).
+
+### Problems found (original, 2026-07-05)
 - **P0 - 8 overlapping entrypoints**: `app.py`, `argus_gui.py`, `argus_studio.py`,
   `desktop_gui.py`, `gui_app.py`, `gui_main.py`, `gui_root.py`, `studio.py`. The canonical
   primary UI per `012` section 2.5 / `011` is a single `app/GUI/dashboard.py`, which does not
   yet exist; `argus_studio.py` appears to be the closest current implementation.
 - **P1 - Naming drift**: `011` specifies `dashboard.py`; the code uses `argus_studio.py`.
 
-### Improvements applied (this environment)
-- None applied in place (consolidation requires running the Streamlit app to verify parity;
-  deletion is blocked). Captured as Cleanup Manifest C3.
+### Improvements applied
+- See STATUS above - C3 is now done.
 
 ### Recommendation
-Adopt one canonical `app/GUI/dashboard.py` (rename/align `argus_studio.py`), keep
-`desktop_gui.py` as the optional Tkinter fallback (per `012` 2.5), and reduce the remaining six
-to thin deprecation shims, then remove (C3).
+Physically remove the 6 deprecation shims once a full UI regression pass confirms nothing
+external still launches them directly.
 
 ---
 
@@ -146,13 +159,15 @@ canonical architecture doc. Tracked as Cleanup Manifest C6.
 | 007 Reflective verification | Implemented | `app/tools/reflective_verification.py` | `tests/test_tools/` | - |
 | 008 Self-healing | Implemented | `app/tools/self_heal.py` | `tests/test_tools/` | - |
 | 009 GUI (Tkinter) | Implemented (UI superseded by 011) | `app/GUI/desktop_gui.py` | `tests/test_gui/` | fallback only |
-| 010 LangGraph agent | Draft (Canonical agent) | `app/core/agent/graph.py`, `nodes/` | - | needs runtime |
-| 011 GUI dashboard | Draft | `app/GUI/argus_studio.py` (-> dashboard.py) | - | naming drift (C3) |
+| 010 LangGraph agent | Implemented (30/33 tasks; T027/T029 test gaps) | `app/core/agent/graph.py`, `nodes/` | `tests/test_modules/test_agent_contracts.py`, `tests/test_gui/` | tasks.md reconciled 2026-07-06 - it read 0/33 despite the graph being built |
+| 011 GUI dashboard | Draft (entrypoint done, tabs partial) | `app/GUI/dashboard.py` | `tests/test_gui/` | renamed 2026-07-06 (C3 done) |
 | 012 Reconciliation | Canonical | (governance) | validation scripts | complete artifact set |
-| 013 LangGraph workflow | Partially superseded | `app/core/workflow/*` | `tests/test_langgraph_workflow.py` | superseded by 010 (C4) |
+| 013 LangGraph workflow | Fully superseded | `app/core/agent/react_workflow.py` (was `app/core/workflow/*`) | `tests/test_langgraph_workflow.py` | migration completed 2026-07-06 (C4/T028) |
 
-**Traceability gaps**: 010/011 are specified but not yet implemented against the reconciled core
-(blocked on runtime); every other feature maps spec -> code -> tests.
+**Traceability gaps**: 011 (GUI dashboard tabs) still has real unimplemented scope; 010 has
+two specific missing tests (T027: tactical graph termination, T029: failed-vs-running UI
+distinction) rather than being unimplemented outright. Every other feature maps spec -> code
+-> tests.
 
 ---
 
@@ -160,15 +175,15 @@ canonical architecture doc. Tracked as Cleanup Manifest C6.
 
 Run these in a normal dev checkout (Python 3.12 + deps). Each is safe with the stated precondition.
 
-| ID | Action | Precondition | Priority |
-|----|--------|--------------|----------|
-| C1 | `rm -rf "Argus-Digilians-fix-copy-setup-to-scripts/"` (nested 1.6 GB self-copy) | confirm not a submodule (it is untracked) | P0 |
-| C2 | Delete `app/core/rag/{processor,vectorstore,engine}.py` | grep confirms zero importers (already true) | P0 |
-| C3 | Rename `app/GUI/argus_studio.py` -> `dashboard.py`; reduce `app.py`/`argus_gui.py`/`gui_app.py`/`gui_main.py`/`gui_root.py`/`studio.py` to shims, then remove | Streamlit smoke test of dashboard passes | P1 |
-| C4 | Merge `brain_v2`->`brain`, `agent_factory_v2`->`agent_factory`; migrate `app/core/workflow/*` into `app/core/agent/`; repoint 3 test files; delete shadows | `pytest` green after repoint | P0 |
-| C5 | Author `research.md`/`data-model.md`/`quickstart.md` for `002` and `003-sqlite` | derive from existing spec/plan (no new decisions) | P2 |
-| C6 | Move root `*_FIX.*` / `*_REPORT.*` notes to `docs/history/`; delete `Plan md/`; move `check_integration.py`/`test_parsing_fix.py` into `tests/` | none | P2 |
-| C7 | Delete `.pytest_cache/` (now gitignored) | none | P3 |
+| ID | Action | Precondition | Priority | Status |
+|----|--------|--------------|----------|--------|
+| C1 | `rm -rf "Argus-Digilians-fix-copy-setup-to-scripts/"` (nested 1.6 GB self-copy) | confirm not a submodule (it is untracked) | P0 | Done (2026-07-06) - verified via byte-level diff of its own unresolved-merge working tree against commit `8495f4d`: `tool_registry.py` identical, `brain.py`/`config.yaml` differed only by already-superseded fixes (ASCII cleanup, port correction). Zero unique content confirmed before deletion; owner confirmed explicitly. |
+| C2 | Delete `app/core/rag/{processor,vectorstore,engine}.py` | grep confirms zero importers (already true) | P0 | Done |
+| C3 | Rename `app/GUI/argus_studio.py` -> `dashboard.py`; reduce `app.py`/`argus_gui.py`/`gui_app.py`/`gui_main.py`/`gui_root.py`/`studio.py` to shims, then remove | Streamlit smoke test of dashboard passes | P1 | Done (2026-07-06) - shims added, physical removal still deferred |
+| C4 | Merge `brain_v2`->`brain`, `agent_factory_v2`->`agent_factory`; migrate `app/core/workflow/*` into `app/core/agent/`; repoint 3 test files; delete shadows | `pytest` green after repoint | P0 | Done |
+| C5 | Author `research.md`/`data-model.md`/`quickstart.md` for `002` and `003-sqlite` | derive from existing spec/plan (no new decisions) | P2 | Done - all 6 files already present with substantial content (91-139 lines each), verified 2026-07-06 |
+| C6 | Move root `*_FIX.*` / `*_REPORT.*` notes to `docs/history/`; delete `Plan md/`; move `check_integration.py`/`test_parsing_fix.py` into `tests/` | none | P2 | Done - `test_parsing_fix.py` routed to `docs/history/verify_parsing_fix.py` instead of `tests/` (2 of its 4 assertions fail against current design; `tests/` would have made it live for the first time via pytest's `test_*.py` discovery) |
+| C7 | Delete `.pytest_cache/` (now gitignored) | none | P3 | Done |
 
 ---
 
@@ -216,3 +231,35 @@ production-grade. Blocking the release:
 **Recommended next step**: in a Python 3.12 checkout with dependencies, execute C1, C2, then C4
 (with `pytest` after the test repoint). That clears all P0 debt and unblocks the remaining feature
 implementation.
+
+---
+
+## 11. Follow-up: GUI crash fix + repo-wide import-time side-effect sweep (2026-07-06)
+
+All of section 10's blockers (C1-C7) are now done - see the Cleanup Manifest table (section 8)
+status column. This section documents a follow-up pass done in a real dev checkout with the full
+test suite available.
+
+**Crash-class defect found and fixed**: `app/GUI/gui_app.py` and `app/GUI/gui_root.py` both
+executed `brain.ask()` unconditionally at import time (no button gate), crashing with
+`'NoneType' object has no attribute 'update'` in bare-mode Streamlit without live Ollama/WSL.
+Verified 98% identical to each other and fully superseded by `app/GUI/dashboard.py`'s
+`AgentController`-based Agent tab. **Both deleted.**
+
+**Repo-wide sweep** (`app/core/`, `app/tools/`, `app/modules/`, `scripts/*.py`; GUI package
+covered separately above) for the same defect class - module-level code executing at import
+instead of being deferred into a function or gated by `if __name__ == "__main__":`. Found and
+fixed two real, low-severity cases (neither could crash without live services - both were pure
+local file/DB I/O, but violated the "deterministic imports" principle):
+- `app/core/agent/blackboard.py` created the SQLite schema unconditionally on import (`init_schema()`
+  called at column 0). Fixed: deferred to lazy init on first `get_connection()` call via a
+  `_schema_ready` guard.
+- `app/core/agent/graph.py` read `config.yaml` via `ArgusConfig.load()` at import to set
+  `MAX_RETRIES`. Fixed: moved into `_get_max_retries()`, called from `should_continue()`.
+
+Reviewed and left unchanged (standard, low-risk bootstrap patterns, not accidental side effects):
+`app/tools/wsl_bridge.py`'s `load_dotenv()` at import; `scripts/run_argus_cli.py`'s
+`load_dotenv()`/`ArgusConfig.load()` before its `__main__` guard.
+
+Validated: full suite (144 passed), `ruff` clean, `scripts/validate_ascii.py` /
+`scripts/validate_specs.py` both PASS.

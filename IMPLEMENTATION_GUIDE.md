@@ -26,7 +26,7 @@ Implemented a **dual-executor system** with intelligent fallback:
 | **app/core/brain.py** | Added WhiteRabbitNeo detection + improved fallback logic | Automatically uses SimpleChain for WhiteRabbitNeo |
 | **app/core/agent_factory_v2.py** | Improved output formatting to markdown reports | Results now display properly instead of raw data |
 | **app/GUI/gui_main.py** | Enhanced error handling | Shows meaningful error messages |
-| **app/GUI/gui_root.py** | Enhanced error handling | Shows meaningful error messages |
+| ~~app/GUI/gui_root.py~~ | Deleted 2026-07-06 | Unsafe import-time `brain.ask()` execution; superseded by `app/GUI/dashboard.py` |
 
 ---
 

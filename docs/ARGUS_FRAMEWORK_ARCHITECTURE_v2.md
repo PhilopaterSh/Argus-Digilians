@@ -121,7 +121,7 @@ graph TB
 | **ArgusMemory** | `app/core/memory/memory_service.py` | SQLite Blackboard with 5 tables (targets, findings, entities, relations, global_state) |
 | **Tool Registry** | `app/tools/tool_registry.py` (facade) + `app/core/registry/` (`ToolRegistry`, `BaseToolService`) | WSLBridgeTools facade over a plugin `ToolRegistry` — **17** registered tools (14 core + 3 reflective-verification from `007`); see `005` |
 | **Tactical Modules** | `app/modules/` | High-level attack workflows (deep exploit, stealth, recon) |
-| **GUI** | `app/GUI/` | Streamlit (`gui_app.py`), Tkinter (`argus_gui.py`), Studio (`studio.py`) |
+| **GUI** | `app/GUI/` | Streamlit (`dashboard.py`, canonical - `012` C3), Tkinter fallback (`desktop_gui.py`); `app.py`/`argus_gui.py`/`gui_main.py`/`studio.py` are deprecation shims. `gui_app.py`/`gui_root.py` deleted 2026-07-06 - unconditional import-time `brain.ask()` execution made them unsafe to even import, and they were 98% duplicates of each other, fully superseded by `dashboard.py`'s `AgentController`-based Agent tab. |
 | **Knowledge Base** | `knowledge_base/` | Static source files ingested into FAISS |
 
 #### Tool Services (inside `app/tools/`)
@@ -165,8 +165,8 @@ flowchart LR
 ```mermaid
 graph TB
     subgraph "GUI Layer [app/GUI/]"
-        Streamlit[gui_app.py<br/>Streamlit Web UI]
-        Tkinter[argus_gui.py<br/>Tkinter Desktop]
+        Streamlit[dashboard.py<br/>Streamlit Web UI]
+        Tkinter[desktop_gui.py<br/>Tkinter Desktop]
         Studio[studio.py<br/>Argus Studio]
     end
 
@@ -291,7 +291,7 @@ graph TB
 ```mermaid
 sequenceDiagram
     participant User as Security Researcher
-    participant GUI as GUI Layer<br/>gui_app.py / studio.py
+    participant GUI as GUI Layer<br/>dashboard.py / studio.py
     participant Brain as ArgusBrain<br/>ask()
     participant RAG as RAG Engine<br/>app/core/rag/
     participant FAISS as FAISS Vector Store

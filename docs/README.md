@@ -1,6 +1,22 @@
-# 📚 Documentation & Architecture
+# Documentation & Architecture
 
 This directory contains comprehensive documentation, architecture diagrams, and technical references for the Argus security framework.
+
+## Canonical & Governance Documents (start here)
+
+These are the authoritative sources of truth. When any other document disagrees, these win.
+
+| Document | Role |
+|----------|------|
+| [`ARGUS_FRAMEWORK_ARCHITECTURE_v2.md`](ARGUS_FRAMEWORK_ARCHITECTURE_v2.md) | Canonical architecture (arc42 + C4) and all ADRs (1-16) |
+| [`../specs/012-spec-reconciliation/`](../specs/012-spec-reconciliation/) | Canonical cross-cutting decisions (naming, ports, RAG embedding, agent design, testing, CI/CD) |
+| [`ARCHITECTURE_AUDIT_REPORT.md`](ARCHITECTURE_AUDIT_REPORT.md) | Repository audit, duplication analysis, and the Cleanup Manifest (C1-C7) |
+| [`ARGUS_SPECKIT_ARCHITECTURE_REVIEW.md`](ARGUS_SPECKIT_ARCHITECTURE_REVIEW.md) | Point-in-time architecture review (pre-consolidation baseline) |
+| [`STRUCTURE_GUIDE.md`](STRUCTURE_GUIDE.md) / [`PROJECT_FILE_OVERVIEW.md`](PROJECT_FILE_OVERVIEW.md) | Repository structure and file overview |
+| [`ARGUS_TECHNICAL_ARCHITECTURE_v1.5_LEGACY.md`](ARGUS_TECHNICAL_ARCHITECTURE_v1.5_LEGACY.md) | Archived pre-RAG architecture (historical) |
+
+Automation and validation: `scripts/validate_specs.py`, `scripts/validate_ascii.py`,
+`scripts/consolidate_canonical.sh`, and the CI pipeline `.github/workflows/ci.yml`.
 
 ## Documentation Files
 
@@ -76,14 +92,19 @@ This directory contains comprehensive documentation, architecture diagrams, and 
 
 ```
 docs/
-├── README.md                              # This file
-├── Argus_Master_Documentation.md          # Main technical reference
-├── arc42.md                               # Architecture view (ISO/IEC/IEEE 42010)
-├── GEMINI.md                              # Project standards & guidelines
-├── OFFLINE_SETUP.md                       # Air-gapped installation (if exists)
-├── ARCHITECTURE_DIAGRAMS.md               # Visual system design (if exists)
-└── API_REFERENCE.md                       # Tool & API documentation (if exists)
+├── README.md                                   # This file (documentation index)
+├── ARGUS_FRAMEWORK_ARCHITECTURE_v2.md          # Canonical architecture (arc42 + C4) + ADRs 1-16
+├── ARGUS_TECHNICAL_ARCHITECTURE_v1.5_LEGACY.md # Archived pre-RAG architecture
+├── ARCHITECTURE_AUDIT_REPORT.md                # Repository audit + Cleanup Manifest
+├── ARGUS_SPECKIT_ARCHITECTURE_REVIEW.md        # Pre-consolidation review baseline
+├── STRUCTURE_GUIDE.md                          # Repository structure guide
+├── PROJECT_FILE_OVERVIEW.md                    # File-by-file overview
+├── Argus_Master_Documentation.md               # Main technical reference
+├── Multi_Agent_Pentest_Architectures.md        # Background research
+└── Information_Disclosure_Notes.md             # Findings notes
 ```
+
+> Canonical cross-cutting decisions live in [`../specs/012-spec-reconciliation/`](../specs/012-spec-reconciliation/), not in this directory.
 
 ## How to Use This Documentation
 
