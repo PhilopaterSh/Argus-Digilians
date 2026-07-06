@@ -18,7 +18,8 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 from app.core.config import ArgusConfig
 from app.tools.tool_registry import WSLBridgeTools
-from app.core.brain import ArgusBrain
+from app.core.agent.brain import ArgusBrain
+from app.GUI.components.status_bar import check_ssh_status
 from langchain_core.tools import Tool
 
 # Load environment variables
@@ -126,7 +127,10 @@ col1, col2 = st.columns([1, 2])
 
 with col1:
     st.subheader("System Status")
-    st.success(f"WSL Bridge: ACTIVE ({bridge.host})")
+    if check_ssh_status():
+        st.success(f"WSL Bridge: ACTIVE ({bridge.host})")
+    else:
+        st.warning(f"WSL Bridge: UNREACHABLE ({bridge.host})")
     st.info(f"AI Engine: {MODEL_NAME}")
     
     st.markdown("---")
