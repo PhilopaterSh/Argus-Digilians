@@ -86,7 +86,7 @@ class ReconService:
         if self.report_writer:
             self.report_writer.save_json_report(clean_target, results)
 
-        report = f"--- 🛰️ FULL RECON REPORT: {clean_target} ---\n"
+        report = f"--- [SAT] FULL RECON REPORT: {clean_target} ---\n"
         report += f"Tech: {results['tech'][:200]}...\n"
         report += f"Ports: {results['ports'][:500]}...\n"
         

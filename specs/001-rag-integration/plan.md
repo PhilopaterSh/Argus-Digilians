@@ -12,7 +12,7 @@ Integrate a production-ready RAG system into the Argus AI penetration testing fr
 
 ## Technical Context
 
-**Language/Version**: Python 3.10+
+**Language/Version**: Python 3.12 (canonical per `012` §2.6)
 
 **Primary Dependencies**: langchain-ollama, langchain-huggingface, langchain-openai, faiss-cpu (or faiss-gpu), langchain-community, PyPDF2, pandas
 
@@ -75,7 +75,7 @@ Argus/
 
 | Violation | Why Needed | Simpler Alternative Rejected Because |
 |-----------|------------|--------------------------------------|
-| 3-tier embedding fallback chain | Ensures operation in offline/air-gapped environments | Single model would fail if unavailable |
+| 3-tier embedding fallback chain (**build-time only**, per `012` §3) | Selects an available embedder when (re)building the index in offline/air-gapped environments; the choice is pinned in `manifest.json` | Single model would fail if unavailable. NOTE: the fallback MUST NOT run at query time across different dimensions — that raises a FAISS dimension error (see `012` §3, FR-C2..C4). |
 | Structural vs fixed-size chunking | Different document formats carry meaning in structure | Fixed-size splits headers/rows/pages, losing semantic boundaries |
 
 ---
@@ -85,5 +85,5 @@ Argus/
 1. **nomic-embed-text over all-MiniLM-L6-v2**: Local execution via Ollama (no API key, no data leakage), 768-dim embeddings.
 2. **RAG + Blackboard fusion**: Separate static knowledge from live target state to prevent hallucination. Prompt instructions prioritize live data.
 3. **Structural chunking**: JSON → RecursiveJsonSplitter/array items, CSV → row-by-row, Markdown → MarkdownHeaderTextSplitter, PDF → PyPDFLoader, other → RecursiveCharacterTextSplitter (600 chunk, 100 overlap).
-4. **Auto-rebuild**: FAISS index checks `knowledge_base/` modification time and rebuilds lazily on first query after change.
+4. **Deterministic rebuild (refined per `012` §3)**: `RAGEngine` compares the `knowledge_base/` content hash **and** the configured embedder against `app/core/rag/store/manifest.json`; a mismatch on either triggers a full rebuild with the current embedder and rewrites the manifest. One embedder per index; no query-time cross-dimension substitution.
 5. **Non-blocking design**: RAG failures never crash the query — fall back to Blackboard-only or raw LLM.

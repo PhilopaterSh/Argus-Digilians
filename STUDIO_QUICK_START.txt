@@ -1,0 +1,192 @@
+================================================================================
+                   ARGUS STUDIO - QUICK START GUIDE
+                    (Updated for CPU/GPU Mode Selection)
+================================================================================
+
+LAUNCHING THE GUI STUDIO:
+=========================
+
+⚠️ IMPORTANT: Check Your Hardware First!
+
+For GPU Systems (NVIDIA/CUDA Available):
+  $ LAUNCH_STUDIO.bat G  (Fast GPU acceleration)
+
+For CPU-Only Systems (NO GPU):
+  $ LAUNCH_STUDIO.bat C  (Stable, slower but reliable)
+
+For Ollama/CUDA Errors:
+  $ LAUNCH_STUDIO.bat R  (Clean restart - fixes most issues)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+WHAT EACH MODE DOES:
+====================
+
+[G] GPU Mode (Default):
+  • Uses NVIDIA CUDA acceleration
+  • Fast AI model inference
+  • For computers with NVIDIA GPU + drivers
+  • If GPU errors appear, try [C] or [R] instead
+
+[C] CPU Mode:
+  • Uses system CPU only
+  • No GPU required
+  • 100% stable
+  • Slower than GPU but still usable
+  • RECOMMENDED if you don't have GPU
+
+[R] Clean Restart:
+  • Stops and restarts Ollama service
+  • Clears any stuck processes
+  • Fixes most CUDA/GPU errors
+  • Good for troubleshooting
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+2. WHAT HAPPENS DURING LAUNCH:
+   ✓ Checks if Ollama is running (AI Engine)
+   ✓ Starts or verifies WSL SSH Bridge
+   ✓ Activates Python Virtual Environment
+   ✓ Starts Streamlit Web Server on port 8501
+   ✓ Opens browser to http://localhost:8501 automatically
+
+3. BROWSER INTERFACE:
+   - Enter target URL (e.g., https://example.com)
+   - Click "🔍 Analyze" button
+   - Watch real-time analysis progress
+   - View security findings in dashboard
+
+================================================================================
+                          TROUBLESHOOTING
+================================================================================
+
+PROBLEM: "SSH Bridge is down"
+SOLUTION:
+  1. Manually start SSH: wsl -d kali-linux -u root /usr/sbin/sshd
+  2. Verify: Test-NetConnection -ComputerName 127.0.0.1 -Port 22
+  3. Retry launcher
+
+PROBLEM: "Ollama is NOT running"
+SOLUTION:
+  1. Ensure Ollama is installed on Windows
+  2. Start manually: start "" "ollama app.exe"
+  3. Retry launcher after ~10 seconds
+
+PROBLEM: "CUDA Errors" or GPU Issues
+SOLUTION:
+  1. Run with CPU Mode: LAUNCH_STUDIO.bat C
+  2. Or clean restart: LAUNCH_STUDIO.bat R
+  3. Check NVIDIA drivers installed
+
+PROBLEM: Streamlit shows import errors
+SOLUTION:
+  1. Run INSTALL_EVERYTHING.bat first
+  2. Ensure Virtual Environment created
+  3. Check .env file has correct settings
+
+PROBLEM: Port 8501 already in use
+SOLUTION:
+  1. Kill existing process: taskkill /F /IM python.exe
+  2. Or check: netstat -ano | findstr :8501
+  3. Retry launcher
+
+================================================================================
+                       CONFIGURATION FILES
+================================================================================
+
+.env (Set these before launching):
+  WSL_HOST=127.0.0.1
+  WSL_USER=kali
+  WSL_PASS=[your-password]
+  WSL_PORT=22
+  WSL_DISTRO=kali-linux
+  ARGUS_DEFAULT_TARGET=https://example.com
+
+config.yaml:
+  command_timeout_seconds: 600
+  ...
+
+================================================================================
+                          FILE LOCATIONS
+================================================================================
+
+Launcher:           C:\AI_PenTest_Project\Argus\scripts\LAUNCH_STUDIO.bat
+GUI App:            C:\AI_PenTest_Project\Argus\app\GUI\gui_app.py
+Configuration:      C:\AI_PenTest_Project\Argus\config.yaml
+Environment:        C:\AI_PenTest_Project\Argus\.env
+Virtual Env:        C:\AI_PenTest_Project\Argus\Argus_venv\
+
+Reports:            C:\AI_PenTest_Project\Argus\reports\
+Logs:               C:\AI_PenTest_Project\Argus\Logs\
+
+================================================================================
+                            FEATURES
+================================================================================
+
+🛡️ Argus AI Studio provides:
+
+  ✓ Real-time security analysis
+  ✓ Subdomain enumeration
+  ✓ WAF detection
+  ✓ Vulnerability scanning (Nikto, FFUF)
+  ✓ Knowledge graph queries
+  ✓ Exploit suggestions
+  ✓ Web crawling
+  ✓ CVE/Exploit research
+
+All powered by:
+  - WhiteRabbitNeo V3 (Local LLM)
+  - WSL Kali Linux (Tools)
+  - Streamlit (Web Interface)
+
+================================================================================
+                        ADVANCED USAGE
+================================================================================
+
+Custom Target Default:
+  set ARGUS_DEFAULT_TARGET=https://target.com
+  LAUNCH_STUDIO.bat
+
+Disable GPU:
+  LAUNCH_STUDIO.bat C
+
+Force Clean Restart:
+  LAUNCH_STUDIO.bat R
+
+Manual SSH Start:
+  wsl -d kali-linux -u root /usr/sbin/sshd
+
+Check Ollama Status:
+  tasklist | findstr ollama
+
+Check SSH Status:
+  Test-NetConnection -ComputerName 127.0.0.1 -Port 22
+
+View Logs:
+  type C:\AI_PenTest_Project\Argus\Logs\bridge_error.log
+
+================================================================================
+                           TIPS & BEST PRACTICES
+================================================================================
+
+1. Always start with "Check Reachability" first
+2. Allow 10-15 seconds for analysis to begin
+3. Use CPU mode for stable runs on weak systems
+4. Check reports in C:\AI_PenTest_Project\Argus\reports\
+5. Enable .env before batch changes for consistency
+6. Monitor Ollama process if GPU mode feels slow
+7. SSH keys optional - password auth works fine
+
+================================================================================
+                              SUPPORT
+================================================================================
+
+For issues, check:
+  - GUI_ERROR_DIAGNOSIS_REPORT.txt (in reports/)
+  - Logs in C:\AI_PenTest_Project\Argus\Logs\
+  - Streamlit error output in terminal
+  - .env configuration
+
+Report bugs or feature requests in the project README.
+
+================================================================================

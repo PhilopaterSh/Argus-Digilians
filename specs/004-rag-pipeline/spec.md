@@ -4,7 +4,7 @@
 
 **Created**: 2026-06-29
 
-**Status**: Draft
+**Status**: Draft — **Refined By** `012-spec-reconciliation` §3. The FAISS integrity/staleness artifact is the single `app/core/rag/store/manifest.json` (not a separate checksum file); the embedder fallback is build-time only. Canonical module names per `012` §2.1.
 
 **Input**: The RAG subsystem was built in Phase 001 (`app/core/rag/`) but was never formally tested, has no unit tests, and the embedding fallback chain (Ollama → HuggingFace → OpenAI) has never been verified end-to-end. This feature hardens the RAG pipeline with tests, error handling, and proper FAISS index management.
 
@@ -34,8 +34,8 @@ As a developer, I want unit tests for all 6 RAG modules, so regressions are caug
 
 ## Requirements
 
-- **FR-001**: Each embedding fallback tier MUST be tested (Ollama nomic-embed-text, HuggingFace all-MiniLM-L6-v2).
-- **FR-002**: FAISS index MUST have a checksum/hash file to detect staleness.
+- **FR-001**: Each embedding fallback tier MUST be tested **at build time** (Ollama nomic-embed-text 768-dim, HuggingFace all-MiniLM-L6-v2 384-dim). Tests MUST assert that querying an index with a different-dimension embedder is prevented (RAG-disabled path), never attempted. *(Per `012` §3.)*
+- **FR-002**: FAISS index integrity/staleness MUST be detected via `app/core/rag/store/manifest.json` (embedder name/provider/dimension + `knowledge_base` content hash + schema_version). A mismatch triggers a full rebuild. *(Supersedes the separate "checksum file"; per `012` §3, FR-C5.)*
 - **FR-003**: RAGEngine MUST handle missing index gracefully (return empty context, not crash).
 - **FR-004**: DocumentProcessor MUST handle binary/unreadable files without crashing.
 - **FR-005**: All 6 RAG modules MUST have type hints and error handling.

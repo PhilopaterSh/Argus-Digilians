@@ -64,7 +64,7 @@ This directory contains comprehensive documentation, architecture diagrams, and 
 
 | Component | Technology | Version |
 |-----------|-----------|---------|
-| **Language** | Python | 3.10+ |
+| **Language** | Python | 3.12 |
 | **UI Framework** | Streamlit | Latest |
 | **AI/LLM** | WhiteRabbitNeo | V3-7B |
 | **Tool Orchestration** | LangChain | 0.1+ |

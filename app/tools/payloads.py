@@ -27,7 +27,7 @@ class PayloadSuggester:
         cmd = f"cat \"/opt/payloads/PayloadsAllTheThings/{matched_dir}/README.md\" | grep -A 5 -P '\\x60\\x60\\x60' | head -n 30"
         payload_data = self.runner.run(cmd)
 
-        reflection = f"--- 🛠️ SUGGESTED PAYLOADS/METHODOLOGY FOR {matched_dir} ---\n"
+        reflection = f"--- [TOOLS] SUGGESTED PAYLOADS/METHODOLOGY FOR {matched_dir} ---\n"
         reflection += "Source: PayloadsAllTheThings (Local Mirror)\n"
         reflection += payload_data
         

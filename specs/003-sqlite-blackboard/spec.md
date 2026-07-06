@@ -4,7 +4,7 @@
 
 **Created**: 2026-06-29
 
-**Status**: Draft
+**Status**: Implemented (tasks 19/19 complete; `ArgusMemory` present at `app/core/memory/memory_service.py`; verified 2026-07-05). Canonical memory owner per `012` §2.3.
 
 **Input**: Refactor the `ArgusMemory` class in `app/core/memory/memory_service.py` to be production-ready: add connection pooling, error handling, type hints, unit tests, database migration support, and consolidate to a single database location.
 

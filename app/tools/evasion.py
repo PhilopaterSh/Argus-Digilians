@@ -56,4 +56,4 @@ class EvasionService:
         if not results:
             return "No vulnerabilities detected with advanced evasion probes."
         
-        return "--- 🛡️ ADVANCED EVASION PROBE REPORT ---\n" + "\n".join(results)
+        return "--- [SHIELD] ADVANCED EVASION PROBE REPORT ---\n" + "\n".join(results)

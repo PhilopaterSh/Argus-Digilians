@@ -36,4 +36,4 @@ Install with: sudo apt-get install python3-tk
 streamlit run app/GUI/app.py
 ```
 
-Expected: Browser opens at localhost:8501 with Argus interface.
+Expected: Browser opens at localhost:12199 (canonical port per `012` §2.6) with the Argus Studio interface.

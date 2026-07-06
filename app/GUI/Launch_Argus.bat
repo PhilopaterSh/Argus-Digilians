@@ -1,7 +1,7 @@
 @echo off
 title Argus AI - Professional Launcher
 echo ---------------------------------------------------
-echo    🛡️ ARGUS AI SECURITY STUDIO - LAUNCHER
+echo    [SHIELD] ARGUS AI SECURITY STUDIO - LAUNCHER
 echo ---------------------------------------------------
 echo.
 

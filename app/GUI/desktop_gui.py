@@ -1,5 +1,5 @@
 """
-Argus Desktop Security Studio — Tkinter interface.
+Argus Desktop Security Studio - Tkinter interface.
 
 Fallback: if Tkinter is not installed, prints a clear error message.
 """
@@ -27,7 +27,7 @@ class DesktopArgusGUI:
         if not TK_AVAILABLE:
             print("Error: Tkinter is not available.")
             print("Install with: sudo apt-get install python3-tk  (WSL/Kali)")
-            print("Or on Windows: Python includes tkinter by default — check your Python installation.")
+            print("Or on Windows: Python includes tkinter by default - check your Python installation.")
             sys.exit(1)
 
         self.bridge = WSLBridgeTools()

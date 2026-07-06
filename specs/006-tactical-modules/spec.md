@@ -4,7 +4,7 @@
 
 **Created**: 2026-06-29
 
-**Status**: Draft
+**Status**: Implemented (Phase 006 in `specs/checklist.md`: CHK010–CHK018, 12 import tests; verified 2026-07-05).
 
 **Input**: The `app/modules/` directory contains 10 tactical workflow files (`argus_reasoning.py`, `argus_deep_exploit.py`, `stealth_exploit.py`, `run_recon.py`, `run_full_recon.py`, `map_target.py`, `seed_memory.py`, `ddgs.py`, `crawler.py`, `check_subs.sh`) using legacy flat import paths (`from core.xxx`) instead of the new `app.core.xxx` structure. No shared base class or strategy pattern exists.
 

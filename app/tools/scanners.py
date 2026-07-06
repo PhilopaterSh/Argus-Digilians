@@ -29,7 +29,7 @@ class VulnerabilityScanners:
             for f in findings:
                 self.memory.add_finding(target_for_mem, "nikto", "vulnerability", f, "Potential vulnerability detected")
 
-        return f"--- 🛠️ NIKTO VULNERABILITY REPORT (Saved to {output_path}) ---\n{res}"
+        return f"--- [TOOLS] NIKTO VULNERABILITY REPORT (Saved to {output_path}) ---\n{res}"
 
     def run_ffuf_discovery(self, url):
         """Runs FFUF for fast directory discovery inside Kali."""
@@ -45,6 +45,6 @@ class VulnerabilityScanners:
             clean_target = url.replace("https://", "").replace("http://", "").split("/")[0]
             for p in paths[:20]:
                 self.memory.add_finding(clean_target, "ffuf", "path", p, "Hidden path discovered")
-            return f"--- 📁 FFUF DISCOVERY REPORT ---\nDiscovered {len(paths)} paths. Top findings:\n" + "\n".join(paths[:40])
+            return f"--- [DIR] FFUF DISCOVERY REPORT ---\nDiscovered {len(paths)} paths. Top findings:\n" + "\n".join(paths[:40])
 
         return "FFUF completed. No notable paths found or timeout reached."

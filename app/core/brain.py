@@ -12,7 +12,7 @@ from typing import Dict, Any, Optional
 
 class ArgusBrain:
     """
-    Enhanced brain with ReAct → SimpleChain fallback and RAG + Blackboard context fusion.
+    Enhanced brain with ReAct -> SimpleChain fallback and RAG + Blackboard context fusion.
 
     When WhiteRabbitNeo has format issues with ReAct, automatically
     falls back to a simpler sequential execution model.

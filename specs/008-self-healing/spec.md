@@ -4,7 +4,7 @@
 
 **Created**: 2026-06-29
 
-**Status**: Draft
+**Status**: Implemented (Phase 008 in `specs/checklist.md`: CHK025–CHK033, 10 tests; verified 2026-07-05).
 
 **Input**: `app/tools/self_heal.py` is a 31-line service that only handles `pip install` and `apt-get install`. The architecture v2 mandates proactive health monitoring, watchdog, process restart, and config repair — none of which exist.
 

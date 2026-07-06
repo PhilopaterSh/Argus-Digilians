@@ -22,7 +22,7 @@ rag:
 # Streamlit / GUI settings (editable, non-sensitive)
 streamlit:
   host: localhost
-  port: 8199
+  port: 12199  # canonical port per 012-spec-reconciliation sec 2.6 / ADR-16 (was 8199)
   headless: true
   enableCORS: false
   enableXsrfProtection: false

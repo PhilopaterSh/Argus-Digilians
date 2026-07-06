@@ -58,7 +58,7 @@ def render_dashboard():
             ts = event.get("timestamp", "")
             st.markdown(
                 f"<div style='background:#1a1d24; padding:8px; border-radius:4px; margin:4px 0; border-left:3px solid #00ff41;'>"
-                f"<small>{ts}</small> <strong>{node}</strong> — {status}: {detail}"
+                f"<small>{ts}</small> <strong>{node}</strong> - {status}: {detail}"
                 f"</div>",
                 unsafe_allow_html=True,
             )

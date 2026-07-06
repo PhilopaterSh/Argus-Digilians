@@ -4,7 +4,7 @@
 
 **Created**: 2026-06-30
 
-**Status**: Draft
+**Status**: Draft — **CANONICAL agent design** (per `012-spec-reconciliation` §4). Supersedes the generic top-level ReAct agent of `013-langgraph-workflow`. Module names align to `012` §2.1/§2.2: RAG uses `document_processor.py` / `vector_store.py` / `rag_engine.py` (not `processor/vectorstore/engine`); agent code lives in `app/core/agent/`. Chunking is structural (canonical), with `RecursiveCharacterTextSplitter` as the plain/unknown-format fallback. Embedding follows the manifest design (`012` §3).
 
 **Input**: User description: "Architecture split: LangChain for RAG (deterministic, linear), LangGraph for Tactical PenTest Agent (stateful, cyclical feedback loops)."
 

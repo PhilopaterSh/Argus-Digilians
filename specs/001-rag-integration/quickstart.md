@@ -3,7 +3,7 @@
 ## Prerequisites
 
 - Ollama installed with nomic-embed-text model: `ollama pull nomic-embed-text`
-- Python 3.10+ with dependencies listed in `Setup/requirements.txt`
+- Python 3.12 (canonical per `012` §2.6) with dependencies listed in `Setup/requirements.txt`
 
 ## Adding Knowledge
 

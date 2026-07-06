@@ -34,7 +34,7 @@ def run_autonomous_reasoning():
     print("\n[!] ARGUS AUTONOMOUS REASONING START")
     result = brain.ask(query)
     print("\n" + "="*60)
-    print("🛡️ ARGUS AUTONOMOUS FINAL REPORT")
+    print("[SHIELD] ARGUS AUTONOMOUS FINAL REPORT")
     print("="*60)
     
     if isinstance(result, dict) and "output" in result:

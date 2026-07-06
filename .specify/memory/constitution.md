@@ -1,29 +1,35 @@
 <!--
 Sync Impact Report
 ==================
-Version change: 0.0.0 (empty template) -> 1.0.0 (initial ratified set)
+Version change: 1.0.0 -> 1.1.0 (MINOR: additive AI/testing/canonical-authority principles)
 
-Modified principles:
-- [PRINCIPLE_1_NAME] -> I. Admin-First Elevation (NON-NEGOTIABLE)
-- [PRINCIPLE_2_NAME] -> II. Single-Source Installer
-- [PRINCIPLE_3_NAME] -> III. Idempotent & Test-Gated (NON-NEGOTIABLE)
-- [PRINCIPLE_4_NAME] -> IV. Platform-Boundary Clarity
-- [PRINCIPLE_5_NAME] -> V. Observability & Logging
-- [PRINCIPLE_6_NAME] -> VI. English-Only Documentation
+Amendment 2026-07-05 (post Spec Consolidation):
+Added principles (additive only; no existing principle redefined or removed):
+- VII. Canonical Reconciliation Authority (NON-NEGOTIABLE)
+- VIII. Truthful Runtime (No Fabrication) (NON-NEGOTIABLE)
+Extended section:
+- "Development Workflow & Quality Gates" -> added Testing & AI-Evaluation Gate
+Rationale: the 012-spec-reconciliation consolidation and the 010 agent design
+established, de facto, (a) a single canonical source of truth, (b) a no-fabrication
+runtime rule, and (c) unit/integration/e2e/AI-eval test tiers. These were not yet
+encoded as constitutional principles; this amendment closes that gap.
 
-Added sections:
-- "Security & Operational Constraints" (former [SECTION_2_NAME])
-- "Development Workflow & Quality Gates" (former [SECTION_3_NAME])
-
-Removed sections: none
+Original 1.0.0 ratified set (unchanged):
+- I. Admin-First Elevation (NON-NEGOTIABLE)
+- II. Single-Source Installer
+- III. Idempotent & Test-Gated (NON-NEGOTIABLE)
+- IV. Platform-Boundary Clarity
+- V. Observability & Logging
+- VI. English-Only Documentation
 
 Templates requiring updates:
-- .specify/templates/plan-template.md        -> no change (already has Constitution Check gate)
-- .specify/templates/spec-template.md        -> no change (generic; principles enforced at review)
-- .specify/templates/tasks-template.md       -> no change (generic phase scaffolding)
+- .specify/templates/plan-template.md        -> no change (Constitution Check gate already generic)
+- .specify/templates/spec-template.md        -> no change
+- .specify/templates/tasks-template.md       -> no change
 - .opencode/commands/speckit.constitution.md -> no change (agent-neutral)
 
-Follow-up TODOs: none. All placeholders resolved.
+Follow-up TODOs: none. Authorization/usage-control remains intentionally out of scope
+(not a constitutional concern for this project per current governance).
 -->
 
 # Argus Security Framework Constitution
@@ -130,6 +136,40 @@ Rules:
 Rationale: mixed-language and placeholder-laden docs are unreadable to most
 contributors and tools, and signal an unfinished artifact.
 
+### VII. Canonical Reconciliation Authority (NON-NEGOTIABLE)
+
+There MUST be exactly one canonical source of truth for cross-cutting design
+decisions (module/package/class naming, ports, language version, RAG embedding/index
+design, agent design, output parsing, testing, CI/CD).
+
+Rules:
+- `specs/012-spec-reconciliation` is that canonical source. When any spec, plan, ADR,
+  architecture document, or code conflicts with it, `012` wins and the other artifact
+  MUST be updated or marked `Superseded By` / `Deprecated` / `Replaced By`.
+- New features MUST reference `012` for cross-cutting names and constants rather than
+  reintroducing local variants.
+- Superseded artifacts MUST NOT be silently deleted; they carry a resolving header
+  pointing at the canonical replacement.
+
+Rationale: incremental, unreconciled specs previously produced duplicate numbering,
+divergent module names, and conflicting constants. A single authority prevents drift.
+
+### VIII. Truthful Runtime — No Fabrication (NON-NEGOTIABLE)
+
+Runtime code MUST NOT fabricate results. Any simulation, stub, or fallback that
+invents data (e.g. synthetic open ports, fake scan/exploit success) is permitted only
+in tests or an explicit demo mode, never in the production execution path.
+
+Rules:
+- Every node/tool MUST report real success, real failure, or an explicit
+  dependency-unavailable state — never a fabricated success.
+- Fallback behavior MUST degrade honestly (e.g. RAG-disabled when the pinned embedder
+  is unavailable) and MUST surface the degraded state, not mask it.
+- Demo/simulation flows MUST be isolated from production flows and clearly labeled.
+
+Rationale: an autonomous agent whose runtime invents findings is worse than useless;
+truthful state is the foundation of trustworthy automation and debuggability.
+
 ## Security & Operational Constraints
 
 - **Target platform:** Windows 10 (build 19041+) or Windows 11, with WSL2 and a
@@ -160,6 +200,11 @@ contributors and tools, and signal an unfinished artifact.
 - **Legacy retention:** Deprecated `Setup/Step_*.bat` scripts are retained as a
   manual debugging fallback but are no longer the supported path. New logic goes
   into the single installer.
+- **Testing & AI-Evaluation gate:** Per `012-spec-reconciliation` §6, changes MUST be
+  covered by the appropriate tier — unit (mocked), integration (real Ollama + ephemeral
+  SQLite + FAISS), end-to-end smoke, and — for RAG/agent changes — AI-evaluation
+  (retrieval recall@k + faithfulness; agent bounded-loop termination). Every fixed
+  defect MUST gain a regression test. CI runs these tiers (`012` §7).
 - **Review gate:** All PRs/reviews MUST verify compliance with these principles;
   any deviation MUST be justified and documented in the plan's Complexity Tracking.
 
@@ -180,4 +225,4 @@ Compliance review: every `/speckit.plan` invocation runs a Constitution Check ga
 violations MUST be either resolved or explicitly justified in the plan's Complexity
 Tracking table before implementation begins.
 
-**Version**: 1.0.0 | **Ratified**: 2026-06-27 | **Last Amended**: 2026-06-27
+**Version**: 1.1.0 | **Ratified**: 2026-06-27 | **Last Amended**: 2026-07-05

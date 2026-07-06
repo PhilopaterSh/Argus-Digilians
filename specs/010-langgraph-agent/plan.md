@@ -71,29 +71,34 @@ specs/010-langgraph-agent/
 ### Source Code
 
 ```text
+# Canonical names per 012 §2.1/§2.2 (RAG uses descriptive names; agent in app/core/agent/)
 app/
 ├── core/
 │   ├── rag/
-│   │   ├── processor.py
-│   │   ├── vectorstore.py
-│   │   └── engine.py
+│   │   ├── config.py              # RAGConfig
+│   │   ├── embeddings.py          # EmbeddingFactory (build-time fallback; manifest per 012 §3)
+│   │   ├── document_processor.py  # structural chunking (RecursiveCharacterTextSplitter = fallback)
+│   │   ├── vector_store.py        # FAISS + store/manifest.json
+│   │   └── rag_engine.py          # linear retrieval + context fusion
 │   └── agent/
-│       ├── state.py
+│       ├── brain.py               # single ArgusBrain (reasoning + registry dispatch) — 012 §2.2
+│       ├── agent_factory.py       # create_default_registry/create_brain/register_all_tools
+│       ├── state.py               # AgentState
 │       ├── nodes/
 │       │   ├── recon.py
 │       │   ├── scanner.py
 │       │   ├── exploit.py
 │       │   ├── reflective.py
 │       │   └── post_exploit.py
-│       └── graph.py
+│       └── graph.py               # canonical LangGraph builder (+ parser/hooks migrated from 013)
 ├── GUI/
-│   ├── argus_studio.py
+│   ├── dashboard.py               # unified Argus Studio (011); LAUNCH_STUDIO.bat → port 12199
 │   ├── tabs/
 │   └── utils/
 └── tools/
     ├── recon.py
     ├── self_heal.py
-    └── tool_registry.py
+    └── tool_registry.py           # WSLBridgeTools facade over ToolRegistry (17 tools)
 ```
 
 ## Delivery Plan

@@ -38,5 +38,5 @@ class SecretAnalyzer:
         if not found:
             return "No obvious secrets or credentials leaked in the landing page HTML."
 
-        report = "--- 🔍 LEAKED SECRETS ANALYSIS ---\n" + "\n".join(found)
+        report = "--- [SEARCH] LEAKED SECRETS ANALYSIS ---\n" + "\n".join(found)
         return f"```\n{report}\n```"

@@ -14,7 +14,7 @@ def _render_events(events):
             f"<div style='background:#1a1d24; padding:10px; border-radius:4px; margin:6px 0; "
             f"border-left:3px solid {color};'>"
             f"<small style='color:#888;'>{ts}</small><br>"
-            f"<strong style='color:{color};'>{node}</strong> — {detail}"
+            f"<strong style='color:{color};'>{node}</strong> - {detail}"
             f"</div>"
         )
     return feed_html
@@ -65,16 +65,16 @@ def render_agent():
         run_mode = current_state.get('mode', 'production')
         updated_at = current_state.get('updated_at', 'N/A')
         if st.session_state.get('agent_running'):
-            st.markdown('**Status**: 🟢 Running')
+            st.markdown('**Status**: [GREEN] Running')
             st.markdown(f"**Target**: {st.session_state.get('current_agent_target', 'N/A')}")
         elif status_label == 'completed':
-            st.markdown('**Status**: ✅ Completed')
+            st.markdown('**Status**: [OK] Completed')
             st.markdown(f"**Target**: {current_state.get('target', selected_target)}")
         elif status_label == 'failed':
-            st.markdown('**Status**: 🔴 Failed')
+            st.markdown('**Status**: [RED] Failed')
             st.markdown(f"**Target**: {current_state.get('target', selected_target)}")
         else:
-            st.markdown('**Status**: ⚪ Idle')
+            st.markdown('**Status**: [o] Idle')
         st.caption(f"Mode: `{run_mode}` | Updated: `{updated_at}`")
 
     st.markdown('---')

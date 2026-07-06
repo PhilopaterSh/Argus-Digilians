@@ -154,9 +154,9 @@ class TestArgusMemory:
         assert eid == -1
 
     def test_unicode_finding(self, mem):
-        mem.add_finding("пример.рф", "tool", "test", "raw", "unicode тест")
+        mem.add_finding("\u043f\u0440\u0438\u043c\u0435\u0440.\u0440\u0444", "tool", "test", "raw", "unicode \u0442\u0435\u0441\u0442")
         summary = json.loads(mem.get_blackboard_summary())
-        assert "пример.рф" in summary
+        assert "\u043f\u0440\u0438\u043c\u0435\u0440.\u0440\u0444" in summary
 
     def test_schema_version(self, db_path):
         m = ArgusMemory(db_path=db_path)

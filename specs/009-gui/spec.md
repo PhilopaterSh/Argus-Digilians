@@ -4,7 +4,7 @@
 
 **Created**: 2026-06-29
 
-**Status**: Draft
+**Status**: Implemented — **Primary UI Superseded By** `011-gui-enhancement` (the unified Streamlit "Argus Studio" dashboard, `app/GUI/dashboard.py`, is the canonical primary UI per `012` §2.5). **Retained** from this spec: the import-path fixes and `app/GUI/desktop_gui.py` (Tkinter) as an **optional lightweight fallback** for environments without Streamlit. Do not build two competing primary UIs.
 
 **Input**: Two Streamlit apps exist (`app/GUI/app.py` and `app/GUI/argus_gui.py`) but the architecture doc references Tkinter desktop, `gui_app.py`, and `studio.py` — none of which exist. `argus_gui.py` uses broken legacy imports (`from core.tools`).
 

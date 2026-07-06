@@ -59,3 +59,18 @@ archive/
 .streamlit/
 .cache/
 streamlit_runtime/
+
+# Test / tooling caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Node (opencode tooling)
+node_modules/
+.opencode/node_modules/
+
+# Nested self-duplicate of the repository (must not be committed; see
+# docs/ARCHITECTURE_AUDIT_REPORT.md "Cleanup Manifest" item C1 - remove this directory)
+/Argus-Digilians-fix-copy-setup-to-scripts/

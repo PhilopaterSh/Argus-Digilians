@@ -26,7 +26,7 @@ config = ArgusConfig.load()
 # --- UI Setup ---
 st.set_page_config(page_title="Argus AI Studio - WSL Bridge", layout="wide")
 
-# تصميم بسيط واحترافي
+# Simple, professional design
 st.markdown("""
     <style>
     .report-card {
@@ -40,11 +40,11 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-st.title("🛡️ Argus AI Studio (WSL Bridge)")
+st.title("[SHIELD] Argus AI Studio (WSL Bridge)")
 
 # Sidebar
 with st.sidebar:
-    st.header("⚙️ Bridge Configuration")
+    st.header("[CFG] Bridge Configuration")
     st.info("App: Docker Container")
     st.info("Tools: Local WSL Kali")
     model = config.model_name
@@ -77,13 +77,13 @@ def load_brain(model_name):
     return ArgusBrain(model_name, tools)
 
 # Main Interface
-target = st.text_input("🎯 Target URL", "https://example.com")
+target = st.text_input("[TARGET] Target URL", "https://example.com")
 
 if st.button("RUN ANALYSIS"):
     if target:
         brain = load_brain(model)
         
-        with st.status("🕵️ Argus Agent is thinking...", expanded=True) as status:
+        with st.status("[RECON] Argus Agent is thinking...", expanded=True) as status:
             try:
                 st.write("Initializing autonomous security reasoning...")
                 st_callback = StreamlitCallbackHandler(st.container())
@@ -96,7 +96,7 @@ if st.button("RUN ANALYSIS"):
                     callbacks=[st_callback]
                 )
                 
-                st.markdown("### 📋 Final Security Report")
+                st.markdown("### [LIST] Final Security Report")
                 
                 # Check if we got a parsed dictionary or raw string
                 final_report = ""
@@ -123,12 +123,12 @@ if st.button("RUN ANALYSIS"):
                 
                 # --- Export Feature ---
                 st.download_button(
-                    label="📥 Download Report (Markdown)",
+                    label="[IN] Download Report (Markdown)",
                     data=final_report,
                     file_name=f"Argus_Report_{target.replace('https://', '').replace('http://', '').replace('/', '_')}.md",
                     mime="text/markdown"
                 )
             except Exception as e:
-                st.error(f"❌ Critical Error during AI Analysis: {str(e)}")
-                st.warning("🔄 Suggestion: Restart Argus and try 'Force CPU Mode' if this is a GPU/CUDA error.")
+                st.error(f"[X] Critical Error during AI Analysis: {str(e)}")
+                st.warning("[RETRY] Suggestion: Restart Argus and try 'Force CPU Mode' if this is a GPU/CUDA error.")
                 status.update(label="Analysis Failed", state="error")

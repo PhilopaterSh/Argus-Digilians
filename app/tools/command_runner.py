@@ -60,7 +60,7 @@ class CommandRunner:
 
             # WAF Detection
             if self._is_waf_blocked(cleaned):
-                return f"🛑 [WAF ALERT] Access Restricted! The target has blocked your IP. Suggestion: STOP SCANS IMMEDIATELY and wait 15-30 mins or use a VPN/Proxy."
+                return f"[STOP] [WAF ALERT] Access Restricted! The target has blocked your IP. Suggestion: STOP SCANS IMMEDIATELY and wait 15-30 mins or use a VPN/Proxy."
 
             if result.returncode != 0:
                 error_msg = result.stderr if result.stderr else result.stdout
@@ -74,7 +74,7 @@ class CommandRunner:
                 return f"Error (Code {result.returncode}): {cleaned}"
 
             if show_prompt:
-                return f"┌──(kali㉿WSL)-[~]\n└─$ {command}\n{cleaned}"
+                return f"+--(kali@WSL)-[~]\n+-$ {command}\n{cleaned}"
             return cleaned
         except subprocess.TimeoutExpired:
             return "Error: Command timed out after 600s. Suggestion: The target might be slow or blocking the scan. Try narrowing the scope or increasing the timeout."
@@ -102,7 +102,7 @@ class CommandRunner:
 
                 cleaned_out = clean_ansi_codes(output if output else error)
                 if self._is_waf_blocked(cleaned_out):
-                     return f"🛑 [WAF ALERT] Access Restricted via SSH! Target blocked IP."
+                     return f"[STOP] [WAF ALERT] Access Restricted via SSH! Target blocked IP."
 
                 if error and not output:
                     return f"SSH Command Error: {error}"

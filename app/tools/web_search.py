@@ -40,6 +40,6 @@ class SmartWebSearch:
             if result.returncode != 0:
                 return f"Archive Subagent Error: {result.stderr}"
 
-            return f"--- 🧠 ARCHIVE RESEARCH REPORT ---\n{result.stdout}"
+            return f"--- [BRAIN] ARCHIVE RESEARCH REPORT ---\n{result.stdout}"
         except Exception as e:
             return f"Failed to invoke archive subagent: {str(e)}"

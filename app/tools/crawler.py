@@ -17,4 +17,4 @@ class CrawlerService:
         for link in links[:20]:
             self.memory.add_finding(clean_target, "crawler", "link", link, f"Discovered link: {link}")        
 
-        return f"--- 🕸️ CRAWLER REPORT: {url} ---\nFound {len(links)} links. Top findings:\n" + "\n".join(links[:15])
+        return f"--- [WEB] CRAWLER REPORT: {url} ---\nFound {len(links)} links. Top findings:\n" + "\n".join(links[:15])

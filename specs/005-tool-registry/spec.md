@@ -4,9 +4,11 @@
 
 **Created**: 2026-06-29
 
-**Status**: Draft
+**Status**: Implemented (Phase 005 in `specs/checklist.md`: CHK001–CHK009, 23 tests; verified 2026-07-05). See reconciliation note below re: single canonical Brain.
 
 **Input**: The `WSLBridgeTools` facade in `app/tools/tool_registry.py` exists with 14 sub-services but has no plugin-based registration pattern, no `brain_v2.py`, no `agent_factory_v2.py`, and zero tests. The architecture doc references components that don't exist yet.
+
+> **Status update / reconciliation (`012` §2.2):** These components were subsequently implemented (see `specs/checklist.md`: `ArgusBrainV2`, `agent_factory_v2`, 23 tests). Per `012-spec-reconciliation`, `ArgusBrainV2` and `agent_factory_v2` are **consolidated into a single canonical `app/core/agent/brain.py` (`ArgusBrain`) and `app/core/agent/agent_factory.py`** — the `_v2` shadow-file names are **Deprecated / Replaced By** the non-suffixed canonical modules. The registry-dispatch capability (`dispatch()`, `get_available_tools()`) is retained, merged into `ArgusBrain`. Canonical registered-tool count is **17** (14 + 3 reflective-verification tools from `007`). References to `brain_v2.py` in this spec's tasks/contracts are historical.
 
 ---
 

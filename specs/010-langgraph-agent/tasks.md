@@ -13,10 +13,10 @@
 
 ## Phase 1: RAG MVP
 
-- [ ] T005 Implement document loading and chunk creation in `app/core/rag/processor.py`.
-- [ ] T006 Implement `RecursiveCharacterTextSplitter`-based splitting in `app/core/rag/processor.py`.
-- [ ] T007 Implement Ollama embeddings plus FAISS indexing in `app/core/rag/vectorstore.py`.
-- [ ] T008 Implement the linear retrieval/query flow in `app/core/rag/engine.py`.
+- [ ] T005 Implement document loading and structural chunk creation in `app/core/rag/document_processor.py` (canonical name per `012` §2.1).
+- [ ] T006 Implement `RecursiveCharacterTextSplitter` as the plain/unknown-format **fallback** in `app/core/rag/document_processor.py` (structural chunking is primary).
+- [ ] T007 Implement Ollama embeddings + FAISS indexing + `store/manifest.json` (one embedder per index, build-time fallback) in `app/core/rag/vector_store.py` (per `012` §3).
+- [ ] T008 Implement the linear retrieval/query flow (with RAG-disabled degradation on embedder/dimension mismatch) in `app/core/rag/rag_engine.py`.
 - [ ] T009 Add a smoke test script for retrieval and answer generation.
 
 ## Phase 2: Tactical Agent MVP

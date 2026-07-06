@@ -156,8 +156,7 @@ Argus/
 ├── knowledge_base/              ← Source documents for RAG
 │   └── argus_security_knowledge.md
 │
-├── app/core/brain.py            ← ArgusBrain with enrichment
-├── app/core/brain_v2.py         ← ArgusBrainV2 with enrichment
+├── app/core/agent/brain.py      ← ArgusBrain (single canonical Brain; per 012 sec 2.2)
 └── config.yaml                  ← RAG settings
 ```
 
@@ -166,8 +165,8 @@ Argus/
 ## Key Features
 
 - **Works offline**: nomic-embed-text runs locally via Ollama
-- **Auto-rebuild**: FAISS index rebuilds when knowledge_base changes
-- **Fallback chain**: HuggingFace → OpenAI if Ollama is unavailable (edge case)
+- **Deterministic rebuild**: FAISS index rebuilds when the knowledge_base content hash OR the pinned embedder differs from store/manifest.json (per 012 sec 3)
+- **One embedder per index**: the HuggingFace/OpenAI fallback runs only at BUILD time to pick an available embedder, which is pinned in the manifest; if that embedder is unavailable at query time, RAG degrades to Blackboard-only rather than querying a dimension-mismatched index (no query-time cross-dimension substitution)
 - **Context-aware**: Separates static knowledge from live target data
 - **Format-aware**: Structural chunking preserves document meaning
 - **Non-blocking**: If RAG fails, falls back to Blackboard-only or raw query

@@ -27,7 +27,7 @@ load_dotenv()
 # --- Page Configuration ---
 st.set_page_config(
     page_title="Argus AI - Security Command Center",
-    page_icon="🛡️",
+    page_icon="[SHIELD]",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -138,7 +138,7 @@ with col2:
     if run_btn:
         if url_input:
             brain = get_brain()
-            with st.status("📡 Bridging to WSL Kali...", expanded=True) as status:
+            with st.status("[SIGNAL] Bridging to WSL Kali...", expanded=True) as status:
                 st.write("Initializing Parallel Recon Subsystem...")
                 # recon_suite returns the full string for display
                 report_display = bridge.recon_suite(url_input)
@@ -148,7 +148,7 @@ with col2:
                 st.markdown("#### Technical Evidence:")
                 st.markdown(f'<div class="terminal-box">{report_display}</div>', unsafe_allow_html=True)
                 
-                st.write("🧠 AI Analyzing technical data...")
+                st.write("[BRAIN] AI Analyzing technical data...")
                 # We use the condensed summary for the AI to improve precision and save context
                 analysis = brain.ask(f"Analyze this reconnaissance report from WSL for {url_input}. Focus on risks and vulnerabilities based on this summary: {report_for_ai}")
                 
@@ -160,7 +160,7 @@ with col2:
                 # Report Export
                 full_export = f"# Argus Security Report - {url_input}\n\n## Technical Data\n{report_display}\n\n## AI Analysis\n{analysis['output']}"
                 st.download_button(
-                    label="📥 DOWNLOAD MARKDOWN REPORT",
+                    label="[IN] DOWNLOAD MARKDOWN REPORT",
                     data=full_export,
                     file_name=f"Argus_{url_input.replace('https://', '').replace('/', '_')}.md",
                     mime="text/markdown"

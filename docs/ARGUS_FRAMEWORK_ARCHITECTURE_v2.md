@@ -2,6 +2,8 @@
 
 This document provides a detailed technical overview of the Argus Security Framework architecture, structured according to the **arc42** template and visualized using the **C4 Model** concepts.
 
+> **Canonical reconciliation:** Cross-cutting naming, ports, Python version, RAG embedding/index design, agent design, parsing, testing, and CI/CD are governed by **`specs/012-spec-reconciliation`**. Where this document and `012` disagree, `012` wins. This document has been updated to match `012` (single `ArgusBrain`, canonical RAG names, embedding manifest, port **12199**, Python **3.12**, **17** registered tools).
+
 ---
 
 ## 1. Introduction and Goals
@@ -111,13 +113,13 @@ graph TB
 
 | Component | Path | Responsibility |
 |-----------|------|----------------|
-| **ArgusBrain** | `app/core/brain.py`, `brain_v2.py` | ReAct/SimpleChain controller; triggers `_enrich_with_rag()` then `ask()` |
+| **ArgusBrain** | `app/core/agent/brain.py` (canonical single Brain; `agent_factory.py`) | Reasoning interface: `_refresh_blackboard()` + `_enrich_with_rag()` context assembly, LLM invocation, structured output, and registry-based tool dispatch. Replaces the deprecated `app/core/brain.py` / `brain_v2.py` / `agent_factory_v2.py` shadow files (see `012` §2.2). |
 | **RAG Engine** | `app/core/rag/rag_engine.py` | Orchestrates retrieval + context fusion via `format_combined_context()` |
 | **Embedding Factory** | `app/core/rag/embeddings.py` | Singleton: Ollama nomic-embed-text → HuggingFace → OpenAI fallback |
 | **Document Processor** | `app/core/rag/document_processor.py` | Structural chunking per file type (see §5.2) |
 | **Vector Store** | `app/core/rag/vector_store.py` | FAISS build/persist/load/similarity_search |
 | **ArgusMemory** | `app/core/memory/memory_service.py` | SQLite Blackboard with 5 tables (targets, findings, entities, relations, global_state) |
-| **Tool Registry** | `app/tools/tool_registry.py` | WSLBridgeTools facade — 12 sub-services |
+| **Tool Registry** | `app/tools/tool_registry.py` (facade) + `app/core/registry/` (`ToolRegistry`, `BaseToolService`) | WSLBridgeTools facade over a plugin `ToolRegistry` — **17** registered tools (14 core + 3 reflective-verification from `007`); see `005` |
 | **Tactical Modules** | `app/modules/` | High-level attack workflows (deep exploit, stealth, recon) |
 | **GUI** | `app/GUI/` | Streamlit (`gui_app.py`), Tkinter (`argus_gui.py`), Studio (`studio.py`) |
 | **Knowledge Base** | `knowledge_base/` | Static source files ingested into FAISS |
@@ -382,10 +384,10 @@ sequenceDiagram
 flowchart TB
     START([RAG Engine start])
 
-    START --> CHECK{FAISS index exists?}
+    START --> CHECK{manifest.json matches?<br/>knowledge_base hash + embedder}
 
-    CHECK -->|Yes, skip rebuild| DONE([Ready])
-    CHECK -->|No or auto rebuild| BUILD
+    CHECK -->|Match, skip rebuild| DONE([Ready])
+    CHECK -->|Hash or embedder differs / missing| BUILD
 
     subgraph BUILD[Full Index Build]
         WALK[Document Processor<br/>walks knowledge_base/]
@@ -411,7 +413,7 @@ flowchart TB
         HF --> STORE
         OPENAI --> STORE
 
-        STORE --> PERSIST[Save to disk<br/>app/core/rag/store/]
+        STORE --> PERSIST[Save index + write manifest.json<br/>app/core/rag/store/<br/>pinned embedder + dim + hash]
     end
 
     BUILD --> DONE
@@ -462,8 +464,9 @@ flowchart LR
 
 - **Host OS:** Windows 10/11.
 - **AI Engine:** Ollama (Localhost:11434) with models: `WhiteRabbitNeo-V3-7B`, `nomic-embed-text`.
-- **Vector Store:** FAISS (CPU) persisted to `app/core/rag/store/`.
-- **Environment:** `Argus_venv` (Python 3.12).
+- **GUI:** Streamlit "Argus Studio" dashboard on canonical port **12199** (`config.yaml` → `streamlit.port`; per `012` §2.6 / ADR-16).
+- **Vector Store:** FAISS (CPU) persisted to `app/core/rag/store/`, with `store/manifest.json` recording the pinned embedder (per ADR-9).
+- **Environment:** `Argus_venv` (Python **3.12**, canonical across all specs per `012` §2.6).
 - **Directory Structure:**
   - `/app`: Core logic (core, tools, modules, GUI).
   - `/app/core/rag`: RAG subsystem (embeddings, vector store, document processor, engine).
@@ -501,11 +504,15 @@ flowchart LR
 - **ADR 6: Reflective Verification over Status-Only Discovery:** Mandated content-level validation because modern WAFs use deceptive "200 OK" redirects.
 - **ADR 7: Autonomous Syntax Learning:** Empowered the agent to run `--help` commands on-the-fly.
 - **ADR 8: Intelligent Rate-Limiting & IP Protection:** Automated halt-on-block logic to protect IP reputation.
-- **ADR 9: Why nomic-embed-text?** Chosen as the primary embedding model because it runs locally via Ollama (no API key, no data leakage), provides 768-dim embeddings with strong retrieval accuracy, and falls back gracefully to HuggingFace/OpenAI.
+- **ADR 9: Why nomic-embed-text (and one embedder per index)?** Chosen as the primary embedding model because it runs locally via Ollama (no API key, no data leakage) and provides 768-dim embeddings with strong retrieval accuracy. **Correction (per `012` §3):** the HuggingFace/OpenAI fallback runs **only at index build time** to select an available embedder, which is then pinned in `app/core/rag/store/manifest.json` (name, provider, dimension, knowledge_base hash, schema_version). A FAISS index has a fixed dimensionality, so silent *query-time* substitution across 768/384/1536-dim models is invalid and forbidden; if the manifest embedder is unavailable and no rebuild is possible, RAG degrades to Blackboard-only rather than issuing a dimension-mismatched query. Rebuilds are triggered deterministically when the knowledge-base hash or the configured embedder differs from the manifest.
 - **ADR 10: Why RAG + Blackboard Fusion?** Separating static knowledge (techniques, cheatsheets) from live target state (active findings) prevents the LLM from confusing general knowledge with current reconnaissance data, reducing hallucination and improving decision accuracy.
 - **ADR 11: Why Structural Chunking?** Different file formats carry meaning in their structure. JSON lists, CSV rows, and Markdown headers each require format-specific splitting to preserve semantic coherence during retrieval.
 - **ADR 12: Why LangChain vs LangGraph?** LangChain is utilized for the linear, deterministic RAG indexing and query flow (docs, embeddings, FAISS) due to its specialized retrieval modules. LangGraph is selected for the autonomous Penetration Testing Agent to handle non-linear execution, cycles (e.g. feedback loops during failed exploits), multi-agent orchestration, and native state management without spaghetti code.
+- **ADR 13: Structured output over regex parsing (per `012` §5).** Tool/Action selection uses structured decoding as the primary path — native `tool_calls` for tool-calling models, and Ollama `format=json` (JSON-schema-constrained) for others — emitting `{ "tool": <name>, "input": <value> }`. The legacy JSON/text regex dual-parser (from `013`) is retained only as a fallback. Rationale: eliminates a whole class of parse failures and reduces retries/latency.
+- **ADR 14: One canonical Brain + descriptive RAG names (per `012` §2).** The `_v2` shadow files (`brain_v2.py`, `agent_factory_v2.py`) are collapsed into a single `app/core/agent/brain.py` (`ArgusBrain`) and `agent_factory.py`; RAG modules keep the descriptive names `document_processor.py` / `vector_store.py` / `rag_engine.py` (not `010`'s `processor/vectorstore/engine`). Rationale: SRP/maintainability and one unambiguous name per concept.
+- **ADR 15: Canonical agent topology = explicit bounded node graph (per `012` §4).** The production agent is the LangGraph node graph `Recon → Scanner → Exploit ⇄ Reflective → Post-Exploit` in `app/core/agent/`, bounded by `MAX_RETRIES` + a recursion limit and emitting one structured event per transition. This supersedes `013`'s generic top-level ReAct agent (whose capability-probe, parser, and hooks are migrated here). Rationale: bounded, observable, truthful (no synthetic runtime results), domain-aligned.
+- **ADR 16: Unified Streamlit port 12199 (per `012` §2.6).** One value in `config.yaml` (`streamlit.port: 12199`), with `get_port.py`'s fail-safe default equal to it, consumed by every launcher and the `011` dashboard. Supersedes the divergent `8199`/`8501` values. Rationale: eliminates port drift at the source.
 
 ---
 
-*Created by Argus Security Framework Team - June 2026*
+*Created by Argus Security Framework Team - June 2026. Reconciled per `specs/012-spec-reconciliation` - July 2026.*
