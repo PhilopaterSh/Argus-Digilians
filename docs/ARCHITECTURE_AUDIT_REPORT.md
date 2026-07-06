@@ -179,7 +179,7 @@ Run these in a normal dev checkout (Python 3.12 + deps). Each is safe with the s
 |----|--------|--------------|----------|--------|
 | C1 | `rm -rf "Argus-Digilians-fix-copy-setup-to-scripts/"` (nested 1.6 GB self-copy) | confirm not a submodule (it is untracked) | P0 | Done (2026-07-06) - verified via byte-level diff of its own unresolved-merge working tree against commit `8495f4d`: `tool_registry.py` identical, `brain.py`/`config.yaml` differed only by already-superseded fixes (ASCII cleanup, port correction). Zero unique content confirmed before deletion; owner confirmed explicitly. |
 | C2 | Delete `app/core/rag/{processor,vectorstore,engine}.py` | grep confirms zero importers (already true) | P0 | Done |
-| C3 | Rename `app/GUI/argus_studio.py` -> `dashboard.py`; reduce `app.py`/`argus_gui.py`/`gui_app.py`/`gui_main.py`/`gui_root.py`/`studio.py` to shims, then remove | Streamlit smoke test of dashboard passes | P1 | Done (2026-07-06) - shims added, physical removal still deferred |
+| C3 | Rename `app/GUI/argus_studio.py` -> `dashboard.py`; reduce `app.py`/`argus_gui.py`/`gui_app.py`/`gui_main.py`/`gui_root.py`/`studio.py` to shims, then remove | Streamlit smoke test of dashboard passes | P1 | Rename+shims done (2026-07-06). **Precondition now met** (2026-07-06): `tests/test_gui/test_dashboard_apptest.py` uses Streamlit's `AppTest` harness to actually run `dashboard.py` and each of its 6 tabs in a simulated session (not just import) - zero exceptions. Physical shim removal still deferred to a dedicated pass, now unblocked. |
 | C4 | Merge `brain_v2`->`brain`, `agent_factory_v2`->`agent_factory`; migrate `app/core/workflow/*` into `app/core/agent/`; repoint 3 test files; delete shadows | `pytest` green after repoint | P0 | Done |
 | C5 | Author `research.md`/`data-model.md`/`quickstart.md` for `002` and `003-sqlite` | derive from existing spec/plan (no new decisions) | P2 | Done - all 6 files already present with substantial content (91-139 lines each), verified 2026-07-06 |
 | C6 | Move root `*_FIX.*` / `*_REPORT.*` notes to `docs/history/`; delete `Plan md/`; move `check_integration.py`/`test_parsing_fix.py` into `tests/` | none | P2 | Done - `test_parsing_fix.py` routed to `docs/history/verify_parsing_fix.py` instead of `tests/` (2 of its 4 assertions fail against current design; `tests/` would have made it live for the first time via pytest's `test_*.py` discovery) |
@@ -263,3 +263,45 @@ Reviewed and left unchanged (standard, low-risk bootstrap patterns, not accident
 
 Validated: full suite (144 passed), `ruff` clean, `scripts/validate_ascii.py` /
 `scripts/validate_specs.py` both PASS.
+
+---
+
+## 12. Full install-to-runtime audit pass (2026-07-06)
+
+A deliberately end-to-end pass, from installer syntax through actual GUI runtime behavior,
+conservatively scoped to what this sandboxed environment can genuinely verify.
+
+**Install/setup**: `scripts/ARGUS_INSTALLER.ps1` and all first-party `.ps1` files re-verified
+via `[System.Management.Automation.Language.Parser]::ParseFile` (zero parse errors) - this is
+static syntax validation only; the installer's actual WSL/Kali/Ollama provisioning steps cannot
+be executed in this environment (no admin elevation, no WSL). This limitation is unchanged from
+every prior pass this session and is called out explicitly rather than assumed away.
+
+**Project structure/imports**: re-confirmed via `python -m compileall -q app scripts tests
+workspace` (zero errors) and the full pytest collection (163 tests collected without error).
+
+**Hidden-issue sweep** (import-time execution, unguarded service calls, misleading UI state):
+no new instances found beyond what earlier passes this session already fixed (`app/GUI/gui_app.py`/
+`gui_root.py` deleted, `app/core/agent/{blackboard,graph}.py` deferred). This pass specifically
+looked for anything missed and found nothing new.
+
+**New verification depth added this pass**: prior passes only checked that GUI modules *import*
+without exception (via `importlib.import_module`). This pass used Streamlit's `AppTest` harness
+(`streamlit.testing.v1`) to actually *run* `dashboard.py` end-to-end, including navigating to
+all 6 tabs (Dashboard, Targets, Agent, Knowledge Graph, Reports, Settings) in a simulated
+session - a materially stronger guarantee than an import check, and the first time this
+repository's GUI has had genuine runtime verification without a human manually clicking through
+it. Zero exceptions. Persisted as `tests/test_gui/test_dashboard_apptest.py` (7 tests) so this
+guarantee doesn't regress silently.
+
+**CLI**: `python scripts/run_argus_cli.py --help` runs and exits 0 with correct usage text.
+
+**Explicitly NOT verifiable here (accepted, unavoidable gaps)**: live WSL/Kali provisioning, a
+real Ollama model pull and inference call, the live SSH bridge, and a full autonomous
+recon->exploit->report run against a real target. All of these require infrastructure this
+sandboxed environment does not have (matches `tests/verify_core.py`/`ai_benchmark.py`/
+`exploit_test.py` being correctly non-blocking in CI for the same reason). No prior session
+pass claimed otherwise, and this one doesn't either.
+
+Validated: full suite (163 passed), `ruff` clean, both validators PASS, PowerShell syntax gate
+clean, CLI `--help` invocation succeeds.

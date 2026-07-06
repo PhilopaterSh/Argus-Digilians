@@ -14,6 +14,19 @@ All notable changes to this project will be documented in this file.
   into a pure `_reconcile_agent_running_state()` function (behavior-preserving)
   and added `tests/test_gui/test_agent_tab_status.py` (5 tests) proving a
   failed/completed run is never displayed as still running.
+- Full install-to-runtime audit pass: re-verified installer PowerShell syntax,
+  project compilation, and the import-time-execution sweep (no new issues
+  found beyond what earlier passes already fixed). Added genuinely new
+  verification depth: `tests/test_gui/test_dashboard_apptest.py` uses
+  Streamlit's `AppTest` harness to actually *run* `dashboard.py` and all 6
+  tabs in a simulated session (not just import), catching runtime errors an
+  import check cannot - zero exceptions found. This also satisfies Cleanup
+  Manifest C3's "Streamlit smoke test of dashboard passes" precondition for
+  the first time with real evidence. Confirmed `scripts/run_argus_cli.py --help`
+  runs cleanly. Explicitly documented what remains unverifiable in this
+  sandboxed environment (live WSL/Kali provisioning, live Ollama inference,
+  live SSH bridge, full end-to-end recon->exploit runs) rather than assumed
+  away - see `docs/ARCHITECTURE_AUDIT_REPORT.md` section 12.
 - Completed the pending merge of `fix/setup-script-update` (all conflicts had been
   resolved in the working tree but never committed); fixed a missing `langgraph`
   dependency in `scripts/Setup/requirements.txt` surfaced during review.
