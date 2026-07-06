@@ -44,7 +44,7 @@ echo [TEST] Verifying Core Imports...
 echo.
 call Argus_venv\Scripts\activate.bat
 python -c "
-from app.core.brain import ArgusBrain
+from app.core.agent.brain import ArgusBrain
 from app.core.llm_factory import build_llm
 from app.tools.tool_registry import WSLBridgeTools
 from app.core.memory.memory_service import ArgusMemory
@@ -104,7 +104,7 @@ echo Opening at http://localhost:8501
 echo Press Ctrl+C to stop the server.
 echo.
 call Argus_venv\Scripts\activate.bat
-python -m streamlit run app\GUI\gui_app.py --logger.level=error
+python -m streamlit run app\GUI\dashboard.py --logger.level=error
 goto menu
 
 :test_cli

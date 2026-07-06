@@ -1,6 +1,15 @@
 import streamlit as st
 import sys
 import os
+import warnings
+
+# DEPRECATED: This file is kept for backward compatibility.
+# Please use app/GUI/dashboard.py instead.
+warnings.warn(
+    "app/GUI/gui_main.py is deprecated. Use app/GUI/dashboard.py for the new unified dashboard.",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
 # Ensure project root is in PYTHONPATH
 proj_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
@@ -8,11 +17,12 @@ if proj_root not in sys.path:
     sys.path.insert(0, proj_root)
 
 from app.tools.tool_registry import WSLBridgeTools
-from app.core.brain import ArgusBrain
+from app.core.agent.brain import ArgusBrain
 from langchain_core.tools import Tool
 from langchain_community.callbacks.streamlit import StreamlitCallbackHandler
 
 st.set_page_config(page_title="Argus AI Studio - WSL Bridge", layout="wide")
+st.warning(":warning: This legacy GUI is deprecated. Please use the new Dashboard at `/app/GUI/dashboard.py`.")
 
 # Simple stylish UI
 st.markdown("""

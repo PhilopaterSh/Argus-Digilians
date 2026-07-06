@@ -7,8 +7,8 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..",
 
 def test_dashboard_imports():
     try:
-        import app.GUI.argus_studio
-        assert app.GUI.argus_studio is not None
+        import app.GUI.dashboard
+        assert app.GUI.dashboard is not None
     except RuntimeError:
         pass
 

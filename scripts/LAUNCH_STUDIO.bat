@@ -97,6 +97,6 @@ echo [*] Activating environment and launching Dashboard...
 echo [INFO] The browser will open automatically. Please wait 10 seconds.
 
 start http://localhost:%STREAMLIT_PORT%
-Argus_venv\Scripts\python.exe -m streamlit run app/GUI/argus_studio.py --server.port %STREAMLIT_PORT% --server.headless true --server.enableCORS false --server.enableXsrfProtection false
+Argus_venv\Scripts\python.exe -m streamlit run app/GUI/dashboard.py --server.port %STREAMLIT_PORT% --server.headless true --server.enableCORS false --server.enableXsrfProtection false
 
 pause

@@ -29,7 +29,7 @@ streamlit:
 
 paths:
   venv_python: "..\\Argus_venv\\Scripts\\python.exe"
-  gui_entry: "..\\app\\GUI\\gui_app.py"
+  gui_entry: "..\\app\\GUI\\dashboard.py"
 
 logging:
   transformers_verbosity: error

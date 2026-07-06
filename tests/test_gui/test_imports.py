@@ -5,6 +5,7 @@ GUI_MODULES = [
     "app.GUI.app",
     "app.GUI.studio",
     "app.GUI.desktop_gui",
+    "app.GUI.dashboard",
 ]
 
 

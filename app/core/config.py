@@ -36,7 +36,7 @@ class StreamlitSettings:
 @dataclass
 class PathSettings:
     venv_python: str = "..\\Argus_venv\\Scripts\\python.exe"
-    gui_entry: str = "..\\app\\GUI\\gui_app.py"
+    gui_entry: str = "..\\app\\GUI\\dashboard.py"
 
 
 @dataclass
