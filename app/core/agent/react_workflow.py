@@ -9,14 +9,15 @@ import re
 import warnings
 from typing import Any, Callable, Dict, Optional
 
-from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 from langchain_core.tools import BaseTool
 from langchain_ollama import ChatOllama
 from langgraph.graph import StateGraph, START, END
 from langgraph.graph.message import add_messages
+from pydantic import BaseModel, Field
 
-from app.core.workflow.state import ArgusAgentState
-from app.core.workflow.prompts import (
+from app.core.agent.react_state import ArgusAgentState
+from app.core.agent.react_prompts import (
     build_react_system_prompt,
     build_prebuilt_system_prompt,
 )
@@ -24,6 +25,41 @@ from app.core.memory.memory_service import ArgusMemory
 
 
 warnings.filterwarnings("ignore", category=DeprecationWarning)
+
+
+class _ArgusAction(BaseModel):
+    """Structured Action decision (012 FR-C9 / ADR-13): Ollama format=json primary path."""
+    thought: str = Field(description="Brief reasoning for this step")
+    tool: Optional[str] = Field(default=None, description="Tool name to call next; omit when giving the final answer")
+    input: Optional[str] = Field(default=None, description="Input value to pass to the tool")
+    final_answer: Optional[str] = Field(default=None, description="The complete final report; set only when done")
+
+
+def _try_structured_action(llm: Any, system_text: str, messages: list) -> Optional[str]:
+    """Attempt Ollama format=json structured decoding of the next Action (012 FR-C9).
+
+    Returns a synthesized ReAct-format content string on success, so the existing
+    regex parser in parse_node can consume it unchanged. Returns None if structured
+    decoding is unavailable or the model does not honor it, so callers fall back to
+    plain llm.invoke() + regex parsing (012 FR-C10).
+    """
+    if not hasattr(llm, "with_structured_output"):
+        return None
+    try:
+        structured_llm = llm.with_structured_output(_ArgusAction)
+        result = structured_llm.invoke([SystemMessage(content=system_text)] + messages)
+        action = result if isinstance(result, _ArgusAction) else _ArgusAction(**result)
+    except Exception:
+        return None
+
+    if action.final_answer:
+        return f"Thought: {action.thought}\nFinal Answer: {action.final_answer}"
+    if action.tool:
+        return (
+            f"Thought: {action.thought}\n"
+            f"Action: {json.dumps({'name': action.tool, 'input': action.input or ''})}"
+        )
+    return None
 
 
 def _supports_tool_calls(llm: ChatOllama) -> bool:
@@ -67,7 +103,7 @@ def _build_prebuilt_workflow(
 ) -> Any:
     """Build workflow using create_react_agent (requires tool_calls support)."""
     from langgraph.prebuilt import create_react_agent
-    from app.core.workflow.state import ArgusPrebuiltState
+    from app.core.agent.react_state import ArgusPrebuiltState
 
     llm_with_tools = llm.bind_tools(tools)
 
@@ -134,9 +170,15 @@ def _build_custom_workflow(
 
     # -- Nodes ------------------------------------------
     def agent_node(state: ArgusAgentState) -> dict:
-        """LLM generates ReAct-formatted output."""
+        """LLM generates the next Action: format=json structured decoding first
+        (012 FR-C9), falling back to free-text ReAct output for parse_node's
+        regex parser when structured decoding is unavailable/fails (FR-C10)."""
         system_text = build_react_system_prompt({**state, "_tools": tool_map})
-        response = llm.invoke([SystemMessage(content=system_text)] + state["messages"])
+        structured_content = _try_structured_action(llm, system_text, state["messages"])
+        if structured_content is not None:
+            response = AIMessage(content=structured_content)
+        else:
+            response = llm.invoke([SystemMessage(content=system_text)] + state["messages"])
         return {
             "messages": [response],
             "iteration_count": state["iteration_count"] + 1,
@@ -190,7 +232,7 @@ def _build_custom_workflow(
         Returns tool_name/tool_input on success, format error on failure.
         """
         last = state["messages"][-1]
-        content = last.content if hasattr(last, "content") else str(last)
+        content = str(last.content) if hasattr(last, "content") else str(last)
         result = _parse_react_output(content, state["target"])
 
         # If format error, tell the model

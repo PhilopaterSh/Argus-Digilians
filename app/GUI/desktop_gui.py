@@ -18,7 +18,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..",
 
 from app.core.config import ArgusConfig
 from app.tools.tool_registry import WSLBridgeTools
-from app.core.brain import ArgusBrain
+from app.core.agent.brain import ArgusBrain
 from langchain_core.tools import Tool
 
 

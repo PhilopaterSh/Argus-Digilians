@@ -2,7 +2,7 @@ import os
 import sys
 import argparse
 from app.tools.tool_registry import WSLBridgeTools
-from app.core.brain import ArgusBrain
+from app.core.agent.brain import ArgusBrain
 from langchain_core.tools import Tool
 from dotenv import load_dotenv
 

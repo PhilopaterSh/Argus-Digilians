@@ -18,8 +18,21 @@ class ArgusBrain:
     falls back to a simpler sequential execution model.
     """
 
-    def __init__(self, model_name, tools_list, rag_config: Optional[dict] = None, memory: Optional[ArgusMemory] = None):
-        self.llm = build_llm(model_name)
+    def __init__(
+        self,
+        model_name,
+        tools_list,
+        rag_config: Optional[dict] = None,
+        memory: Optional[ArgusMemory] = None,
+        llm: Optional[Any] = None,
+    ):
+        """`llm` is an optional override of the Ollama-backed default from `build_llm()`.
+
+        Exists so tests can inject a fake/fake-list LLM (e.g. langchain_core's
+        FakeListLLM) without needing a live Ollama server; production callers
+        never pass it and get the normal Ollama-backed model.
+        """
+        self.llm = llm if llm is not None else build_llm(model_name)
         self.tools = tools_list
         self.tool_map = {tool.name: tool for tool in tools_list}
         self.output_parser = PydanticOutputParser(pydantic_object=SecurityReport)
@@ -57,7 +70,7 @@ class ArgusBrain:
             return self._react_agent
 
         try:
-            from app.core.agent_factory import build_agent_executor
+            from app.core.agent.agent_factory import build_agent_executor
             format_instructions = self.output_parser.get_format_instructions()
             prompt = get_argus_prompt(format_instructions)
             self._react_agent = build_agent_executor(
@@ -75,7 +88,7 @@ class ArgusBrain:
             return self._simple_chain
 
         try:
-            from app.core.agent_factory import build_agent_executor
+            from app.core.agent.agent_factory import build_agent_executor
 
             self._simple_chain = build_agent_executor(
                 llm=self.llm,
@@ -226,7 +239,7 @@ class ArgusBrain:
 
         try:
             parsed = self.output_parser.parse(str(output))
-            return {"output": parsed.dict()}
+            return {"output": parsed.model_dump()}
         except Exception as e:
             print(f"[BRAIN] Pydantic parsing failed: {e}")
 
@@ -245,4 +258,17 @@ class ArgusBrain:
     def simple_ask(self, prompt):
         response = self.llm.invoke(prompt)
         return {"output": response}
+
+    def dispatch(self, tool_name: str, **kwargs) -> Any:
+        """Invoke a single registered tool directly by name, bypassing the LLM executor."""
+        tool = self.tool_map.get(tool_name)
+        if tool is None:
+            raise KeyError(f"Tool not found: {tool_name}")
+        return tool.func(**kwargs)
+
+    def get_available_tools(self):
+        return list(self.tools)
+
+    def get_tool_names(self):
+        return list(self.tool_map.keys())
 

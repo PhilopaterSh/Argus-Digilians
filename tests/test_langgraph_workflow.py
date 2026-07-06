@@ -12,14 +12,16 @@ warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 from typing import Any
 from langchain_core.messages import AIMessage, HumanMessage
-from app.core.workflow.graph import (
+from app.core.agent.react_workflow import (
+    _ArgusAction,
     _build_custom_workflow,
     _build_prebuilt_workflow,
     _build_tool_map,
     _supports_tool_calls,
+    _try_structured_action,
     extract_target,
 )
-from app.core.workflow.state import ArgusAgentState
+from app.core.agent.react_state import ArgusAgentState
 
 
 # -- Mock helpers -------------------------------------
@@ -48,6 +50,27 @@ def mock_search(query: str) -> str:
 def mock_recon(target: str) -> str:
     """Reconnaissance scan."""
     return "Subdomains: admin.test.com, api.test.com."
+
+
+class StructuredMockLLM:
+    """Mock LLM simulating Ollama format=json structured decoding (012 FR-C9)."""
+    def __init__(self, structured_response=None, raise_on_structured=False):
+        self._structured_response = structured_response
+        self._raise = raise_on_structured
+
+    def with_structured_output(self, schema):
+        if self._raise:
+            raise RuntimeError("model does not support format=json")
+        response = self._structured_response
+
+        class _Bound:
+            def invoke(self, messages):
+                return response
+
+        return _Bound()
+
+    def invoke(self, messages, **kwargs):
+        return AIMessage(content="Thought: fallback path used.\nFinal Answer: fallback report")
 
 
 # -- State fixtures -----------------------------------
@@ -222,6 +245,44 @@ def test_custom_graph_malformed_json_fallback_to_text():
     print("  [PASS] test_custom_graph_malformed_json_fallback_to_text")
 
 
+def test_structured_action_produces_tool_call():
+    """format=json path (012 FR-C9): structured Action maps to an Action: line
+    that parse_node's regex parser can consume unchanged."""
+    llm = StructuredMockLLM(_ArgusAction(thought="Scan first.", tool="mock_scan", input="https://test.com"))
+    content = _try_structured_action(llm, "system prompt", [HumanMessage(content="go")])
+    assert content is not None
+    assert 'Action: {"name": "mock_scan", "input": "https://test.com"}' in content
+
+
+def test_structured_action_produces_final_answer():
+    llm = StructuredMockLLM(_ArgusAction(thought="Done.", final_answer="Security report here."))
+    content = _try_structured_action(llm, "system prompt", [HumanMessage(content="go")])
+    assert content == "Thought: Done.\nFinal Answer: Security report here."
+
+
+def test_structured_action_falls_back_when_unsupported():
+    """012 FR-C10: models without with_structured_output fall back silently."""
+    llm = MockLLM(["Thought: x\nFinal Answer: y"])
+    assert _try_structured_action(llm, "system prompt", [HumanMessage(content="go")]) is None
+
+
+def test_structured_action_falls_back_on_exception():
+    """012 FR-C10: a model that claims to support format=json but errors falls back."""
+    llm = StructuredMockLLM(raise_on_structured=True)
+    assert _try_structured_action(llm, "system prompt", [HumanMessage(content="go")]) is None
+
+
+def test_custom_graph_uses_structured_action_end_to_end():
+    """Full graph cycle driven by structured decoding instead of free-text output."""
+    llm = StructuredMockLLM(_ArgusAction(thought="Done.", final_answer="Security report here."))
+    graph = _build_custom_workflow(llm, [mock_scan])
+    result = graph.invoke(dict(BASE_STATE))
+
+    assert result["iteration_count"] == 1
+    assert "Security report here." in result["messages"][-1].content
+    print("  [PASS] test_custom_graph_uses_structured_action_end_to_end")
+
+
 # =======================================================
 
 if __name__ == "__main__":
@@ -239,6 +300,11 @@ if __name__ == "__main__":
     test_custom_graph_json_action_format()
     test_custom_graph_json_action_variants()
     test_custom_graph_malformed_json_fallback_to_text()
+    test_structured_action_produces_tool_call()
+    test_structured_action_produces_final_answer()
+    test_structured_action_falls_back_when_unsupported()
+    test_structured_action_falls_back_on_exception()
+    test_custom_graph_uses_structured_action_end_to_end()
 
     print(f"\n{'='*50}")
     print("ALL TESTS PASSED")

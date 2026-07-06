@@ -10,7 +10,7 @@ from typing import Any, Dict, List, NotRequired, Optional, TypedDict
 from langchain_core.messages import HumanMessage
 
 AGENT_RUNNER_ENTRYPOINT = "scripts/run_agent.py"
-STREAMLIT_DASHBOARD_ENTRYPOINT = "app/GUI/argus_studio.py"
+STREAMLIT_DASHBOARD_ENTRYPOINT = "app/GUI/dashboard.py"
 AGENT_RUN_MODE_PRODUCTION = "production"
 AGENT_RUN_MODE_DEMO = "demo"
 AGENT_RUN_MODE_TEST = "test"

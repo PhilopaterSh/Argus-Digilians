@@ -10,7 +10,7 @@ import os
 # Ensure we can import app modules
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from app.core.brain import ArgusBrain
+from app.core.agent.brain import ArgusBrain
 from app.tools.tool_registry import WSLBridgeTools
 from langchain_core.tools import Tool
 

@@ -1,4 +1,4 @@
-from app.core.brain import ArgusBrain
+from app.core.agent.brain import ArgusBrain
 from app.core.config import ArgusConfig
 from app.tools.tool_registry import WSLBridgeTools
 from langchain_core.tools import Tool

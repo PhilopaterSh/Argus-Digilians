@@ -3,9 +3,9 @@ import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from langchain_ollama import ChatOllama
-from app.core.workflow import build_workflow
-from app.core.workflow.state import ArgusPrebuiltState
-from app.core.workflow.graph import _supports_tool_calls
+from app.core.agent import build_workflow
+from app.core.agent.react_state import ArgusPrebuiltState
+from app.core.agent.react_workflow import _supports_tool_calls
 from langchain_core.messages import HumanMessage
 import warnings
 warnings.filterwarnings("ignore", category=DeprecationWarning)

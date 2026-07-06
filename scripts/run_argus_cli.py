@@ -8,7 +8,7 @@ if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
 from app.tools.tool_registry import WSLBridgeTools
-from app.core.brain import ArgusBrain
+from app.core.agent.brain import ArgusBrain
 from app.core.config import ArgusConfig
 from langchain_core.tools import Tool
 from dotenv import load_dotenv

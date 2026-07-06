@@ -7,7 +7,7 @@ warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 from typing import Any
 from langchain_core.messages import AIMessage, HumanMessage
-from app.core.workflow.graph import _build_custom_workflow, _build_tool_map
+from app.core.agent.react_workflow import _build_custom_workflow, _build_tool_map
 
 
 class MockLLM:
