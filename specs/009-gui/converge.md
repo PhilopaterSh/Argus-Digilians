@@ -1,14 +1,14 @@
 # Converge for 009-gui
 
-## ما تم إغلاقه
+## Closed
 
-| العنصر | الحالة | ملاحظات |
-|--------|--------|----------|
-| تصحيح مسارات استيراد واجهة المستخدم القديمة | ✅ مكتمل | تم تصحيح جميع مسارات الاستيراد في `argus_gui.py` لتعتمد على حزم `app.*` الجديدة. |
-| إنشاء واجهة سطح المكتب (Tkinter GUI) | ✅ مكتمل | تم إنشاء `app/GUI/desktop_gui.py` كواجهة سطح مكتب بسيطة توفر واجهة تفاعلية لتحديد الأهداف واستعراض النتائج بشكل سلس، مع توفير fallback عند عدم توفر Tkinter. |
-| ملفات التوجيه المساعد | ✅ مكتمل | تم إنشاء `app/GUI/studio.py` كإعادة تصدير لـ `app.py` لدعم مسارات التشغيل السابقة. |
-| اختبارات الوحدة والاستيراد | ✅ مكتمل | تم إنشاء مجلد `tests/test_gui/` وملف `test_imports.py` وتمرير الاختبارات للتأكد من خلو واجهة المستخدم من مشاكل الاستيراد. |
+| Item | Status | Notes |
+|------|--------|-------|
+| Fixing legacy GUI import paths | Done | Corrected all import paths in `argus_gui.py` to rely on the new `app.*` packages. |
+| Desktop UI (Tkinter GUI) | Done | Created `app/GUI/desktop_gui.py` as a simple desktop interface providing a smooth interactive UI for setting targets and reviewing results, with a fallback when Tkinter is unavailable. |
+| Helper routing files | Done | Created `app/GUI/studio.py` as a re-export of `app.py` to support previous launch paths. |
+| Unit and import tests | Done | Created the `tests/test_gui/` directory and `test_imports.py`, and confirmed the tests pass, verifying the GUI is free of import issues. |
 
-## ما يزال مفتوحًا
+## Still open
 
-- لا يوجد مهام معلقة لهذا الـ Spec (جميع المهام من T001 إلى T005 مكتملة ومختبرة بالكامل).
+- No pending tasks for this spec (T001 through T005 all complete and fully tested).

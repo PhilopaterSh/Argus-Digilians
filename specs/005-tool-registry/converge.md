@@ -1,16 +1,23 @@
 # Converge for 005-tool-registry
 
-## ما تم إغلاقه
+## Closed
 
-| العنصر | الحالة | ملاحظات |
-|--------|--------|----------|
-| بنية الحزم الأساسية | ✅ مكتمل | تم إنشاء حزمة `app/core/registry/` وحزمة `app/core/agent/`. |
-| البنية التجريدية للخدمات والأدوات | ✅ مكتمل | تم إنشاء `BaseToolService` كـ ABC و `ToolMetadata` كـ Dataclass لتجريد الخدمات. |
-| سجل الأدوات الديناميكي (`ToolRegistry`) | ✅ مكتمل | تم تطبيق `ToolRegistry` مع وظائف التسجيل والإلغاء والاسترجاع وإدارة الأسماء المكررة وتوثيق السجلات بالـ Logs. |
-| المكونات المتوافقة مع معمارية v2 | ✅ مكتمل | تم إنشاء `ArgusBrainV2` و `agent_factory_v2.py` وتسجيل الأدوات الـ 14 الافتراضية مع المحافظة على التوافقية الرجعية مع الـ 42 دالة لـ `WSLBridgeTools`. |
-| اختبارات التغطية الكاملة | ✅ مكتمل | إنشاء مجلد الاختبارات `tests/test_registry/` مع 4 ملفات اختبارات تغطي كافة الوظائف والأنواع والحالات الاستثنائية بـ 23 اختبار وحدة ناجح. |
-| فحص البث والتشغيل | ✅ مكتمل | التحقق يدويًا وبرمجيًا من عمل الاستيراد والتشغيل بدون أي مشاكل. |
+| Item | Status | Notes |
+|------|--------|-------|
+| Core package structure | Done | Created the `app/core/registry/` and `app/core/agent/` packages. |
+| Service/tool abstraction | Done | Created `BaseToolService` as an ABC and `ToolMetadata` as a dataclass to abstract services. |
+| Dynamic tool registry (`ToolRegistry`) | Done | Implemented `ToolRegistry` with register/unregister/lookup, duplicate-name handling, and logging. |
+| v2-architecture-compatible components | Done | Created `ArgusBrainV2` and `agent_factory_v2.py` and registered the 14 default tools while keeping backward compatibility with the 42 `WSLBridgeTools` functions. |
+| Full test coverage | Done | Created the `tests/test_registry/` directory with 4 test files covering all functions, types, and edge cases, with 23 passing unit tests. |
+| Import/run smoke check | Done | Verified manually and programmatically that imports and execution work with no issues. |
 
-## ما يزال مفتوحًا
+## Still open
 
-- لا يوجد مهام معلقة لهذا الـ Spec (جميع المهام من T001 إلى T022 مكتملة ومختبرة بالكامل).
+- No pending tasks for this spec (T001 through T022 all complete and fully tested).
+
+## Note (2026-07-06)
+
+Per specs/012-spec-reconciliation T026/T027, `ArgusBrainV2` and `agent_factory_v2.py`
+have since been consolidated into `app/core/agent/brain.py` / `agent_factory.py` and
+the `_v2` shadow files removed; the `ToolRegistry`/`BaseToolService` abstraction
+recorded above is unaffected and remains canonical.

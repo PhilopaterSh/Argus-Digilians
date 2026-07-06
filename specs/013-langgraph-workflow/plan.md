@@ -4,7 +4,7 @@
 
 **Feature ID**: `013-langgraph-workflow` (renumbered from duplicate `003`).
 
-**Status**: ✅ Completed — **Partially Superseded By** `010-langgraph-agent` + `012-spec-reconciliation`. See spec header for retained-vs-superseded breakdown. Canonical agent location is `app/core/agent/` (not `app/core/workflow/`); canonical Streamlit port is **12199**.
+**Status**: ✅ Completed — **Fully Superseded By** `010-langgraph-agent` + `012-spec-reconciliation` (migration completed 2026-07-06). See spec header for the migrated-vs-superseded breakdown. Canonical agent location is `app/core/agent/` (`app/core/workflow/` deleted); canonical Streamlit port is **12199**.
 
 ---
 

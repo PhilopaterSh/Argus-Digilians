@@ -1,14 +1,14 @@
 # Converge for 008-self-healing
 
-## ما تم إغلاقه
+## Closed
 
-| العنصر | الحالة | ملاحظات |
-|--------|--------|----------|
-| مراقبة الصحة الاستباقية (Proactive Health Check) | ✅ مكتمل | تم إنشاء دالة `health_check()` لفحص صحة بيئة الـ WSL عبر `wsl --status` والـ Ollama عبر واجهة الـ API والـ Python عبر فحص الـ `Argus_venv`. |
-| استعادة الخدمات التلقائية (Service Restart) | ✅ مكتمل | تم تطبيق دالة `restart_service()` للتحكم بالخدمات وإعادة تشغيل Ollama أو WSL عند تعطلها برمجياً. |
-| تغطية الاختبارات لخدمة العلاج الذاتي | ✅ مكتمل | تم إنشاء ملف الاختبار `tests/test_tools/test_self_heal.py` بـ 10 اختبارات وحدة تغطي حالات الفحص واستعادة التشغيل بنجاح. |
-| توافق الخدمة مع الأنظمة القديمة | ✅ مكتمل | تم دمج الخدمة كأداة رسمية في الـ Tool Registry مع المحافظة على عمل دالة `system_self_heal()` القديمة. |
+| Item | Status | Notes |
+|------|--------|-------|
+| Proactive health check | Done | Added a `health_check()` function checking WSL health via `wsl --status`, Ollama via its API, and Python via the `Argus_venv` check. |
+| Automatic service restart | Done | Implemented a `restart_service()` function to control services and restart Ollama or WSL programmatically when they go down. |
+| Test coverage for the self-healing service | Done | Created `tests/test_tools/test_self_heal.py` with 10 unit tests covering the health check and successful restart scenarios. |
+| Compatibility with legacy systems | Done | Integrated the service as an official Tool Registry entry while keeping the legacy `system_self_heal()` function working. |
 
-## ما يزال مفتوحًا
+## Still open
 
-- لا يوجد مهام معلقة لهذا الـ Spec (جميع المهام من T001 إلى T010 مكتملة ومختبرة بالكامل).
+- No pending tasks for this spec (T001 through T010 all complete and fully tested).

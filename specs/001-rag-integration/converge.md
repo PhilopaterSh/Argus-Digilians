@@ -1,16 +1,16 @@
 # Converge for 001-rag-integration
 
-## ما تم إغلاقه
+## Closed
 
-| العنصر | الحالة | ملاحظات |
-|--------|--------|----------|
-| بنية حزمة RAG الأساسية (`app/core/rag/`) | ✅ مكتمل | تم إنشاء الهيكل وملفات `__init__.py` و `config.py` و `embeddings.py` و `document_processor.py` و `vector_store.py` و `rag_engine.py`. |
-| قاعدة المعرفة Seed (`knowledge_base/`) | ✅ مكتمل | تم إنشاء المجلد وملف `argus_security_knowledge.md` وتهيئة إعدادات الـ RAG في `config.yaml`. |
-| تكامل الـ Brain مع RAG والـ Blackboard | ✅ مكتمل | تم تحديث `brain.py` و `brain_v2.py` لدمج سياق الـ RAG والـ Blackboard تلقائياً قبل استدعاء الـ LLM. |
-| التوثيق والمخططات المعمارية | ✅ مكتمل | تم إنشاء `app/core/rag/README.md` وتحديث `docs/ARGUS_FRAMEWORK_ARCHITECTURE_v2.md` بـ 6 مخططات Mermaid وأرشفة الملفات القديمة. |
-| المزامنة والنشر بين الفروع | ✅ مكتمل | تم نسخ التغييرات ومزامنتها بنجاح ودفع فرع `fix/copy-setup-to-scripts` إلى GitHub. |
+| Item | Status | Notes |
+|------|--------|-------|
+| Core RAG package structure (`app/core/rag/`) | Done | Created the package layout and `__init__.py`, `config.py`, `embeddings.py`, `document_processor.py`, `vector_store.py`, `rag_engine.py`. |
+| Seed knowledge base (`knowledge_base/`) | Done | Created the directory and `argus_security_knowledge.md`, and set up RAG settings in `config.yaml`. |
+| Brain integration with RAG and the Blackboard | Done | Updated `brain.py` and `brain_v2.py` to automatically fuse RAG and Blackboard context before calling the LLM. |
+| Documentation and architecture diagrams | Done | Created `app/core/rag/README.md` and updated `docs/ARGUS_FRAMEWORK_ARCHITECTURE_v2.md` with 6 Mermaid diagrams, archived the old files. |
+| Sync and publish across branches | Done | Changes copied and synced successfully; `fix/copy-setup-to-scripts` pushed to GitHub. |
 
-## ما يزال مفتوحًا
+## Still open
 
-- لا يوجد مهام معلقة لهذا الـ Spec (جميع المهام من T001 إلى T020 مكتملة).
-- *ملاحظة*: تم نقل مهام تقوية وحماية نظام الـ RAG إلى الـ Spec رقم `004-rag-pipeline`.
+- No pending tasks for this spec (T001 through T020 all complete).
+- Note: RAG hardening/robustness tasks were moved to spec `004-rag-pipeline`.

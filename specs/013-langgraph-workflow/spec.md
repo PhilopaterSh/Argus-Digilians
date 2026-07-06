@@ -6,13 +6,13 @@
 
 **Feature ID**: `013-langgraph-workflow` (renumbered from the duplicate `003` — the original `003` is `003-sqlite-blackboard`, created 2026-06-29).
 
-**Status**: Partially Superseded
+**Status**: Fully Superseded (migration completed 2026-07-06, `012` T028/T030)
 
 **Superseded By**: `010-langgraph-agent` (canonical agent topology) and `012-spec-reconciliation` (canonical decisions).
 
 **Supersession scope**:
-- **Superseded** — the generic dual-mode top-level ReAct agent (`_build_prebuilt_workflow` / `_build_custom_workflow`) and its `app/core/workflow/` location. The canonical production agent is the explicit LangGraph node graph in `app/core/agent/` (see `010`).
-- **Retained (still canonical)** — the model tool-calling capability probe, the Action parser, the pre/post model hooks, and the config-driven port. Per `012`, these migrate from `app/core/workflow/` into `app/core/agent/` and the parser becomes the *fallback* path behind Ollama `format=json` structured decoding (see `012` ADR-14). The canonical Streamlit port is **12199** (not 8199).
+- **Superseded** — the generic dual-mode top-level ReAct agent (`_build_prebuilt_workflow` / `_build_custom_workflow`) and its `app/core/workflow/` location. The canonical production agent is the explicit LangGraph node graph in `app/core/agent/` (see `010`). `app/core/workflow/` has been deleted; `hooks.py` was dropped entirely (confirmed dead, fully duplicated by inline closures already in `graph.py`).
+- **Migrated (now canonical under `app/core/agent/`)** — the model tool-calling capability probe and the Action parser moved to `app/core/agent/react_workflow.py`; state/prompts moved to `react_state.py`/`react_prompts.py`. The parser is now the *fallback* path behind Ollama `format=json` structured decoding (`012` ADR-13/FR-C9/FR-C10), implemented via `_ArgusAction`/`_try_structured_action` in `react_workflow.py`. The config-driven port is **12199** (not 8199), set in `config.yaml`.
 
 **Input**: Upgrade Argus AI agent from legacy LangChain `AgentExecutor` to a modern LangGraph-based workflow that supports both tool-calling models (Llama 3.1) and non-tool-calling models (WhiteRabbitNeo), with robust JSON/text Action parsing and configurable Streamlit port.
 

@@ -1,14 +1,14 @@
 # Converge for 007-reflective-verification
 
-## ما تم إغلاقه
+## Closed
 
-| العنصر | الحالة | ملاحظات |
-|--------|--------|----------|
-| منع الحلقات التكرارية اللانهائية (Infinite-Loop Prevention) | ✅ مكتمل | تم تطبيق آلية تتبع سجل الأوامر الأخير في الذاكرة بحد أقصى 10 قيود ومنع تنفيذ الأوامر المتطابقة المتكررة لـ 3 مرات متتالية. |
-| تصدير أدوات التحقق لـ LangChain | ✅ مكتمل | تم إدراج دوال التحقق من الأوامر والمخرجات وصعوبة التنفيذ (`verify_command`, `verify_output`, `assess_difficulty`) في سجل الأدوات الافتراضية للـ `WSLBridgeTools`. |
-| تغطية الاختبارات لخدمة التحقق | ✅ مكتمل | إنشاء ملف الاختبارات `tests/test_tools/test_reflective_verification.py` بـ 20 اختبار وحدة تغطي حالات الفحص الأولي والأمني (مثل منع WAF والـ Redirection والبيانات الحساسة والأخطاء المدخلة). |
-| التحقق النهائي والتلميع | ✅ مكتمل | فحص تشغيل الاختبارات للتأكد من فاعلية التحقق المنعكس وموثوقيته. |
+| Item | Status | Notes |
+|------|--------|-------|
+| Infinite-loop prevention | Done | Implemented an in-memory recent-command history tracker capped at 10 entries, blocking the same command from repeating more than 3 times in a row. |
+| Exporting verification tools to LangChain | Done | Registered the command/output verification and difficulty-assessment functions (`verify_command`, `verify_output`, `assess_difficulty`) in `WSLBridgeTools`'s default tool registry. |
+| Test coverage for the verification service | Done | Created `tests/test_tools/test_reflective_verification.py` with 20 unit tests covering initial and security checks (e.g. WAF detection, redirects, sensitive data, and input errors). |
+| Final verification and polish | Done | Ran the tests to confirm the reflective-verification loop is effective and reliable. |
 
-## ما يزال مفتوحًا
+## Still open
 
-- لا يوجد مهام معلقة لهذا الـ Spec (جميع المهام من T001 إلى T010 مكتملة ومختبرة بالكامل).
+- No pending tasks for this spec (T001 through T010 all complete and fully tested).

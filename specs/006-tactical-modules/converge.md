@@ -1,15 +1,15 @@
 # Converge for 006-tactical-modules
 
-## ما تم إغلاقه
+## Closed
 
-| العنصر | الحالة | ملاحظات |
-|--------|--------|----------|
-| البنية التجريدية للموديلات التكتيكية | ✅ مكتمل | تم إنشاء `app/modules/base.py` وتطبيق الفئة التجريدية الأساسية `BaseTacticalModule`. |
-| تصحيح مسارات الاستيراد | ✅ مكتمل | تم تصحيح مسارات استيراد حزم `app.*` لجميع الموديلات التكتيكية التسعة (مثل `argus_reasoning.py` و `argus_deep_exploit.py` و `run_recon.py` و `map_target.py` و `crawler.py`). |
-| آلية التسجيل والتشغيل الموحد | ✅ مكتمل | تم تحديث `app/modules/__init__.py` لتوفير دوال التسجيل الديناميكي للوحدات وتشغيلها الموحد (`register`, `run_all`, `run_module`, `list_modules`). |
-| اختبارات التحقق من الاستيراد | ✅ مكتمل | تم إنشاء مجلد `tests/test_modules/` وملف `test_imports.py` وتجاوز 12 اختبار وحدة ناجح للتأكد من خلو الوحدات من أي أخطاء استيراد. |
-| التحقق النهائي والتلميع | ✅ مكتمل | تم تشغيل فحص الاستيراد وتشغيل بيئة الاختبارات بنجاح تام. |
+| Item | Status | Notes |
+|------|--------|-------|
+| Tactical module abstraction | Done | Created `app/modules/base.py` and implemented the `BaseTacticalModule` abstract base class. |
+| Import path fixes | Done | Corrected `app.*` package import paths for all nine tactical modules (e.g. `argus_reasoning.py`, `argus_deep_exploit.py`, `run_recon.py`, `map_target.py`, `crawler.py`). |
+| Unified registration and run mechanism | Done | Updated `app/modules/__init__.py` to provide dynamic module registration and unified execution (`register`, `run_all`, `run_module`, `list_modules`). |
+| Import-verification tests | Done | Created the `tests/test_modules/` directory and `test_imports.py`, with over 12 passing unit tests confirming the modules are free of import errors. |
+| Final verification and polish | Done | Ran the import check and the full test suite successfully. |
 
-## ما يزال مفتوحًا
+## Still open
 
-- لا يوجد مهام معلقة لهذا الـ Spec (جميع المهام من T001 إلى T012 مكتملة ومختبرة بالكامل).
+- No pending tasks for this spec (T001 through T012 all complete and fully tested).

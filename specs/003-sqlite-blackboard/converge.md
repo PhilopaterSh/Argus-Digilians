@@ -1,16 +1,16 @@
 # Converge for 003-sqlite-blackboard
 
-## ما تم إغلاقه
+## Closed
 
-| العنصر | الحالة | ملاحظات |
-|--------|--------|----------|
-| هيكل الحزمة والتهيئة | ✅ مكتمل | تم إنشاء `app/core/memory/__init__.py` لتنظيم الاستيراد وقراءة الكود القديم. |
-| إعادة هيكلة الـ `memory_service.py` | ✅ مكتمل | تم تحسين الاتصال بقاعدة البيانات عبر `WAL mode` وتفعيل الـ `foreign keys` وإضافة تلميحات الأنواع ومعالجة الأخطاء. |
-| قاعدة البيانات الموحدة وقفل الدمج | ✅ مكتمل | تثبيت مسار قاعدة البيانات في `data/argus_intelligence.db` وتضمين دالة `_migrate_from_root()` للدمج التلقائي من الجذر. |
-| آلية فحص الصحة والنزاهة | ✅ مكتمل | تم تضمين فحص النزاهة `PRAGMA integrity_check` ونظام إصدارات الجداول `schema_version`. |
-| فحص التوافقية والتجربة | ✅ مكتمل | التحقق من عمل جميع مكونات ومستهلكي قاعدة البيانات (مثل `brain.py` والـ CLI والـ GUI) وحذف النسخة القديمة من الجذر بعد نجاح الهجرة. |
-| اختبارات الوحدة | ✅ مكتمل | إنشاء ملف `tests/test_memory.py` يغطي كافة عمليات الـ CRUD والحالات الاستثنائية وهجرة البيانات بنسبة تغطية تتجاوز 90%. |
+| Item | Status | Notes |
+|------|--------|-------|
+| Package structure and initialization | Done | Created `app/core/memory/__init__.py` to organize imports and read the legacy code. |
+| `memory_service.py` refactor | Done | Improved the database connection via `WAL mode`, enabled `foreign keys`, added type hints and error handling. |
+| Unified database and merge lock | Done | Pinned the database path to `data/argus_intelligence.db` and added a `_migrate_from_root()` function for automatic migration from the root. |
+| Health-check and integrity mechanism | Done | Added `PRAGMA integrity_check` and a `schema_version` table-versioning system. |
+| Compatibility and trial check | Done | Verified all database components and consumers (e.g. `brain.py`, the CLI, the GUI) work correctly, and removed the old root-level copy after a successful migration. |
+| Unit tests | Done | Created `tests/test_memory.py` covering all CRUD operations, edge cases, and data migration, at over 90% coverage. |
 
-## ما يزال مفتوحًا
+## Still open
 
-- لا يوجد مهام معلقة لهذا الـ Spec (جميع المهام من T001 إلى T019 مكتملة بنجاح وتم فحصها بالاختبارات).
+- No pending tasks for this spec (T001 through T019 all completed successfully and verified by tests).
