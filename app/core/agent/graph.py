@@ -14,11 +14,12 @@ from app.core.config import ArgusConfig
 
 logger = logging.getLogger(__name__)
 
-try:
-    config = ArgusConfig.load()
-    MAX_RETRIES = config.max_retries
-except Exception:
-    MAX_RETRIES = 3
+
+def _get_max_retries() -> int:
+    try:
+        return ArgusConfig.load().max_retries
+    except Exception:
+        return 3
 
 
 def self_heal_node(state: AgentState) -> AgentState:
@@ -54,14 +55,15 @@ def should_continue(state: AgentState):
     if state.get("exploit_success"):
         return "post_exploit"
 
+    max_retries = _get_max_retries()
     has_dep_error = any(
         "not found" in err.lower() or "not installed" in err.lower() or "permission denied" in err.lower()
         for err in state.get("error_log", [])
     )
-    if has_dep_error and state.get("retry_count", 0) < MAX_RETRIES:
+    if has_dep_error and state.get("retry_count", 0) < max_retries:
         return "self_heal"
 
-    if state.get("retry_count", 0) >= MAX_RETRIES or state.get("current_payload") is None:
+    if state.get("retry_count", 0) >= max_retries or state.get("current_payload") is None:
         save_entry(state["target_ip"], dict(state), "FAILED")
         return END
 

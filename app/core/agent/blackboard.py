@@ -6,8 +6,16 @@ from typing import Dict, Any
 
 DB_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../data/argus_intelligence.db"))
 
+_schema_ready = False
+
 def get_connection():
+    global _schema_ready
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
+    if not _schema_ready:
+        # Set before calling init_schema() (which itself calls get_connection())
+        # to avoid infinite recursion on the first call.
+        _schema_ready = True
+        init_schema()
     return sqlite3.connect(DB_PATH)
 
 def init_schema():
@@ -57,7 +65,3 @@ def save_entry(target: str, state_snapshot: Dict[str, Any], status: str):
     )
     conn.commit()
     conn.close()
-
-
-# Initialize schema when module is imported
-init_schema()
