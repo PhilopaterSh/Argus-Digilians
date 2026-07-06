@@ -5,6 +5,8 @@ from app.core.rag.config import RAGConfig
 class EmbeddingFactory:
     _instance = None
     _embedding_model = None
+    _provider = None
+    _model_name = None
 
     def __new__(cls):
         if cls._instance is None:
@@ -20,12 +22,21 @@ class EmbeddingFactory:
             config = RAGConfig.from_central()
 
         cls._embedding_model = cls._try_ollama(config)
+        if cls._embedding_model is not None:
+            cls._provider = "ollama"
+            cls._model_name = config.embedding_model
 
         if cls._embedding_model is None:
             cls._embedding_model = cls._try_huggingface(config)
+            if cls._embedding_model is not None:
+                cls._provider = "huggingface"
+                cls._model_name = "all-MiniLM-L6-v2"
 
         if cls._embedding_model is None:
             cls._embedding_model = cls._try_openai()
+            if cls._embedding_model is not None:
+                cls._provider = "openai"
+                cls._model_name = "text-embedding-3-small"
 
         if cls._embedding_model is None:
             raise ImportError(
@@ -34,6 +45,19 @@ class EmbeddingFactory:
             )
 
         return cls._embedding_model
+
+    @classmethod
+    def get_provider(cls) -> Optional[str]:
+        """Return the provider ("ollama"|"huggingface"|"openai") actually selected.
+
+        None if get_embeddings() has not been called yet.
+        """
+        return cls._provider
+
+    @classmethod
+    def get_model_name(cls) -> Optional[str]:
+        """Return the concrete embedder model name actually selected (post-fallback)."""
+        return cls._model_name
 
     @classmethod
     def _try_ollama(cls, config: RAGConfig):
@@ -76,3 +100,5 @@ class EmbeddingFactory:
     @classmethod
     def reset(cls):
         cls._embedding_model = None
+        cls._provider = None
+        cls._model_name = None

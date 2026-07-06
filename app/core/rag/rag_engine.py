@@ -81,8 +81,16 @@ class RAGEngine:
             self._initialized = True
 
     def retrieve(self, query: str, k: Optional[int] = None) -> List[Document]:
+        """Retrieve documents passing the configured similarity threshold.
+
+        Uses similarity_search_with_score (not similarity_search) so the same
+        relevance gate as query() applies here too - format_context() and
+        format_combined_context() (used on every live ArgusBrain query) were
+        previously bypassing the threshold entirely.
+        """
         self.initialize()
-        return self.vector_store.similarity_search(query, k=k)
+        results = self.vector_store.similarity_search_with_score(query, k=k)
+        return [doc for doc, score in results if score <= self.config.similarity_threshold]
 
     def retrieve_with_scores(self, query: str, k: Optional[int] = None) -> List[tuple]:
         self.initialize()
