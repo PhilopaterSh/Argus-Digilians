@@ -29,13 +29,17 @@ class AgentController:
         self.state_file = os.path.join(self.state_dir, f'agent_{self.run_id}.json')
         self.run_mode = normalize_run_mode(os.getenv('AGENT_RUN_MODE') or os.getenv('ARGUS_AGENT_MODE'))
 
+        # Written once, before the child process spawns, so the child's own
+        # state-file writes (scripts/run_agent.py) never race a second write
+        # from this parent process landing moments after Popen() - both sides
+        # do non-atomic read-modify-write on the same file with no locking.
         self._write_state(
             build_run_snapshot(
                 self.run_id,
                 target,
                 self.run_mode,
-                status='starting',
-                current_node='init',
+                status='running',
+                current_node='recon',
                 progress_pct=0,
             )
         )
@@ -60,15 +64,6 @@ class AgentController:
             stderr=subprocess.PIPE,
             cwd=str(project_root),
         )
-        self._write_state({
-            'status': 'running',
-            'current_node': 'recon',
-            'updated_at': utc_now_iso(),
-            'run_id': self.run_id,
-            'target': target,
-            'mode': self.run_mode,
-            'progress_pct': 0,
-        })
         return self.run_id
 
     def stop(self):
