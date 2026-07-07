@@ -65,18 +65,21 @@ class ReconService:
         print(f"[*] Starting Full Recon Suite for: {clean_target}")
 
         results = {}
-        
+
+        # Bounded per-command so one slow/unresponsive tool can't consume the
+        # entire outer agent-run budget (scripts/run_agent.py's
+        # AGENT_TIMEOUT_SECONDS) and silently strand the graph on this node.
         # 1. Tech Stack (whatweb)
         print(f"[*] Identifying Tech Stack for {clean_target}...")
-        results['tech'] = self.runner.run(f"whatweb {url} --aggression 3")
+        results['tech'] = self.runner.run(f"whatweb {url} --aggression 3", timeout=90)
 
         # 2. Port Scan (nmap - lightweight)
         print(f"[*] Scanning Ports for {clean_target}...")
-        results['ports'] = self.runner.run(f"nmap -sV -T4 --top-ports 100 {clean_target}")
+        results['ports'] = self.runner.run(f"nmap -sV -T4 --top-ports 100 {clean_target}", timeout=180)
 
         # 3. DNS Recon
         print(f"[*] DNS Enumeration for {clean_target}...")
-        results['dns'] = self.runner.run(f"dig ANY {clean_target} +short")
+        results['dns'] = self.runner.run(f"dig ANY {clean_target} +short", timeout=20)
 
         self.last_recon_results = results
         

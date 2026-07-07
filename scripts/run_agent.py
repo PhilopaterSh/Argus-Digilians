@@ -15,12 +15,23 @@ from app.core.agent.contracts import (
     load_json_file,
     normalize_run_mode,
     persist_run_snapshot,
-    record_state_event,
     utc_now_iso,
 )
 from app.core.agent.graph import build_tactical_graph
 
-DEFAULT_TIMEOUT_SECONDS = 120
+
+# Recon (whatweb/nmap/dig, app/tools/recon.py), scanner (nikto/ffuf,
+# app/tools/scanners.py) and exploit (6 sequential evasion probes,
+# app/tools/evasion.py) each run multiple sequential external tool calls
+# over WSL/SSH. Per-call timeouts bound each one, but stacked worst-case
+# across all three nodes (plus per-call WSL process spin-up overhead) can
+# approach ~800s. The original 120s guaranteed the graph got killed by the
+# timeout branch below during recon on every real (non-demo) run, before
+# recon_node could ever return - this is why the agent never progressed
+# past recon and final_state/results stayed empty. Live end-to-end
+# reproduction against a real host (see CHANGELOG.md) confirmed a full
+# recon->scanner->exploit run needs headroom well past 600s.
+DEFAULT_TIMEOUT_SECONDS = 900
 
 
 def run_graph(target: str, run_id: str, mode: str, state_file: str, result_box: Dict[str, Any]) -> None:
@@ -46,13 +57,13 @@ def main() -> None:
         state_file,
         build_run_snapshot(run_id, target, mode, status='starting', current_node='init', started_at=started_at, updated_at=started_at),
     )
-    record_state_event(
-        {'run_id': run_id, 'state_file': state_file, 'target_ip': target, 'mode': mode, 'events': []},
-        'recon',
-        'running',
-        f'Starting reconnaissance on {target}',
-    )
 
+    # Note: recon_node() (app/core/agent/nodes/recon.py) writes its own
+    # 'Starting reconnaissance on {target}' event the moment the graph
+    # thread actually begins running recon. A second, pre-emptive write of
+    # the identical message here (before the thread even starts) used to
+    # produce a visible duplicate log line with no corresponding progress -
+    # removed; the snapshot below already reflects current_node='recon'.
     state_data = load_json_file(state_file)
     state_data.setdefault('events', [])
     state_data['run_id'] = run_id

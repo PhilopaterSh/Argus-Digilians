@@ -1,8 +1,11 @@
+import socket
 import subprocess
 import time
 import paramiko
 from app.tools.utils import clean_ansi_codes
 from app.tools.wsl_bridge import WSLBridge
+
+DEFAULT_COMMAND_TIMEOUT = 180
 
 class CommandRunner:
     """Responsible only for executing commands through WSL or SSH fallback."""
@@ -28,13 +31,18 @@ class CommandRunner:
                 return True
         return False
 
-    def run(self, command: str, show_prompt: bool = False) -> str:
-        """Execute a command in WSL Kali with guided error reporting."""
-        if self.config.host in ["127.0.0.1", "localhost"]:
-            return self._run_direct_wsl(command, show_prompt)
-        return self._run_ssh(command)
+    def run(self, command: str, show_prompt: bool = False, timeout: int = DEFAULT_COMMAND_TIMEOUT) -> str:
+        """Execute a command in WSL Kali with guided error reporting.
 
-    def _run_direct_wsl(self, command: str, show_prompt: bool = False) -> str:
+        `timeout` bounds a single command so one slow/unresponsive tool call
+        can't silently consume the entire outer agent-run budget (see
+        scripts/run_agent.py's AGENT_TIMEOUT_SECONDS).
+        """
+        if self.config.host in ["127.0.0.1", "localhost"]:
+            return self._run_direct_wsl(command, show_prompt, timeout=timeout)
+        return self._run_ssh(command, timeout=timeout)
+
+    def _run_direct_wsl(self, command: str, show_prompt: bool = False, timeout: int = DEFAULT_COMMAND_TIMEOUT) -> str:
         try:
             wsl_cmd = [
                 "wsl",
@@ -50,7 +58,7 @@ class CommandRunner:
                 wsl_cmd,
                 capture_output=True,
                 text=True,
-                timeout=600,
+                timeout=timeout,
                 encoding="utf-8",
                 errors="ignore",
             )
@@ -77,11 +85,11 @@ class CommandRunner:
                 return f"+--(kali@WSL)-[~]\n+-$ {command}\n{cleaned}"
             return cleaned
         except subprocess.TimeoutExpired:
-            return "Error: Command timed out after 600s. Suggestion: The target might be slow or blocking the scan. Try narrowing the scope or increasing the timeout."
+            return f"Error: Command timed out after {timeout}s. Suggestion: The target might be slow or blocking the scan. Try narrowing the scope or increasing the timeout."
         except Exception as exc:
             return f"Bridge Error: {exc}"
 
-    def _run_ssh(self, command: str) -> str:
+    def _run_ssh(self, command: str, timeout: int = DEFAULT_COMMAND_TIMEOUT) -> str:
         max_retries = 2
         for attempt in range(max_retries):
             self.bridge.ensure_ssh_service()
@@ -95,9 +103,17 @@ class CommandRunner:
                     password=self.config.password,
                     timeout=15,
                 )
-                _, stdout, stderr = client.exec_command(command)
-                output = stdout.read().decode()
-                error = stderr.read().decode()
+                # exec_command()'s own timeout only bounds the exec request itself;
+                # without settimeout() on the channel, stdout.read()/stderr.read()
+                # below block forever on a hung/slow remote command.
+                _, stdout, stderr = client.exec_command(command, timeout=timeout)
+                stdout.channel.settimeout(timeout)
+                try:
+                    output = stdout.read().decode()
+                    error = stderr.read().decode()
+                except socket.timeout:
+                    client.close()
+                    return f"Error: SSH command timed out after {timeout}s. Suggestion: The target might be slow or blocking the scan. Try narrowing the scope or increasing the timeout."
                 client.close()
 
                 cleaned_out = clean_ansi_codes(output if output else error)
