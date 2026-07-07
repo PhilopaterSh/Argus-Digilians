@@ -296,12 +296,36 @@ guarantee doesn't regress silently.
 
 **CLI**: `python scripts/run_argus_cli.py --help` runs and exits 0 with correct usage text.
 
-**Explicitly NOT verifiable here (accepted, unavoidable gaps)**: live WSL/Kali provisioning, a
-real Ollama model pull and inference call, the live SSH bridge, and a full autonomous
-recon->exploit->report run against a real target. All of these require infrastructure this
-sandboxed environment does not have (matches `tests/verify_core.py`/`ai_benchmark.py`/
-`exploit_test.py` being correctly non-blocking in CI for the same reason). No prior session
-pass claimed otherwise, and this one doesn't either.
-
 Validated: full suite (163 passed), `ruff` clean, both validators PASS, PowerShell syntax gate
 clean, CLI `--help` invocation succeeds.
+
+### Correction (2026-07-07): live WSL/Ollama/SSH were actually available all along
+
+Everything above (and every prior pass in this document) stated live Ollama/WSL/SSH were
+unavailable "in this sandboxed environment." That was wrong - none of those passes actually
+attempted a live invocation; the assumption was never tested. Direct verification in a
+follow-up session found:
+- `wsl.exe` is reachable and `kali-linux` boots and runs real commands.
+- Ollama is running with `WhiteRabbitNeo/WhiteRabbitNeo-V3-7B:latest` already pulled (15 GB);
+  a real `/api/generate` call returned a real response. `ArgusBrain.simple_ask()` (the actual
+  project code, not a probe script) confirmed the same end-to-end.
+- SSH inside Kali was installed but dormant (`inactive (dead)`, disabled at boot) - starting it
+  (`mkdir -p /run/sshd && /usr/sbin/sshd`, exactly what `WSLBridge.ensure_ssh_service()` already
+  does) brought port 22 up immediately; `paramiko` connected with the project's default
+  `kali`/`kali` credentials and executed a real remote command.
+- `scripts/LAUNCH_STUDIO.bat` was run for real (non-interactively): Ollama check passed, SSH
+  self-heal fired and succeeded, and the Streamlit dashboard came up and served real HTTP 200
+  content on the configured port (12199). **No script or code change was needed to make this
+  work** - the launcher's self-healing logic was already correct.
+
+One genuine, minor, previously-undiscovered bug was found and fixed in the process:
+`app/tools/self_heal.py`'s `_check_wsl()` decoded `wsl.exe`'s UTF-16LE stdout/stderr with
+`text=True` (platform-default encoding), producing an unreadable, null-byte-interleaved
+diagnostic message in the failure path only - the actual pass/fail result was always
+`returncode`-based and unaffected. Fixed to decode explicitly as `utf-16-le`.
+
+The only items that remain genuinely unverified are a full autonomous recon->exploit->report
+run against a real external target (a live pentest, out of scope to run casually against any
+target) and the fresh-machine installer provisioning steps (WSL feature enablement, Kali
+first-install) - both are legitimately different from "the components don't exist," which was
+the incorrect framing used throughout this document until now.

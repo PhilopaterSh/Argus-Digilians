@@ -65,13 +65,19 @@ class SelfHealingService(BaseToolService):
 
     def _check_wsl(self) -> str:
         try:
+            # wsl.exe writes UTF-16LE to stdout/stderr; text=True decodes with the
+            # default locale, which turns it into a null-byte-interleaved mess
+            # (harmless for the returncode check below, but unreadable in the
+            # failure diagnostic). Capture raw bytes and decode explicitly instead.
             res = subprocess.run(
                 ["wsl", "--status"],
-                capture_output=True, text=True, timeout=10,
+                capture_output=True, timeout=10,
             )
             if res.returncode == 0:
                 return "ok"
-            return f"failed: {res.stderr.strip() or res.stdout.strip()}"
+            stderr = res.stderr.decode("utf-16-le", errors="ignore").strip()
+            stdout = res.stdout.decode("utf-16-le", errors="ignore").strip()
+            return f"failed: {stderr or stdout}"
         except subprocess.TimeoutExpired:
             return "failed: timeout"
         except FileNotFoundError:

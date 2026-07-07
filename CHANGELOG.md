@@ -2,6 +2,28 @@
 
 All notable changes to this project will be documented in this file.
 
+## Correction (2026-07-07)
+Prior audit passes in this changelog stated live Ollama/WSL/SSH were
+"unavailable in this sandboxed environment." That was incorrect - they are
+genuinely installed and reachable here; the passes never actually attempted
+live invocation and defaulted to a cautious assumption instead of testing it.
+Corrected by direct verification: WSL boots and runs real commands, Ollama
+(with `WhiteRabbitNeo-V3-7B` already pulled) answers real inference requests,
+and SSH into Kali works via the project's own `paramiko`-based bridge with
+the default `kali`/`kali` credentials. `LAUNCH_STUDIO.bat` was run for real
+(non-interactively) and completed cleanly: Ollama check passed, SSH
+self-heal (`wsl -d kali-linux -u root -- mkdir -p /run/sshd && sshd`)
+started the dormant daemon, and the Streamlit dashboard came up and served
+real HTTP 200 content on the configured port. No code or script change was
+needed to make this work - the only "fix" was actually testing instead of
+assuming. One genuine, minor, previously-undiscovered bug was found and
+fixed along the way: `app/tools/self_heal.py`'s `_check_wsl()` decoded
+`wsl.exe`'s UTF-16LE stdout/stderr with `text=True` (the platform default
+encoding), producing an unreadable, null-byte-interleaved diagnostic message
+in the failure path. This never affected the actual pass/fail result (that
+was always `returncode`-based and correct) - purely cosmetic, now decoded
+explicitly as `utf-16-le`.
+
 ## [Unreleased]
 - Initial structure proposals applied.
 - Closed the last two documented test gaps in `specs/010-langgraph-agent/tasks.md`
