@@ -1,6 +1,33 @@
-import streamlit as st
+import glob
 import json
+import os
 from datetime import datetime, timezone
+
+import streamlit as st
+
+_AGENT_RUNS_DIR = os.path.join("logs", "agent_runs")
+
+
+def _latest_run_for_target(target_url):
+    """Finds the most recent agent run file for this target on disk.
+
+    Previously this tab read st.session_state.jobs for findings - a list
+    initialized to [] in dashboard.py that nothing ever appends to, so
+    "Generate Report" always produced a report with 0 findings even right
+    after a fully successful agent run. Reports now pull real results from
+    the same run state files scripts/run_agent.py writes.
+    """
+    paths = glob.glob(os.path.join(_AGENT_RUNS_DIR, "agent_*.json"))
+    paths.sort(key=os.path.getmtime, reverse=True)
+    for path in paths:
+        try:
+            with open(path, "r", encoding="utf-8") as handle:
+                run = json.load(handle)
+        except (OSError, json.JSONDecodeError):
+            continue
+        if run.get("target") == target_url:
+            return run
+    return None
 
 
 def render_reports():
@@ -8,7 +35,6 @@ def render_reports():
     st.markdown("---")
 
     targets = st.session_state.get("targets", [])
-    jobs = st.session_state.get("jobs", [])
 
     if not targets:
         st.warning("No targets available. Add targets and run the agent first.")
@@ -29,10 +55,25 @@ def render_reports():
     st.subheader(":hammer_and_wrench: Generate")
 
     if st.button(":gear: Generate Report", type="primary"):
-        findings = []
-        for job in jobs:
-            if job.get("target_id") == (target_obj.get("id") if target_obj else None):
-                findings.extend(job.get("findings", []))
+        run = _latest_run_for_target(selected_target)
+        if not run:
+            st.warning(f"No agent run found yet for {selected_target}. Run the agent first to generate a real report.")
+            return
+
+        final_state = run.get("final_state", {})
+        exploit_success = final_state.get("exploit_success", False)
+        # Real vulnerability findings (app/core/agent/nodes/scanner.py) carry
+        # {tool, port, summary, url} - no "severity"/"type" keys, which is
+        # what this report renderer expects further down. Map them here
+        # instead of silently rendering every real finding as "?"/info.
+        findings = [
+            {
+                "type": f.get("tool", "?"),
+                "summary": f.get("summary", "?"),
+                "severity": "critical" if exploit_success else "medium",
+            }
+            for f in final_state.get("vulnerabilities", [])
+        ]
 
         report_data = {
             "title": f"Argus Security Report - {selected_target}",

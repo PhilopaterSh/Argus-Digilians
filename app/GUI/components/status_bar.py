@@ -45,13 +45,18 @@ def render_status_bar():
             st.markdown(":yellow_circle: **SSH Bridge** : Inactive")
     with col3:
         try:
-            from app.GUI.utils.blackboard import get_blackboard_summary
-            summary = get_blackboard_summary()
-            targets = summary.get("target_count", 0)
-            findings = summary.get("findings_count", 0)
+            from app.GUI.utils.blackboard import get_blackboard_counts
+            # get_blackboard_summary() returns a JSON *string* of nested
+            # per-domain detail, not a dict - calling .get() on it always
+            # raised AttributeError here, silently swallowed below, so this
+            # showed "N/A" unconditionally regardless of what was in the
+            # Blackboard. get_blackboard_counts() returns real counts.
+            counts = get_blackboard_counts()
+            targets = counts.get("target_count", 0)
+            findings = counts.get("findings_count", 0)
             st.markdown(f":bar_chart: **Targets**: {targets} | **Findings**: {findings}")
-        except Exception:
-            st.markdown(":bar_chart: **Blackboard**: N/A")
+        except Exception as e:
+            st.markdown(f":bar_chart: **Blackboard**: N/A ({e})")
     with col4:
         import os
         model = os.getenv("SELECTED_MODEL") or ArgusConfig.load().model_name

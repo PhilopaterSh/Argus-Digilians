@@ -345,6 +345,39 @@ class ArgusMemory:
             logger.error("get_blackboard_summary failed: %s", e)
             return "{}"
 
+    def get_blackboard_counts(self) -> dict:
+        """Dict-shaped summary (target_count/findings_count) for the GUI status
+        bar. get_blackboard_summary() above returns a JSON *string* of nested
+        per-domain detail - callers that need simple counts should use this
+        instead of misusing that string as a dict.
+        """
+        try:
+            with self._get_conn() as conn:
+                target_count = conn.execute("SELECT COUNT(*) FROM targets").fetchone()[0]
+                findings_count = conn.execute("SELECT COUNT(*) FROM findings").fetchone()[0]
+                return {"target_count": target_count, "findings_count": findings_count}
+        except Exception as e:
+            logger.error("get_blackboard_counts failed: %s", e)
+            return {"target_count": 0, "findings_count": 0}
+
+    def get_findings_graph_rows(self) -> list[tuple[str, str, str, str]]:
+        """(domain, tool_name, data_type, summary) rows for the Knowledge Graph
+        tab - built from the same targets/findings tables the tactical agent's
+        recon/scanner nodes actually write to via upsert_target()/add_finding().
+        """
+        try:
+            with self._get_conn() as conn:
+                rows = conn.execute(
+                    """SELECT t.domain, f.tool_name, f.data_type, f.summary
+                       FROM targets t
+                       JOIN findings f ON t.id = f.target_id
+                       ORDER BY f.timestamp DESC"""
+                ).fetchall()
+                return [tuple(row) for row in rows]
+        except Exception as e:
+            logger.error("get_findings_graph_rows failed: %s", e)
+            return []
+
     # ------------------------------------------------------------------
     # Clear memory
     # ------------------------------------------------------------------

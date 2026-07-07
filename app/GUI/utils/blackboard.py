@@ -52,13 +52,36 @@ def get_blackboard_summary():
     return _get_memory().get_blackboard_summary()
 
 
+def get_blackboard_counts():
+    return _get_memory().get_blackboard_counts()
+
+
 def build_graph_data():
+    """Builds a real networkx graph from the targets/findings the tactical
+    agent actually writes (via ArgusMemory.upsert_target()/add_finding()).
+    Previously this returned an always-empty DiGraph unconditionally, so the
+    Knowledge Graph tab showed "No entities found" even with a fully
+    populated Blackboard.
+    """
     try:
         import networkx as nx
-        G = nx.DiGraph()
-        return G
     except ImportError:
         return None
+
+    G = nx.DiGraph()
+    for domain, tool_name, data_type, summary in _get_memory().get_findings_graph_rows():
+        if domain not in G:
+            G.add_node(domain, label=domain, type="domain", properties={})
+        finding_id = f"{domain}::{tool_name}::{data_type}"
+        if finding_id not in G:
+            G.add_node(
+                finding_id,
+                label=f"{tool_name}/{data_type}",
+                type="finding",
+                properties={"summary": summary},
+            )
+        G.add_edge(domain, finding_id, label=tool_name)
+    return G
 
 
 def init_gui_tables():
