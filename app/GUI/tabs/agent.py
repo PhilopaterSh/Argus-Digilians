@@ -1,5 +1,4 @@
 import streamlit as st
-import time
 
 
 def _reconcile_agent_running_state(session_agent_running, controller):
@@ -74,78 +73,78 @@ def render_agent():
                 st.session_state.agent_running = False
                 st.rerun()
 
-    new_agent_running, current_state = _reconcile_agent_running_state(
-        st.session_state.get('agent_running', False), controller
-    )
-    st.session_state.agent_running = new_agent_running
-
     with col3:
+        st.caption(f"Run file: {controller.state_file}" if controller and controller.state_file else 'No active run yet.')
+
+    st.markdown('---')
+
+    # Everything below needs to keep updating while a run is in flight
+    # without blocking the rest of the page. The previous implementation
+    # used `for _ in range(60): ...; time.sleep(1)` inside the main script
+    # run - a plain Python sleep loop that froze this ENTIRE Streamlit
+    # session (every button, every tab switch) for up to 60 straight
+    # seconds, since Streamlit is single-threaded per session and nothing
+    # else can be processed while that loop is sleeping. st.fragment with
+    # run_every re-executes only this fragment on a timer, in the
+    # background, while the rest of the page (Start/Stop buttons, sidebar
+    # navigation) stays fully interactive. run_every is only set while a
+    # run is actually active, so an idle page does no polling at all.
+    run_every = '2s' if st.session_state.get('agent_running') else None
+
+    @st.fragment(run_every=run_every)
+    def _live_section():
+        controller = st.session_state.get('agent_controller')
+        if controller is None:
+            st.info('Agent feed will appear here when running. Select a target and click Start Agent.')
+            return
+
+        new_agent_running, current_state = _reconcile_agent_running_state(
+            st.session_state.get('agent_running', False), controller
+        )
+        st.session_state.agent_running = new_agent_running
+
         status_label = current_state.get('status', 'idle')
         run_mode = current_state.get('mode', 'production')
         updated_at = current_state.get('updated_at', 'N/A')
-        if st.session_state.get('agent_running'):
-            st.markdown('**Status**: [GREEN] Running')
+        if new_agent_running:
+            st.markdown('**Status**: :green_circle: Running')
             st.markdown(f"**Target**: {st.session_state.get('current_agent_target', 'N/A')}")
         elif status_label == 'completed':
-            st.markdown('**Status**: [OK] Completed')
+            st.markdown('**Status**: :white_check_mark: Completed')
             st.markdown(f"**Target**: {current_state.get('target', selected_target)}")
         elif status_label == 'failed':
-            st.markdown('**Status**: [RED] Failed')
+            st.markdown('**Status**: :red_circle: Failed')
             st.markdown(f"**Target**: {current_state.get('target', selected_target)}")
         else:
-            st.markdown('**Status**: [o] Idle')
+            st.markdown('**Status**: :white_circle: Idle')
         st.caption(f"Mode: `{run_mode}` | Updated: `{updated_at}`")
 
-    st.markdown('---')
-    st.subheader(':scroll: Agent Feed')
-
-    feed_placeholder = st.empty()
-
-    if controller:
-        st.caption(f"Run file: {controller.state_file}")
-
-    if st.session_state.get('agent_running') and controller:
-        for _ in range(60):
-            state_snapshot = controller.get_status()
-            if not controller.is_running() and state_snapshot.get('status') not in ('running', 'starting'):
-                st.session_state.agent_running = False
-                current_state = state_snapshot
-                break
-
-            events = controller.get_feed()
-            if events:
-                feed_placeholder.markdown(_render_events(events), unsafe_allow_html=True)
-            else:
-                feed_placeholder.info('Waiting for the first agent event...')
-
-            time.sleep(1)
-
-        state = controller.get_status()
-        if state.get('status') == 'completed':
-            st.success(':white_check_mark: Agent completed successfully!')
-        elif state.get('status') == 'failed':
-            st.error(f":x: Agent failed: {state.get('error', 'Unknown error')}")
-    else:
-        if controller:
-            events = controller.get_feed()
-            if events:
-                feed_placeholder.markdown(_render_events(events), unsafe_allow_html=True)
-            else:
-                feed_placeholder.info('Agent feed will appear here when running. Select a target and click Start Agent.')
+        st.subheader(':scroll: Agent Feed')
+        events = current_state.get('events', [])
+        if events:
+            st.markdown(_render_events(events), unsafe_allow_html=True)
+        elif new_agent_running:
+            st.info('Waiting for the first agent event...')
         else:
-            feed_placeholder.info('Agent feed will appear here when running. Select a target and click Start Agent.')
+            st.info('Agent feed will appear here when running. Select a target and click Start Agent.')
 
-    st.markdown('---')
-    st.subheader(':bar_chart: Final Results')
+        if status_label == 'completed' and not new_agent_running:
+            st.success(':white_check_mark: Agent completed successfully!')
+        elif status_label == 'failed' and not new_agent_running:
+            st.error(f":x: Agent failed: {current_state.get('error', 'Unknown error')}")
 
-    if controller:
-        state = controller.get_status()
-        final_state = state.get('final_state', {})
-        if state.get('status') in ('completed', 'failed') or final_state:
+        st.markdown('---')
+        st.subheader(':bar_chart: Final Results')
+        final_state = current_state.get('final_state', {})
+        if status_label in ('completed', 'failed') or final_state:
             cols = st.columns(3)
             cols[0].metric('Open Ports', len(final_state.get('open_ports', [])))
             cols[1].metric('Vulnerabilities', len(final_state.get('vulnerabilities', [])))
             cols[2].metric('Exploit Success', 'Yes' if final_state.get('exploit_success') else 'No')
 
             with st.expander(':card_index_drawer: View Full State', expanded=False):
-                st.json(state)
+                st.json(current_state)
+        else:
+            st.info('No results yet. Results populate here once the agent run completes.')
+
+    _live_section()
