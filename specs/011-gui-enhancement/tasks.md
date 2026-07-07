@@ -156,3 +156,93 @@
 - Phase 3 and Phase 4 can run in parallel
 - T020 and T023 can run in parallel (Phase 5 and 6 components)
 - T027-T028 can run in parallel (Phase 7 tests)
+
+---
+
+## Post-Implementation Bug Fixes (2026-07-07)
+
+Diagnosed against a real, fully-online environment (Ollama/SSH/WSL all confirmed
+live) - the reported "GUI slow, buttons do nothing, no results" symptoms were
+execution-flow/UI-logic bugs, not infrastructure. Six confirmed root causes,
+each verified by reading the actual code (not assumed) and, where applicable,
+by live end-to-end reproduction against `scanme.nmap.org`.
+
+### 1. Dashboard "Quick Action" buttons were fully non-functional
+- **Broken**: `app/GUI/tabs/overview.py`'s 4 buttons (New Target / Start Agent /
+  Generate Report / Settings) set `st.session_state.targets_tab_open` (etc.)
+  and called `st.rerun()`. Nothing anywhere read those flags.
+- **Why**: `app/GUI/dashboard.py`'s page routing is driven entirely by
+  `st.sidebar.radio(key='nav_radio')`. Setting an unrelated flag has no effect
+  on which page renders - clicking any of the 4 buttons produced a rerun with
+  zero visible change.
+- **Fixed**: buttons now set `st.session_state.nav_radio` directly (the exact
+  key the sidebar widget reads its value from) before rerunning, so each
+  button performs real navigation to the intended tab.
+- **Evidence**: `tests/test_gui/test_dashboard_apptest.py` already drives
+  navigation via `at.radio(key="nav_radio").set_value(page)` - the same
+  mechanism, proven working under `AppTest` for all 6 pages with zero
+  exceptions after the fix.
+
+### 2. Blackboard status showed "N/A" unconditionally
+- **Broken**: `app/GUI/components/status_bar.py` called
+  `get_blackboard_summary().get("target_count", 0)`.
+- **Why**: `ArgusMemory.get_blackboard_summary()`
+  (`app/core/memory/memory_service.py`) returns a **JSON string** of nested
+  per-domain detail, not a dict. `.get()` on a string always raises
+  `AttributeError`, silently caught by a bare `except Exception`, showing
+  "N/A" **every time**, regardless of whether the Blackboard had real data.
+- **Fixed**: added `ArgusMemory.get_blackboard_counts()` (real
+  `SELECT COUNT(*)` on `targets`/`findings`) and
+  `blackboard.get_blackboard_counts()`; `status_bar.py` now calls that
+  instead, and the fallback path shows the actual exception instead of a bare
+  "N/A" (no more silent failure).
+
+### 3. Knowledge Graph tab was a permanent no-op
+- **Broken**: `app/GUI/utils/blackboard.py::build_graph_data()` constructed an
+  empty `nx.DiGraph()` and returned it immediately - never queried any real
+  data.
+- **Why**: stub left over from initial scaffolding (T021), never wired to the
+  `targets`/`findings` tables the tactical agent's recon/scanner nodes
+  actually populate via `ArgusMemory.upsert_target()`/`add_finding()`.
+- **Fixed**: added `ArgusMemory.get_findings_graph_rows()` and rewrote
+  `build_graph_data()` to build real domain -> finding nodes/edges from it.
+
+### 4. Dashboard "Recent Activity" and Reports "Generate Report" always empty
+- **Broken**: both read `st.session_state.jobs`, initialized to `[]` in
+  `dashboard.py` with **nothing anywhere ever appending to it**.
+- **Why**: dead state left over from scaffolding; the agent controller writes
+  real run data to `logs/agent_runs/agent_<uuid>.json`, never to
+  `session_state.jobs`.
+- **Fixed**: `overview.py` and `reports.py` now read the real run JSON files
+  from `logs/agent_runs/` directly (the same files `AgentController`/
+  `run_agent.py` already write and the Agent tab already polls). Reports also
+  now maps real finding fields (`tool`/`summary`, no `severity`/`type` keys)
+  instead of rendering everything as `?`/info.
+
+### 5. GUI was slow/unresponsive: `time.sleep()` loop froze the whole session
+- **Broken**: `app/GUI/tabs/agent.py`'s feed polling was
+  `for _ in range(60): ...; time.sleep(1)` inside the main script run.
+- **Why**: Streamlit is single-threaded per session. A 60-second blocking
+  sleep loop means **no button, no tab switch, nothing** can be processed
+  anywhere in the app for up to 60 straight seconds while a run is active -
+  this is the direct cause of "GUI is very slow and laggy." It also read the
+  same state file twice per iteration (`get_status()` then `get_feed()`,
+  which internally calls `get_status()` again).
+- **Fixed**: replaced with `st.fragment(run_every="2s")` - only that fragment
+  re-executes on a timer; the rest of the page (Start/Stop, navigation) stays
+  fully interactive. `run_every` is `None` (no polling at all) when idle.
+  Feed/status/results now share a single `get_status()` call per tick.
+
+### 6. (carried over from the recon-stuck investigation) Exploit-probe timeout
+- `app/tools/evasion.py::EvasionService.advanced_vuln_probe()` had no explicit
+  timeout on its 6 sequential curl probes - see `CHANGELOG.md`'s
+  "Fixed: dashboard stuck..." entry for full detail. Directly relevant here
+  because it's what let the Agent tab's "Testing / Agent execution" stage
+  reach `post_exploit` at all instead of dying at the 600s outer timeout.
+
+### Validation
+- `pytest tests/test_gui tests/test_tools tests/test_memory.py` - 79/79 pass.
+- Three independent live end-to-end runs against `scanme.nmap.org`
+  (see CHANGELOG.md) - the third completed the full
+  recon -> scanner -> exploit -> reflective retry loop -> completion with
+  `retry_count: 3` and real findings in `final_state`.
