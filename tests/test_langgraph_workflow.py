@@ -19,6 +19,7 @@ from app.core.agent.react_workflow import (
     _build_tool_map,
     _supports_tool_calls,
     _try_structured_action,
+    _try_structured_final_answer,
     extract_target,
 )
 from app.core.agent.react_state import ArgusAgentState
@@ -283,6 +284,56 @@ def test_custom_graph_uses_structured_action_end_to_end():
     print("  [PASS] test_custom_graph_uses_structured_action_end_to_end")
 
 
+def test_custom_graph_format_error_loop_respects_max_iterations():
+    """specs/018 regression test - bug fix in route_after_parse.
+
+    Previously the format_error branch routed straight back to "agent" with
+    NO max_iterations check at all (unlike the tool-execute path), unbounded
+    except by LangGraph's default recursion_limit (25), via an ungraceful
+    GraphRecursionError rather than a clean stop. This is exactly the failure
+    mode from the live incident: a model that never once produces a valid
+    Thought/Action/Final Answer line.
+    """
+    llm = MockLLM(["this is not ReAct-formatted output at all, just prose"])
+    state = dict(BASE_STATE)
+    state["max_iterations"] = 3
+
+    graph = _build_custom_workflow(llm, [mock_scan])
+    result = graph.invoke(state)
+
+    assert result["iteration_count"] <= state["max_iterations"], \
+        f"iteration_count {result['iteration_count']} exceeded max {state['max_iterations']}"
+    assert result.get("phase") != "done"
+    print(f"  [PASS] test_custom_graph_format_error_loop_respects_max_iterations (stopped at {result['iteration_count']})")
+
+
+def test_structured_final_answer_extracts_security_report():
+    from app.core.schemas import SecurityReport
+    report = SecurityReport(
+        summary="ok", attack_surface_stats="1 host", findings=[],
+        overall_risk_score=4, next_steps=["step1"], output="full text",
+    )
+    llm = StructuredMockLLM(report)
+
+    result = _try_structured_final_answer(llm, "some raw final answer text")
+
+    assert result is not None
+    assert result["overall_risk_score"] == 4
+    print("  [PASS] test_structured_final_answer_extracts_security_report")
+
+
+def test_structured_final_answer_falls_back_when_unsupported():
+    llm = MockLLM(["plain text"])
+    assert _try_structured_final_answer(llm, "raw text") is None
+    print("  [PASS] test_structured_final_answer_falls_back_when_unsupported")
+
+
+def test_structured_final_answer_falls_back_on_exception():
+    llm = StructuredMockLLM(raise_on_structured=True)
+    assert _try_structured_final_answer(llm, "raw text") is None
+    print("  [PASS] test_structured_final_answer_falls_back_on_exception")
+
+
 # =======================================================
 
 if __name__ == "__main__":
@@ -305,6 +356,10 @@ if __name__ == "__main__":
     test_structured_action_falls_back_when_unsupported()
     test_structured_action_falls_back_on_exception()
     test_custom_graph_uses_structured_action_end_to_end()
+    test_custom_graph_format_error_loop_respects_max_iterations()
+    test_structured_final_answer_extracts_security_report()
+    test_structured_final_answer_falls_back_when_unsupported()
+    test_structured_final_answer_falls_back_on_exception()
 
     print(f"\n{'='*50}")
     print("ALL TESTS PASSED")

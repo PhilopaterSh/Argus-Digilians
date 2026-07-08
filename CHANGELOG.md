@@ -2,6 +2,63 @@
 
 All notable changes to this project will be documented in this file.
 
+## Fixed: ArgusBrain hung 900s with zero results on its first real production run (2026-07-08, specs/018)
+First live run of `017`'s restored `ArgusBrain` (against `https://www.cultbeauty.co.uk/`) timed
+out completely: `logs/agent_runs/agent_9a5671bc-....json` shows WhiteRabbitNeo-V3-7B repeating
+the *identical* malformed, non-ReAct output (a raw dump of Blackboard/RAG context data) on
+every one of ~26 retries over 15 minutes, each rejected by LangChain
+(`"Invalid Format: Missing 'Action:' after 'Thought:'"`), until the wall-clock timeout killed
+the run with `Overall Risk Score: N/A`, `Findings Count: 0`.
+
+Root cause: `ArgusBrain`'s docstring claimed *"When WhiteRabbitNeo has format issues with
+ReAct, automatically falls back to a simpler sequential execution model"* - but
+`_get_react_agent()` and `_get_simple_chain()` both built the identical
+`agent_factory.py::build_agent_executor()` (classic free-text `AgentExecutor`), differing only
+in a `verbose` flag. No real fallback ever existed.
+
+Researched the standard fix (Ollama's own structured-outputs docs, LangChain/LangGraph
+reliability write-ups - full citations in `specs/018-structured-agent-reliability/research.md`):
+constrain the model's output at the sampling level via a JSON schema, which "eliminates parsing
+problems at the root... near-100% parse success," instead of hoping free text matches a regex.
+**This exact technique already existed, fully built and tested, in this repo** -
+`app/core/agent/react_workflow.py::_try_structured_action()` (built for the orphaned
+`013-langgraph-workflow`, using `llm.with_structured_output()`) - just disconnected from
+`ArgusBrain`, the same situation `017` found and fixed for the agent as a whole.
+
+Also found and fixed an independent bug while reusing that module: `route_after_parse()`'s
+format-error retry branch had **no `max_iterations` check at all** (unlike the tool-execution
+path 8 lines below it) - a model that never once produces valid output would have looped there
+unbounded except by LangGraph's default `recursion_limit` (25), raising an ungraceful
+`GraphRecursionError` instead of a clean, honest result.
+
+Changes:
+- `app/core/agent/react_workflow.py`: new `_try_structured_final_answer()` (same structured-
+  decoding fix applied to the final report shape, not just tool selection); `route_after_parse()`
+  now checks `max_iterations` on the format-error path too.
+- `app/core/agent/brain.py`: removed the non-functional `_get_react_agent`/`_get_simple_chain`/
+  `use_react` dual-path; `ArgusBrain` now drives `react_workflow.py`'s structured-output-first
+  custom graph via `.stream(stream_mode="values")` instead of `agent_factory.py`'s classic
+  `AgentExecutor`. `max_iterations` reduced from the old executor's 50 to **15** (structured
+  decoding needs far fewer retries, and it bounds worst-case wall-clock time). `ask()`'s
+  external contract is unchanged - `017`'s `scripts/run_agent.py`, `brain_tools.py`, and
+  `app/GUI/tabs/agent.py` needed zero changes.
+- `app/core/agent/react_callback.py`: new `LiveFeedCallbackHandler.on_graph_event()` - a raw
+  `StateGraph` doesn't fire `AgentExecutor`'s callback hooks, so `ArgusBrain`'s new streaming
+  loop calls this directly instead, once per new message, reusing the same live-feed contract.
+
+Verified: directly reproduced the live incident with a mock LLM that repeats the exact
+malformed behavior - confirmed it now terminates within `max_iterations` (15) with an honest
+`no_final_answer` error instead of hanging. A separate well-behaved mock confirms the happy
+path (real structured report + live-feed events) is unaffected. New regression test for the
+`route_after_parse` bug fix. Zero regressions: all existing `tests/test_registry/`,
+`tests/test_langgraph_workflow.py`, and `017` tests pass unmodified.
+
+Note: `app/core/prompts.py` (the prompt file `017` originally restored) is no longer what
+drives `ArgusBrain`'s tool selection - `react_workflow.py`'s shorter `react_prompts.py` is, for
+reliability (flatter prompts are also a documented reliability lever for smaller local models).
+`app/core/prompts.py` remains in place, used by `agent_factory.py`'s classic executor for other
+callers (Constitution VII - not deleted).
+
 ## Restored: ArgusBrain (prompt-driven ReAct agent) as the production Agent driver (2026-07-08, specs/017)
 The user pointed out that `app/core/prompts.py` defines the project's originally-intended
 operating model: the AI follows a structured prompt, freely picks whichever tool it judges

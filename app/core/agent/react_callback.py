@@ -70,3 +70,19 @@ class LiveFeedCallbackHandler(BaseCallbackHandler):
     def on_agent_finish(self, finish: AgentFinish, *, run_id: UUID, parent_run_id: Optional[UUID] = None, **kwargs: Any) -> None:
         """Record that the agent produced its final answer."""
         self._emit("completed", "Agent finished - producing final security report.")
+
+    def on_graph_event(self, status: str, detail: str) -> None:
+        """Record a step from a raw LangGraph `StateGraph.stream()` loop (specs/018).
+
+        The four hooks above are LangChain's `AgentExecutor`-specific
+        callback dispatch, which a plain `StateGraph` (e.g.
+        `app/core/agent/react_workflow.py`'s custom graph) never triggers.
+        `ArgusBrain`'s structured-graph path calls this directly instead,
+        once per streamed state update, reusing the same event contract.
+
+        Args:
+            status (str): "running"/"completed"/"failed", per
+                `app/core/agent/contracts.py`'s event status convention.
+            detail (str): Human-readable description of the step.
+        """
+        self._emit(status, detail)

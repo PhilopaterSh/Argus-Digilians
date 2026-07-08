@@ -91,3 +91,20 @@ def test_long_detail_is_truncated(state_file):
 
     events = _events(state_file)
     assert len(events[0]["detail"]) == 500  # _TRUNCATE_CHARS cap in react_callback.py
+
+
+def test_on_graph_event_appends_event_with_given_status(state_file):
+    """specs/018: drives the live feed from a raw LangGraph StateGraph.stream()
+    loop (app/core/agent/brain.py::_run_structured_graph), which never fires
+    the AgentExecutor-specific hooks above."""
+    handler = LiveFeedCallbackHandler(state_file, "run-1", "example.com", "production")
+
+    handler.on_graph_event("running", "Thought: about to scan.")
+    handler.on_graph_event("completed", "Observation: scan finished.")
+
+    events = _events(state_file)
+    assert len(events) == 2
+    assert events[0]["status"] == "running"
+    assert "Thought: about to scan." in events[0]["detail"]
+    assert events[1]["status"] == "completed"
+    assert "Observation: scan finished." in events[1]["detail"]

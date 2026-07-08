@@ -1,7 +1,7 @@
+from langchain_core.messages import HumanMessage
 from langchain_core.output_parsers import PydanticOutputParser
 from app.core.schemas import SecurityReport
 from app.core.llm_factory import build_llm
-from app.core.prompts import get_argus_prompt
 from app.core.rag import RAGEngine, RAGConfig
 from app.core.memory.memory_service import ArgusMemory
 import json
@@ -9,13 +9,26 @@ import os
 import re
 from typing import Dict, Any, Optional
 
+# Structured decoding needs far fewer retries than free-text ReAct parsing
+# ever could reliably use (agent_factory.py's old AgentExecutor path defaulted
+# to 50) - see specs/018-structured-agent-reliability. Also bounds worst-case
+# wall-clock time better, since each iteration can be a slow real tool call.
+DEFAULT_MAX_ITERATIONS = 15
+
 
 class ArgusBrain:
     """
-    Enhanced brain with ReAct -> SimpleChain fallback and RAG + Blackboard context fusion.
+    Runs a structured-output ReAct loop (app/core/agent/react_workflow.py's
+    custom graph) with RAG + Blackboard context fusion.
 
-    When WhiteRabbitNeo has format issues with ReAct, automatically
-    falls back to a simpler sequential execution model.
+    specs/018-structured-agent-reliability: this used to route through
+    agent_factory.py's classic create_react_agent + AgentExecutor (free-text
+    Thought/Action/Observation parsing), which a live production run proved
+    unreliable for WhiteRabbitNeo - it repeated the same malformed output on
+    every retry until the 900s timeout killed it, producing zero results.
+    react_workflow.py's graph tries Ollama's schema-constrained structured
+    output first (near-100% parse success per Ollama's own 0.3.0+ docs),
+    falling back to regex text parsing only if that's unavailable.
     """
 
     def __init__(
@@ -56,50 +69,9 @@ class ArgusBrain:
         self._blackboard_context = ""
         self._refresh_blackboard()
 
-        # Lazy load executors
-        self._react_agent = None
-        self._simple_chain = None
+        self.max_iterations = DEFAULT_MAX_ITERATIONS
 
-        # Always use SimpleChain for local models (CPU/no GPU) to avoid ReAct format issues
-        self.use_react = False
-
-        print(f"[BRAIN] Using SimpleChain for model: {model_name}")
-
-    def _get_react_agent(self):
-        if self._react_agent is not None:
-            return self._react_agent
-
-        try:
-            from app.core.agent.agent_factory import build_agent_executor
-            format_instructions = self.output_parser.get_format_instructions()
-            prompt = get_argus_prompt(format_instructions)
-            self._react_agent = build_agent_executor(
-                llm=self.llm,
-                tools=self.tools,
-                prompt=prompt
-            )
-            return self._react_agent
-        except Exception as e:
-            print(f"[BRAIN] Failed to load ReAct agent: {e}")
-            return None
-
-    def _get_simple_chain(self):
-        if self._simple_chain is not None:
-            return self._simple_chain
-
-        try:
-            from app.core.agent.agent_factory import build_agent_executor
-
-            self._simple_chain = build_agent_executor(
-                llm=self.llm,
-                tools=self.tools,
-                prompt=get_argus_prompt(self.output_parser.get_format_instructions()),
-                verbose=False
-            )
-            return self._simple_chain
-        except Exception as e:
-            print(f"[BRAIN] Failed to load Simple Chain: {e}")
-            return None
+        print(f"[BRAIN] Using structured-output ReAct graph for model: {model_name}")
 
     @staticmethod
     def _load_rag_config() -> Optional[Dict[str, Any]]:
@@ -172,66 +144,95 @@ class ArgusBrain:
     def ask(self, query: str, callbacks=None) -> Dict[str, Any]:
         self._refresh_blackboard()
         augmented_query = self._enrich_with_rag(query)
+        return self._run_structured_graph(augmented_query, callbacks)
 
-        if self.use_react:
-            try:
-                react_agent = self._get_react_agent()
-                if react_agent:
-                    print("[BRAIN] Attempting ReAct agent...")
-                    result = react_agent.invoke(
-                        {"input": augmented_query},
-                        config={"callbacks": callbacks}
-                    )
+    def _run_structured_graph(self, query: str, callbacks=None) -> Dict[str, Any]:
+        """Run react_workflow.py's structured-output ReAct graph to completion.
 
-                    if isinstance(result, dict):
-                        output = result.get("output", result)
+        Args:
+            query (str): The (RAG/Blackboard-enriched) question/instruction.
+            callbacks (list | None): Objects exposing an `on_graph_event(status,
+                detail)` method (e.g. `app/core/agent/react_callback.py`'s
+                `LiveFeedCallbackHandler`) - called once per new message the
+                graph produces, so callers get the same live step-by-step
+                visibility the old AgentExecutor callbacks gave, without
+                relying on LangChain's AgentExecutor-specific dispatch (a raw
+                `StateGraph` doesn't go through that).
 
-                        if isinstance(output, dict) and "error" in output:
-                            error_msg = str(output.get("message", ""))
-                            if "Invalid Format" in error_msg or "Missing 'Action:'" in error_msg or "parsing_error" in output.get("error", ""):
-                                print(f"[BRAIN] ReAct format error detected: {error_msg}")
-                                self.use_react = False
-                                return self._ask_simple_chain(augmented_query, callbacks)
+        Returns:
+            Dict[str, Any]: `{"output": ...}` - a `SecurityReport`-shaped
+            dict on successful structured extraction, the raw final-answer
+            text if structured extraction wasn't possible, or
+            `{"output": {"error": ..., "message": ...}}` if the graph
+            never reached a Final Answer within `self.max_iterations`
+            (never fabricated - Constitution VIII).
+        """
+        from app.core.agent.react_workflow import build_workflow, extract_target
 
-                        return self._process_output(output, str(result))
+        target = extract_target(query)
+        graph = build_workflow(self.llm, self.tools, self.memory)
+        initial_state = {
+            "messages": [HumanMessage(content=query)],
+            "target": target,
+            "phase": "init",
+            "blackboard_summary": self._blackboard_context,
+            "iteration_count": 0,
+            "max_iterations": self.max_iterations,
+            "tool_name": None,
+            "tool_input": None,
+            "tool_result": None,
+            "tool_error": None,
+        }
 
-            except Exception as e:
-                error_msg = str(e)
-                if "Invalid Format" in error_msg or "Missing 'Action:'" in error_msg:
-                    print(f"[BRAIN] ReAct format error exception: {error_msg}")
-                    self.use_react = False
-                    return self._ask_simple_chain(augmented_query, callbacks)
-                print(f"[BRAIN] ReAct attempt failed: {error_msg}")
-
-        print("[BRAIN] Using Simple Chain as primary or fallback executor...")
-        return self._ask_simple_chain(augmented_query, callbacks)
-
-    def _ask_simple_chain(self, query: str, callbacks=None) -> Dict[str, Any]:
+        seen_messages = len(initial_state["messages"])
+        final_state: Dict[str, Any] = initial_state
         try:
-            simple_chain = self._get_simple_chain()
-            if not simple_chain:
-                return {
-                    "output": {
-                        "error": "executor_unavailable",
-                        "message": "Neither ReAct nor Simple Chain could be initialized. Check logs."
-                    }
-                }
-
-            print("[BRAIN] Using Simple Chain executor...")
-            result = simple_chain.invoke(
-                {"input": query},
-                config={"callbacks": callbacks} if callbacks else {}
-            )
-
-            return self._process_output(result.get("output", result), str(result))
-
+            for state in graph.stream(initial_state, stream_mode="values"):
+                final_state = state
+                messages = state.get("messages", [])
+                for message in messages[seen_messages:]:
+                    self._emit_graph_step(callbacks, message)
+                seen_messages = len(messages)
         except Exception as e:
+            print(f"[BRAIN] Structured graph execution failed: {e}")
+            return {"output": {"error": "graph_execution_failed", "message": str(e)}}
+
+        return self._finalize_graph_output(final_state)
+
+    @staticmethod
+    def _emit_graph_step(callbacks, message) -> None:
+        """Forward one new graph message to each callback's `on_graph_event`."""
+        if not callbacks:
+            return
+        content = str(getattr(message, "content", message))
+        status = "completed" if content.startswith("Observation:") else "running"
+        for cb in callbacks:
+            handler = getattr(cb, "on_graph_event", None)
+            if handler:
+                handler(status, content)
+
+    def _finalize_graph_output(self, state: Dict[str, Any]) -> Dict[str, Any]:
+        """Extract and structure the graph's Final Answer, if it reached one."""
+        from app.core.agent.react_workflow import _try_structured_final_answer
+
+        messages = state.get("messages", [])
+        last_content = str(messages[-1].content) if messages else ""
+        if state.get("phase") != "done" or "Final Answer:" not in last_content:
             return {
                 "output": {
-                    "error": "simple_chain_failed",
-                    "message": str(e)
+                    "error": "no_final_answer",
+                    "message": f"Agent did not produce a Final Answer within {state.get('max_iterations')} iterations.",
                 }
             }
+
+        raw_answer = last_content.split("Final Answer:", 1)[1].strip()
+        structured = _try_structured_final_answer(self.llm, raw_answer)
+        if structured is not None:
+            return {"output": structured}
+        # Falls back further to _process_output's Pydantic/regex-JSON extraction
+        # (e.g. the model wrote valid JSON inline despite structured decoding
+        # being unavailable) before giving up and returning the raw text.
+        return self._process_output(raw_answer, raw_answer)
 
     def _process_output(self, output: Any, raw_output: str = "") -> Dict[str, Any]:
         if isinstance(output, dict) and "error" in output:

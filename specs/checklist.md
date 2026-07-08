@@ -141,6 +141,35 @@ phase's own `specs/<phase>/tasks.md` remains the source of truth for individual 
   supersession; `docs/ARCHITECTURE_AUDIT_REPORT.md` traceability matrix row 010 updated,
   new row 017 added
 
+## Phase 018 — Structured Agent Reliability
+
+First real production run of 017 (against `https://www.cultbeauty.co.uk/`) timed out after
+900s with zero results - full incident + fix in `specs/018-structured-agent-reliability/`.
+
+- [x] CHK070 Root cause confirmed from the real run log: WhiteRabbitNeo-V3-7B repeated
+  identical malformed non-ReAct output on every retry; `ArgusBrain`'s claimed
+  ReAct->SimpleChain fallback never actually existed (`_get_react_agent`/`_get_simple_chain`
+  built the identical `AgentExecutor`, differing only in `verbose`)
+- [x] CHK071 Web research conducted (Ollama structured-outputs docs, LangChain/LangGraph
+  reliability patterns) confirming schema-constrained decoding as the standard fix -
+  `specs/018-structured-agent-reliability/research.md`
+- [x] CHK072 `app/core/agent/react_workflow.py::_try_structured_final_answer()` added,
+  applying the same structured-decoding fix already used for tool selection to the final
+  report shape (verified: `tests/test_langgraph_workflow.py`, 3 new tests passing)
+- [x] CHK073 Independent bug fixed: `route_after_parse()`'s format-error branch previously
+  had no `max_iterations` check at all (unlike the tool-execute path) - unbounded except by
+  LangGraph's default `recursion_limit` (25), via an ungraceful `GraphRecursionError`.
+  Regression test: `test_custom_graph_format_error_loop_respects_max_iterations`
+- [x] CHK074 `ArgusBrain` rewired to `react_workflow.build_workflow().stream()` instead of
+  `agent_factory.py`'s classic `AgentExecutor`; `ask()`'s external contract unchanged (017's
+  `scripts/run_agent.py`/`brain_tools.py`/`app/GUI/tabs/agent.py` needed zero changes)
+- [x] CHK075 Live incident directly reproduced with a mock LLM replaying the exact failure
+  behavior, proving the fix terminates within `max_iterations` (15) with an honest error
+  instead of hanging - `test_ask_terminates_within_max_iterations_on_repeated_malformed_output`
+- [x] CHK076 Happy path (real structured report + live-feed events via new `on_graph_event`)
+  verified unaffected; zero regressions across `tests/test_registry/`,
+  `tests/test_langgraph_workflow.py`, and all `017` tests
+
 ## Constitution IX — Single Source of Truth (No Duplication)
 
 Enforcement tool: `scripts/check_duplication.py` (built and verified 2026-07-08 -
@@ -179,11 +208,11 @@ below). Found via `--all` scan of `app/`, `scripts/`, `Setup/`:
 
 | Metric | Value |
 |--------|-------|
-| Phases completed | 5 (005-009) fully; 010 (superseded as production driver, code retained)/012/013/014/017 substantially; 011 code-complete but tracking-stale |
-| Tasks completed | 60+ (005-009) + 30/33 (010) + 0/31-tracked-but-code-complete (011) + 32/33 (012) + 34/34 (013) + 5/13 (014) + 6/6 (017) |
-| Tests written | 68 (new, 005-009) + 13 (new, 017) |
-| Total tests passing | 163/163 per CHANGELOG.md 2026-07-07 validation + 13/13 new 017 tests (2026-07-08) |
+| Phases completed | 5 (005-009) fully; 010 (superseded as production driver, code retained)/012/013/014/017/018 substantially; 011 code-complete but tracking-stale |
+| Tasks completed | 60+ (005-009) + 30/33 (010) + 0/31-tracked-but-code-complete (011) + 32/33 (012) + 34/34 (013) + 5/13 (014) + 6/6 (017) + 11/11 (018) |
+| Tests written | 68 (new, 005-009) + 13 (new, 017) + 8 (new, 018: 3 in test_brain_ask.py, 1 in test_react_callback.py, 4 in test_langgraph_workflow.py) |
+| Total tests passing | 163/163 per CHANGELOG.md 2026-07-07 validation + 13/13 (017) + full test_registry/test_langgraph_workflow suites green (018, 2026-07-08) |
 | Commits | 16+ (005-009) + ongoing |
-| New files created | 20+ (005-009) + 5 (017: brain_tools.py, react_callback.py, 3 test files) |
+| New files created | 20+ (005-009) + 5 (017) + 4 (018: spec/research/plan/tasks.md) |
 | Files refactored | 10+ (005-009) |
 | **Open compliance gaps** | **CHK052** (011 task tracking vs. code mismatch); **CHK055** (014 in progress, not a gap — expected); **CHK058-063** (Constitution IX duplication backlog, found 2026-07-08) |

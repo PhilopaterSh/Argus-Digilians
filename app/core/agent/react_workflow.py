@@ -22,6 +22,7 @@ from app.core.agent.react_prompts import (
     build_prebuilt_system_prompt,
 )
 from app.core.memory.memory_service import ArgusMemory
+from app.core.schemas import SecurityReport
 
 
 warnings.filterwarnings("ignore", category=DeprecationWarning)
@@ -60,6 +61,46 @@ def _try_structured_action(llm: Any, system_text: str, messages: list) -> Option
             f"Action: {json.dumps({'name': action.tool, 'input': action.input or ''})}"
         )
     return None
+
+
+def _try_structured_final_answer(llm: Any, raw_answer: str) -> Optional[dict]:
+    """Coerce a free-text final answer into the SecurityReport schema (specs/018).
+
+    Applies the same schema-constrained-decoding reliability fix as
+    `_try_structured_action` to the final report shape, not just tool
+    selection - a free-text "Final Answer:" is just as prone to the format
+    drift that motivated this module's structured-first approach.
+
+    Args:
+        llm (Any): The LLM in use; only attempted if it exposes
+            `with_structured_output` (Ollama 0.3.0+ / LangChain's wrapper
+            around it).
+        raw_answer (str): The text following "Final Answer:" in the
+            agent's last message.
+
+    Returns:
+        Optional[dict]: A `SecurityReport.model_dump()` dict on success, or
+        None if structured decoding is unavailable or fails - callers must
+        fall back to the raw text rather than fabricate a report
+        (Constitution VIII - Truthful Runtime).
+    """
+    if not hasattr(llm, "with_structured_output"):
+        return None
+    try:
+        structured_llm = llm.with_structured_output(SecurityReport)
+        result = structured_llm.invoke([
+            SystemMessage(content=(
+                "Extract a SecurityReport from the following penetration test "
+                "final answer. Preserve all real findings verbatim; do not "
+                "invent findings, scores, or steps that aren't supported by "
+                "the text."
+            )),
+            HumanMessage(content=raw_answer),
+        ])
+        report = result if isinstance(result, SecurityReport) else SecurityReport(**result)
+        return report.model_dump()
+    except Exception:
+        return None
 
 
 def _supports_tool_calls(llm: ChatOllama) -> bool:
@@ -300,6 +341,15 @@ def _build_custom_workflow(
         if phase == "done":
             return "end"
         if phase == "format_error":
+            # Bug fixed (specs/018): this previously routed straight back to
+            # "agent" with no iteration check at all, unlike the tool-execute
+            # path below. A model that never once produces valid output (the
+            # exact live failure this spec fixes) would loop here forever,
+            # bounded only by LangGraph's default recursion_limit (25) via an
+            # ungraceful GraphRecursionError - not by max_iterations, and not
+            # a clean "no final answer" result.
+            if state["iteration_count"] >= state["max_iterations"]:
+                return "end"
             return "agent"  # loop back so model sees the format error
         if state.get("tool_name"):
             return "execute"
