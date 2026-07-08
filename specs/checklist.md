@@ -116,6 +116,38 @@ phase's own `specs/<phase>/tasks.md` remains the source of truth for individual 
   (`ollama/ollama:0.3.14`, `juice-shop:v17.1.1`, gobuster 3.6.0, ffuf 2.1.0, subfinder 2.6.6 — FR-006)
 - [x] CHK057 Lab is additive/optional and does not alter the WSL production path (FR-007)
 
+## Constitution IX — Single Source of Truth (No Duplication)
+
+Enforcement tool: `scripts/check_duplication.py` (built and verified 2026-07-08 -
+catches exact-file and normalized-function-body duplication; `--diff` mode
+confirmed to only flag newly-touched duplication, not the pre-existing backlog
+below). Found via `--all` scan of `app/`, `scripts/`, `Setup/`:
+
+- [ ] CHK058 (OPEN) `Setup/requirements.txt` byte-identical to
+  `scripts/Setup/requirements.txt` — pick one canonical file; the other must
+  either be deleted or become a generated copy, not hand-maintained twice.
+- [ ] CHK059 (OPEN) `_first_web_port` identically defined in both
+  `app/core/agent/nodes/exploit.py:11` and `app/core/agent/nodes/scanner.py:11`
+  — consolidate into one shared helper (e.g. `app/core/agent/nodes/_shared.py`
+  or similar).
+- [ ] CHK060 (OPEN) `_build_target_url` identically defined in both
+  `app/core/agent/nodes/exploit.py:17` and `app/core/agent/nodes/scanner.py:18`
+  — same consolidation as CHK059.
+- [ ] CHK061 (OPEN) `_get_conn`/`_get_gui_conn` identical DB-connection logic
+  independently defined in `app/GUI/components/session_manager.py:9` and
+  `app/GUI/utils/blackboard.py:12` — consolidate into one shared connection
+  helper.
+- [ ] CHK062 (OPEN, low severity) Identical 2-line `__init__(self, runner,
+  memory)` constructor body independently repeated across 5 tool-service
+  classes (`app/tools/{crawler,reachability,scanners,secrets,simulation}.py`)
+  — candidate for a shared base class, but low urgency since it's idiomatic
+  dependency-injection boilerplate rather than accidental drift.
+- [ ] CHK063 (OPEN, tracked but NOT simple duplication) `workspace/run_argus_cli.py`
+  vs `scripts/run_argus_cli.py` — these started as the same file and have
+  since diverged (workspace/ has 4 extra tools); `scripts/TEST_ARGUS.bat`
+  depends on the `workspace/` version. Requires a decision on which tool set
+  is current before reconciling, not a mechanical delete.
+
 ---
 
 ## Summary
@@ -129,4 +161,4 @@ phase's own `specs/<phase>/tasks.md` remains the source of truth for individual 
 | Commits | 16+ (005-009) + ongoing |
 | New files created | 20+ (005-009) |
 | Files refactored | 10+ (005-009) |
-| **Open compliance gaps** | **CHK052** (011 task tracking vs. code mismatch); **CHK055** (014 in progress, not a gap — expected) |
+| **Open compliance gaps** | **CHK052** (011 task tracking vs. code mismatch); **CHK055** (014 in progress, not a gap — expected); **CHK058-063** (Constitution IX duplication backlog, found 2026-07-08) |

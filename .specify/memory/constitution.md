@@ -1,7 +1,44 @@
 <!--
 Sync Impact Report
 ==================
-Version change: 1.0.0 -> 1.1.0 (MINOR: additive AI/testing/canonical-authority principles)
+Version change: 1.2.0 -> 1.3.0 (MINOR: additive commit-discipline principle)
+
+Amendment 2026-07-08b (repo-hygiene session, fix/copy-setup-to-scripts):
+Added principle (additive only; no existing principle redefined or removed):
+- X. Traceable Commit Discipline (NON-NEGOTIABLE)
+Extended section:
+- "Development Workflow & Quality Gates" -> added Commit gate (and, retroactively
+  for the same-day IX amendment, Duplication gate)
+Rationale: this session's fixes were repeatedly staged but left uncommitted
+across many turns pending user confirmation - safe for reversibility during
+active work, but if never explicitly finalized, git history stops being a
+truthful record of what was actually resolved and when, undermining the same
+auditability Principle V already requires of installer logs. This principle
+extends that same auditability expectation to source control: every resolved
+defect/completed fix MUST end in a commit, with one commit per coherent unit
+of work and a message stating why, not just what. It explicitly does NOT
+override the human-approval gate an AI coding assistant operates under - it
+mandates the end state (a clean, descriptive commit exists), not that an
+agent may execute `git commit` unattended.
+
+Amendment 2026-07-08 (repo-hygiene session, fix/copy-setup-to-scripts):
+Added principle (additive only; no existing principle redefined or removed):
+- IX. Single Source of Truth - No Duplication (NON-NEGOTIABLE)
+New enforcement tool:
+- scripts/check_duplication.py (exact-file-hash and normalized-function-body
+  detection; --diff mode for CI, --all mode for full-repo reporting)
+Rationale: this session found, by direct inspection (not estimation), a
+byte-identical Setup/requirements.txt vs scripts/Setup/requirements.txt, an
+identical `_build_target_url`/`_first_web_port` pair independently defined in
+both app/core/agent/nodes/scanner.py and exploit.py, an identical DB-connection
+helper (`_get_conn`/`_get_gui_conn`) independently defined in two GUI utility
+files, and a divergent pair (workspace/run_argus_cli.py vs
+scripts/run_argus_cli.py) that started as one file and silently forked because
+nothing forced reconciliation. Principle II already forbade duplication within
+the installer specifically; Principle VII already required one canonical
+authority for cross-cutting *design decisions*; neither covered general
+file/code duplication. This amendment closes that gap the same way VII and
+VIII closed theirs.
 
 Amendment 2026-07-05 (post Spec Consolidation):
 Added principles (additive only; no existing principle redefined or removed):
@@ -28,8 +65,8 @@ Templates requiring updates:
 - .specify/templates/tasks-template.md       -> no change
 - .opencode/commands/speckit.constitution.md -> no change (agent-neutral)
 
-Follow-up TODOs: none. Authorization/usage-control remains intentionally out of scope
-(not a constitutional concern for this project per current governance).
+Follow-up TODOs: none - specs/checklist.md CHK058-063 already added (2026-07-08)
+tracking the 5 duplicate groups found this session through to resolution.
 -->
 
 # Argus Security Framework Constitution
@@ -170,6 +207,81 @@ Rules:
 Rationale: an autonomous agent whose runtime invents findings is worse than useless;
 truthful state is the foundation of trustworthy automation and debuggability.
 
+### IX. Single Source of Truth — No Duplication (NON-NEGOTIABLE)
+
+No file, dependency manifest, or function/module logic MAY exist in more than one
+place in the repository. Every responsibility MUST have exactly one canonical
+implementation; every other location that needs it MUST import/reference the
+canonical one, never re-derive or hand-copy it.
+
+Rules:
+- Before adding a new file or function, an author MUST check whether an existing
+  one already serves the same purpose (`scripts/check_duplication.py --all`).
+  Copy-pasting an existing implementation into a new location is forbidden; the
+  existing one MUST be imported/reused, or factored out into a shared location if
+  it isn't already importable from where it's needed.
+- Any two files with byte-identical content are a defect: one MUST be deleted
+  and replaced with a reference to the other (or, if both must physically exist
+  for a build/deploy reason, one generates the other rather than both being
+  hand-maintained).
+- Any two functions implementing the same logic independently are a defect,
+  regardless of naming - MUST be consolidated into one shared function.
+- `scripts/check_duplication.py --diff <base_ref>` MUST run in CI (stage 1:
+  diff-scoped, blocks new duplication without retroactively failing on the
+  existing backlog - same staged rollout already used for `ruff.toml` and
+  `mypy.ini`, per Constitution amendment precedent).
+- Existing duplication found MUST be tracked to resolution in `specs/checklist.md`
+  as a CHK item, not left open indefinitely; it MUST NOT be rediscovered from
+  scratch in a future audit because no one recorded it the first time.
+- A file that must temporarily exist as a compatibility shim for a canonical
+  rename (e.g. Principle VII's superseded-artifact pattern) MUST say so
+  explicitly in a header comment pointing at the canonical replacement - it is
+  not exempt from this principle, it is a documented, time-boxed exception to it.
+
+Rationale: this session found, by direct code inspection, an identical
+`requirements.txt` hand-maintained in two places, an identical URL-building
+helper independently defined in two agent nodes, an identical DB-connection
+helper independently defined in two GUI utilities, and a CLI entrypoint that
+started as one file and silently forked into two different tool sets because
+nothing forced reconciliation when it drifted. Undetected duplication doesn't
+just waste space - it rots: one copy gets fixed, the other doesn't, and the
+next person to touch either has no way to know the other exists.
+
+### X. Traceable Commit Discipline (NON-NEGOTIABLE)
+
+Every resolved defect or completed fix MUST end in a git commit that records it.
+Work that is fixed but never committed does not exist as far as the project's
+audit trail is concerned, and defeats the observability this Constitution
+otherwise requires.
+
+Rules:
+- Once a fix is verified working, it MUST be committed - not left staged
+  indefinitely across unrelated further work, and not silently dropped.
+- Each commit MUST correspond to one coherent, reviewable unit of resolved
+  work; unrelated fixes MUST NOT be squashed into a single commit (this
+  project's own history - e.g. splitting the WAF/CDN pipeline fix, the
+  containerized-lab feature, and the installer hardening into three separate
+  commits in one session - is the standard to follow, not the exception).
+- Commit messages MUST state why the change was needed, not merely what
+  changed - restating the diff in prose is not sufficient.
+- Where a fix resolves a tracked item (a `specs/*/tasks.md` task or a
+  `specs/checklist.md` CHK id), the commit message SHOULD reference it, so
+  git history and Spec-Kit tracking stay cross-referenced.
+- This principle governs the required END STATE - a clean, descriptive commit
+  must eventually exist for every resolved fix. It does NOT authorize an AI
+  coding assistant to execute `git commit` without the human operator's
+  explicit, per-instance confirmation; that human-approval gate is a separate,
+  standing operational control this Constitution does not override. An
+  assistant operating under this principle MUST still stage/prepare commits
+  and request confirmation before writing them.
+
+Rationale: mid-session, fixes are routinely kept staged-but-uncommitted while
+work continues - correct for reversibility, but if a session ends without
+ever finalizing them, the git history silently stops reflecting what was
+actually fixed and when, which is exactly the kind of unaudited state
+Principle V forbids for installer logs. This principle extends that same
+auditability expectation to source control itself.
+
 ## Security & Operational Constraints
 
 - **Target platform:** Windows 10 (build 19041+) or Windows 11, with WSL2 and a
@@ -207,6 +319,12 @@ truthful state is the foundation of trustworthy automation and debuggability.
   defect MUST gain a regression test. CI runs these tiers (`012` §7).
 - **Review gate:** All PRs/reviews MUST verify compliance with these principles;
   any deviation MUST be justified and documented in the plan's Complexity Tracking.
+- **Duplication gate:** `scripts/check_duplication.py --diff <base_ref>` MUST run
+  in CI per Principle IX; a PR introducing new file or function duplication
+  MUST fail this gate until consolidated.
+- **Commit gate:** Per Principle X, a PR/session MUST NOT be considered done while
+  a verified fix remains uncommitted; an AI assistant MUST request explicit
+  confirmation before each `git commit` rather than batching or auto-committing.
 
 ## Governance
 
@@ -225,4 +343,4 @@ Compliance review: every `/speckit.plan` invocation runs a Constitution Check ga
 violations MUST be either resolved or explicitly justified in the plan's Complexity
 Tracking table before implementation begins.
 
-**Version**: 1.1.0 | **Ratified**: 2026-06-27 | **Last Amended**: 2026-07-05
+**Version**: 1.3.0 | **Ratified**: 2026-06-27 | **Last Amended**: 2026-07-08
