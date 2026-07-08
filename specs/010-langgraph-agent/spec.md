@@ -4,7 +4,19 @@
 
 **Created**: 2026-06-30
 
-**Status**: Draft — **CANONICAL agent design** (per `012-spec-reconciliation` §4). Supersedes the generic top-level ReAct agent of `013-langgraph-workflow`. Module names align to `012` §2.1/§2.2: RAG uses `document_processor.py` / `vector_store.py` / `rag_engine.py` (not `processor/vectorstore/engine`); agent code lives in `app/core/agent/`. Chunking is structural (canonical), with `RecursiveCharacterTextSplitter` as the plain/unknown-format fallback. Embedding follows the manifest design (`012` §3).
+**Status**: Draft — **RAG architecture remains canonical** (per `012-spec-reconciliation` §4). The
+**tactical-agent design (recon -> scanner -> exploit -> reflective, `app/core/agent/graph.py`)
+is superseded as the production driver by `017-restore-react-agent`** (2026-07-08): investigation
+found the project's originally-intended operating model (`app/core/prompts.py` + `ArgusBrain`'s
+free-form ReAct tool selection) was fully built but wired only to deprecated GUI shims, while the
+canonical `app/GUI/dashboard.py` ran this deterministic graph instead. `017` restores `ArgusBrain`
+as the "Start Agent" driver; this graph's code remains in `app/core/agent/graph.py`/`nodes/` (not
+deleted, per the Governance rule below) and its own tests stay green, but it is no longer invoked
+by the production entrypoint (`scripts/run_agent.py`). Module names align to `012` §2.1/§2.2: RAG
+uses `document_processor.py` / `vector_store.py` / `rag_engine.py` (not `processor/vectorstore/engine`);
+agent code lives in `app/core/agent/`. Chunking is structural (canonical), with
+`RecursiveCharacterTextSplitter` as the plain/unknown-format fallback. Embedding follows the
+manifest design (`012` §3).
 
 **Input**: User description: "Architecture split: LangChain for RAG (deterministic, linear), LangGraph for Tactical PenTest Agent (stateful, cyclical feedback loops)."
 

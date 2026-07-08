@@ -7,37 +7,108 @@ from typing import Any, Dict
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
+from app.core.agent.brain_tools import build_argus_tools
 from app.core.agent.contracts import (
     AGENT_RUN_MODE_DEMO,
     AGENT_RUN_MODE_TEST,
-    build_initial_agent_state,
     build_run_snapshot,
     load_json_file,
     normalize_run_mode,
     persist_run_snapshot,
     utc_now_iso,
 )
-from app.core.agent.graph import build_tactical_graph
+from app.core.agent.react_callback import LiveFeedCallbackHandler
+from app.core.agent.brain import ArgusBrain
+from app.core.config import ArgusConfig
+from app.tools.tool_registry import WSLBridgeTools
 
 
-# Recon (whatweb/nmap/dig, app/tools/recon.py), scanner (nikto/ffuf,
-# app/tools/scanners.py) and exploit (6 sequential evasion probes,
-# app/tools/evasion.py) each run multiple sequential external tool calls
-# over WSL/SSH. Per-call timeouts bound each one, but stacked worst-case
-# across all three nodes (plus per-call WSL process spin-up overhead) can
-# approach ~800s. The original 120s guaranteed the graph got killed by the
-# timeout branch below during recon on every real (non-demo) run, before
-# recon_node could ever return - this is why the agent never progressed
-# past recon and final_state/results stayed empty. Live end-to-end
-# reproduction against a real host (see CHANGELOG.md) confirmed a full
-# recon->scanner->exploit run needs headroom well past 600s.
+# ArgusBrain's ReAct loop (app/core/agent/agent_factory.py, max_iterations=50)
+# can make far more tool calls than the old fixed 3-phase pipeline it
+# replaces (specs/017-restore-react-agent) - each real recon/scan tool call
+# can itself take 60-180s. 900s is the same default the old pipeline needed
+# for a single recon->scanner->exploit pass; a full free-form run exploring
+# many tools may need more. Override via AGENT_TIMEOUT_SECONDS if a run
+# needs more headroom than this.
 DEFAULT_TIMEOUT_SECONDS = 900
 
+ANALYSIS_QUERY_TEMPLATE = (
+    "CONSULT MEMORY FIRST using 'Query_Memory'. Then perform a comprehensive security "
+    "analysis for {target}. If findings like SQLi, Path Traversal, or sensitive files "
+    "already exist in memory, use 'Exploit_Suggester' and 'Smart_Web_Search' to CHAIN "
+    "them and reach maximum impact (RCE). Finally, provide a deep risk assessment "
+    "including the full attack chain."
+)
 
-def run_graph(target: str, run_id: str, mode: str, state_file: str, result_box: Dict[str, Any]) -> None:
-    graph = build_tactical_graph()
-    initial_state = build_initial_agent_state(target, run_id, mode, state_file)
-    result_box['state'] = graph.invoke(initial_state)
+
+def run_brain_analysis(target: str, run_id: str, mode: str, state_file: str, result_box: Dict[str, Any]) -> None:
+    """Run ArgusBrain's free-form ReAct loop against `target`.
+
+    Args:
+        target (str): Target URL/host to analyze.
+        run_id (str): This run's id, threaded through every live-feed event.
+        mode (str): production/demo/test - attached to every live-feed event.
+        state_file (str): Path to the JSON state file the GUI polls; also
+            where `LiveFeedCallbackHandler` appends each ReAct step live.
+        result_box (Dict[str, Any]): Mutated in place with either `result`
+            (ArgusBrain.ask()'s return value) or `error` (str) - this
+            function runs on a background thread, so exceptions here would
+            otherwise be silently lost to the caller.
+    """
+    try:
+        model_name = os.getenv('SELECTED_MODEL') or ArgusConfig.load().model_name
+        bridge = WSLBridgeTools()
+        tools = build_argus_tools(bridge)
+        brain = ArgusBrain(model_name, tools, memory=bridge.memory)
+        handler = LiveFeedCallbackHandler(state_file, run_id, target, mode)
+        query = ANALYSIS_QUERY_TEMPLATE.format(target=target)
+        result_box['result'] = brain.ask(query, callbacks=[handler])
+    except Exception as e:
+        result_box['error'] = str(e)
+
+
+def _build_final_state(result: Dict[str, Any], mode: str, target: str) -> Dict[str, Any]:
+    """Shape ArgusBrain's raw `ask()` return value into the persisted final_state.
+
+    Args:
+        result (Dict[str, Any]): `{"output": ...}` from `ArgusBrain.ask()` -
+            `output` is a `SecurityReport`-shaped dict on successful
+            structured parsing, or a raw string/dict otherwise (see
+            `ArgusBrain._process_output`).
+        mode (str): production/demo/test.
+        target (str): The analyzed target.
+
+    Returns:
+        Dict[str, Any]: Always has `summary`/`attack_surface_stats`/
+        `findings`/`overall_risk_score`/`next_steps`/`output`/`mode`/
+        `target`. When the agent's output wasn't a valid structured
+        report, those fields are left empty/None and `parse_warning`
+        explains why - never fabricated to look like a real empty report
+        (Constitution VIII - Truthful Runtime).
+    """
+    output = result.get('output') if isinstance(result, dict) else None
+    if isinstance(output, dict) and 'error' not in output:
+        return {
+            'summary': output.get('summary', ''),
+            'attack_surface_stats': output.get('attack_surface_stats', ''),
+            'findings': output.get('findings', []),
+            'overall_risk_score': output.get('overall_risk_score'),
+            'next_steps': output.get('next_steps', []),
+            'output': output.get('output', ''),
+            'mode': mode,
+            'target': target,
+        }
+    return {
+        'summary': '',
+        'attack_surface_stats': '',
+        'findings': [],
+        'overall_risk_score': None,
+        'next_steps': [],
+        'output': str(output) if output is not None else '',
+        'mode': mode,
+        'target': target,
+        'parse_warning': 'Agent output was not a structured SecurityReport; showing raw output.',
+    }
 
 
 def main() -> None:
@@ -58,40 +129,22 @@ def main() -> None:
         build_run_snapshot(run_id, target, mode, status='starting', current_node='init', started_at=started_at, updated_at=started_at),
     )
 
-    # Note: recon_node() (app/core/agent/nodes/recon.py) writes its own
-    # 'Starting reconnaissance on {target}' event the moment the graph
-    # thread actually begins running recon. A second, pre-emptive write of
-    # the identical message here (before the thread even starts) used to
-    # produce a visible duplicate log line with no corresponding progress -
-    # removed; the snapshot below already reflects current_node='recon'.
     state_data = load_json_file(state_file)
     state_data.setdefault('events', [])
-    state_data['run_id'] = run_id
-    state_data['target'] = target
-    state_data['mode'] = mode
-    state_data['status'] = 'running'
-    state_data['current_node'] = 'recon'
-    state_data['updated_at'] = started_at
-    persist_run_snapshot(state_file, build_run_snapshot(run_id, target, mode, status='running', current_node='recon', started_at=started_at, updated_at=started_at, events=state_data.get('events', [])))
+    persist_run_snapshot(state_file, build_run_snapshot(run_id, target, mode, status='running', current_node='agent', started_at=started_at, updated_at=started_at, events=state_data.get('events', [])))
 
     result_box: Dict[str, Any] = {}
-    worker = threading.Thread(target=run_graph, args=(target, run_id, mode, state_file, result_box), daemon=True)
+    worker = threading.Thread(target=run_brain_analysis, args=(target, run_id, mode, state_file, result_box), daemon=True)
     worker.start()
     worker.join(timeout_seconds)
 
     if worker.is_alive():
-        timeout_message = f'Graph execution timed out after {timeout_seconds}s.'
+        timeout_message = f'Agent execution timed out after {timeout_seconds}s.'
         if mode in {AGENT_RUN_MODE_DEMO, AGENT_RUN_MODE_TEST}:
             demo_events = list(load_json_file(state_file).get('events', []))
             for node, status, detail in [
-                ('recon', 'running', f'{timeout_message} Running fallback simulation...'),
-                ('recon', 'completed', 'Recon complete'),
-                ('scanner', 'running', 'Scanning for vulnerabilities'),
-                ('scanner', 'completed', 'Scan complete'),
-                ('exploit', 'running', 'Attempting exploitation'),
-                ('exploit', 'completed', 'Exploitation complete'),
-                ('post_exploit', 'running', 'Processing results'),
-                ('post_exploit', 'completed', 'Post-exploit complete'),
+                ('agent', 'running', f'{timeout_message} Running fallback simulation...'),
+                ('agent', 'completed', 'Demo/test fallback analysis complete'),
             ]:
                 demo_events.append({'node': node, 'status': status, 'detail': detail, 'timestamp': utc_now_iso(), 'run_id': run_id, 'target': target, 'mode': mode})
             persist_run_snapshot(
@@ -101,10 +154,15 @@ def main() -> None:
                     target,
                     mode,
                     status='completed',
-                    current_node='post_exploit',
+                    current_node='agent',
                     progress_pct=100,
                     started_at=started_at,
-                    final_state={'open_ports': [8080], 'vulnerabilities': [], 'exploit_success': False, 'extracted_data': {}, 'error_log': ['Demo/test fallback simulation enabled'], 'retry_count': 0},
+                    final_state={
+                        'summary': 'Demo/test fallback - no live analysis performed.',
+                        'attack_surface_stats': '', 'findings': [], 'overall_risk_score': None,
+                        'next_steps': [], 'output': 'Demo/test fallback simulation enabled',
+                        'mode': mode, 'target': target,
+                    },
                     events=demo_events,
                 ),
             )
@@ -117,7 +175,7 @@ def main() -> None:
                 target,
                 mode,
                 status='failed',
-                current_node='recon',
+                current_node='agent',
                 progress_pct=0,
                 started_at=started_at,
                 error=timeout_message,
@@ -126,47 +184,33 @@ def main() -> None:
         )
         sys.exit(1)
 
-    final_state = result_box.get('state')
-    if not isinstance(final_state, dict):
-        error_message = 'Graph returned no final state.'
+    state_data = load_json_file(state_file)
+    if 'error' in result_box:
         persist_run_snapshot(
             state_file,
             build_run_snapshot(
-                run_id,
-                target,
-                mode,
-                status='failed',
-                current_node='error',
-                progress_pct=0,
-                started_at=started_at,
-                error=error_message,
-                events=load_json_file(state_file).get('events', []),
+                run_id, target, mode, status='failed', current_node='agent', progress_pct=0,
+                started_at=started_at, error=result_box['error'], events=state_data.get('events', []),
             ),
         )
         sys.exit(1)
 
-    collected = {
-        'open_ports': final_state.get('open_ports', []),
-        'vulnerabilities': final_state.get('vulnerabilities', []),
-        'exploit_success': final_state.get('exploit_success', False),
-        'extracted_data': final_state.get('extracted_data', {}),
-        'error_log': final_state.get('error_log', []),
-        'retry_count': final_state.get('retry_count', 0),
-        'mode': mode,
-        'target': target,
-    }
-    state_data = load_json_file(state_file)
+    result = result_box.get('result')
+    if not isinstance(result, dict):
+        persist_run_snapshot(
+            state_file,
+            build_run_snapshot(
+                run_id, target, mode, status='failed', current_node='agent', progress_pct=0,
+                started_at=started_at, error='Agent returned no result.', events=state_data.get('events', []),
+            ),
+        )
+        sys.exit(1)
+
     persist_run_snapshot(
         state_file,
         build_run_snapshot(
-            run_id,
-            target,
-            mode,
-            status='completed',
-            current_node=final_state.get('current_node', 'post_exploit'),
-            progress_pct=100,
-            started_at=started_at,
-            final_state=collected,
+            run_id, target, mode, status='completed', current_node='agent', progress_pct=100,
+            started_at=started_at, final_state=_build_final_state(result, mode, target),
             events=state_data.get('events', []),
         ),
     )

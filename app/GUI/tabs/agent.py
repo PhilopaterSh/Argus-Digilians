@@ -137,10 +137,45 @@ def render_agent():
         st.subheader(':bar_chart: Final Results')
         final_state = current_state.get('final_state', {})
         if status_label in ('completed', 'failed') or final_state:
-            cols = st.columns(3)
-            cols[0].metric('Open Ports', len(final_state.get('open_ports', [])))
-            cols[1].metric('Vulnerabilities', len(final_state.get('vulnerabilities', [])))
-            cols[2].metric('Exploit Success', 'Yes' if final_state.get('exploit_success') else 'No')
+            # ArgusBrain's ReAct agent (specs/017-restore-react-agent) returns a
+            # SecurityReport (summary/findings/overall_risk_score/next_steps),
+            # not the old deterministic pipeline's open_ports/vulnerabilities/
+            # exploit_success - this section reflects that report shape.
+            findings = final_state.get('findings', [])
+            risk_score = final_state.get('overall_risk_score')
+
+            if final_state.get('parse_warning'):
+                st.warning(final_state['parse_warning'])
+
+            cols = st.columns(2)
+            cols[0].metric('Overall Risk Score', f"{risk_score}/10" if risk_score is not None else 'N/A')
+            cols[1].metric('Findings Count', len(findings))
+
+            if final_state.get('summary'):
+                st.markdown(f"**Summary**: {final_state['summary']}")
+            if final_state.get('attack_surface_stats'):
+                st.caption(f"Attack surface: {final_state['attack_surface_stats']}")
+
+            if findings:
+                with st.expander(f':mag: Findings ({len(findings)})', expanded=False):
+                    for f in findings:
+                        st.markdown(
+                            f"**[{f.get('severity', '?')}] {f.get('issue', 'Unknown issue')}** - `{f.get('target', '?')}`\n\n"
+                            f"{f.get('description', '')}\n\n"
+                            f"*Suggested payload*: `{f.get('suggested_payload') or 'n/a'}`  \n"
+                            f"*Remediation*: {f.get('remediation', '')}"
+                        )
+                        st.markdown('---')
+
+            next_steps = final_state.get('next_steps', [])
+            if next_steps:
+                with st.expander(':arrow_right: Next Steps', expanded=False):
+                    for step in next_steps:
+                        st.markdown(f"- {step}")
+
+            if final_state.get('output'):
+                with st.expander(':page_facing_up: Full Security Report', expanded=False):
+                    st.markdown(final_state['output'])
 
             with st.expander(':card_index_drawer: View Full State', expanded=False):
                 st.json(current_state)

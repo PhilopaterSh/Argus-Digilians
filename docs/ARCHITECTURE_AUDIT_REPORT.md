@@ -159,10 +159,11 @@ canonical architecture doc. Tracked as Cleanup Manifest C6.
 | 007 Reflective verification | Implemented | `app/tools/reflective_verification.py` | `tests/test_tools/` | - |
 | 008 Self-healing | Implemented | `app/tools/self_heal.py` | `tests/test_tools/` | - |
 | 009 GUI (Tkinter) | Implemented (UI superseded by 011) | `app/GUI/desktop_gui.py` | `tests/test_gui/` | fallback only |
-| 010 LangGraph agent | Implemented (32/33 tasks; T031-T033 explicitly out-of-scope-for-MVP) | `app/core/agent/graph.py`, `nodes/` | `tests/test_modules/{test_agent_contracts,test_tactical_graph_termination}.py`, `tests/test_gui/{test_dashboard,test_agent_tab_status}.py` | tasks.md reconciled 2026-07-06 - it read 0/33 despite the graph being built; T027/T029 test gaps closed same day |
+| 010 LangGraph agent | Implemented, but **superseded as production driver by 017** (2026-07-08) | `app/core/agent/graph.py`, `nodes/` | `tests/test_modules/{test_agent_contracts,test_tactical_graph_termination}.py`, `tests/test_gui/{test_dashboard,test_agent_tab_status}.py` | Code + tests retained (Constitution VII); no longer invoked by `scripts/run_agent.py` |
 | 011 GUI dashboard | Draft (entrypoint done, tabs partial) | `app/GUI/dashboard.py` | `tests/test_gui/` | renamed 2026-07-06 (C3 done) |
 | 012 Reconciliation | Canonical | (governance) | validation scripts | complete artifact set |
 | 013 LangGraph workflow | Fully superseded | `app/core/agent/react_workflow.py` (was `app/core/workflow/*`) | `tests/test_langgraph_workflow.py` | migration completed 2026-07-06 (C4/T028) |
+| 017 Restore ReAct agent | Implemented | `app/core/agent/{brain_tools,react_callback}.py`, `scripts/run_agent.py`, `app/core/agent/brain.py` (pre-existing) | `tests/test_registry/{test_brain_tools,test_react_callback}.py`, `tests/test_modules/test_run_agent.py` | `ArgusBrain` + `app/core/prompts.py` now drive production "Start Agent"; 010's graph retained, not deleted |
 
 **Traceability gaps**: 011 (GUI dashboard tabs) still has real unimplemented scope; 010 has
 two specific missing tests (T027: tactical graph termination, T029: failed-vs-running UI

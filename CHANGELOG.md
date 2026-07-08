@@ -2,6 +2,53 @@
 
 All notable changes to this project will be documented in this file.
 
+## Restored: ArgusBrain (prompt-driven ReAct agent) as the production Agent driver (2026-07-08, specs/017)
+The user pointed out that `app/core/prompts.py` defines the project's originally-intended
+operating model: the AI follows a structured prompt, freely picks whichever tool it judges
+best, observes the result, and decides the next action - a classic ReAct loop, not a fixed
+sequence. Investigation confirmed that engine already exists and works
+(`app/core/agent/brain.py::ArgusBrain`, using `app/core/prompts.py` via
+`app/core/agent/agent_factory.py::build_agent_executor()`, which always builds a real
+`create_react_agent` + `AgentExecutor`) - but `ArgusBrain(...)` was only ever instantiated by
+the deprecated GUI shims (`app/GUI/{app,argus_gui,gui_main}.py`, `desktop_gui.py`). The
+canonical `app/GUI/dashboard.py` instead drove `scripts/run_agent.py` ->
+`app/core/agent/graph.py::build_tactical_graph()`, a deterministic recon->scanner->exploit->
+reflective state machine with only one narrow single-token LLM call - no free tool choice
+anywhere in the production path.
+
+This is a genuine Constitution VII (Canonical Reconciliation Authority) event, reversing the
+2026-07-06 decision that made the deterministic graph canonical. Full details:
+`specs/017-restore-react-agent/spec.md`.
+
+Changes:
+- `app/core/agent/brain_tools.py` (new): one canonical `build_argus_tools()` wrapping the 12
+  `WSLBridgeTools` methods still present (of the historical 13-tool list on the `PHILOPATERSH`
+  branch; `run_specialized_module` no longer exists and was dropped) - replacing the pattern of
+  hand-copying this list into every GUI file.
+- `app/core/agent/react_callback.py` (new): `LiveFeedCallbackHandler` streams each ReAct step
+  (Thought/Action/Observation, tool errors, final answer) into the *existing*
+  `app/core/agent/contracts.py::append_run_event` state-file contract - `app/GUI/tabs/agent.py`'s
+  "Agent Feed" shows it live with zero GUI polling changes, since `StreamlitCallbackHandler`
+  (the historical approach) only works when the agent runs in-process, and the current
+  architecture deliberately runs it in a subprocess for GUI responsiveness.
+- `scripts/run_agent.py`: rewritten to drive `ArgusBrain.ask()` instead of
+  `build_tactical_graph()`. Same `threading.Thread(...).join(timeout)` bounding and demo/test
+  fallback path, unchanged. `_build_final_state()` persists the real `SecurityReport` shape
+  (`summary`/`findings`/`overall_risk_score`/`next_steps`/`output`) and explicitly flags
+  `parse_warning` rather than fabricating empty structured fields when the LLM's output didn't
+  parse (Constitution VIII - Truthful Runtime).
+- `app/GUI/tabs/agent.py`: "Final Results" now renders risk score, a findings expander, next
+  steps, and the full report - not the old open_ports/vulnerabilities/exploit_success metrics.
+- `app/core/agent/graph.py` and its nodes are **retained, not deleted** (Constitution VII); their
+  existing tests (`tests/test_modules/test_tactical_graph_termination.py`) still pass.
+
+Verified: end-to-end wiring smoke-tested with an injected `FakeListLLM` (no live Ollama/WSL
+needed) - both the successful-structured-report path and the unparseable-output fallback path.
+New Agent tab UI verified with a real Streamlit `AppTest` run against a completed-run state
+file: zero exceptions, findings/report content confirmed present in rendered output. 13 new
+unit tests (`tests/test_registry/{test_brain_tools,test_react_callback}.py`,
+`tests/test_modules/test_run_agent.py`), all passing.
+
 ## Fixed: same real site fragmented into multiple Blackboard targets (2026-07-08)
 Found while verifying the SQLite lock-contention fix against a real scan: a run
 against `https://www.cultbeauty.co.uk/` correctly incremented Targets by +1, but

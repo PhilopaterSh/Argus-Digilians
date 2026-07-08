@@ -71,6 +71,7 @@ archive/
 .streamlit/
 .cache/
 streamlit_runtime/
+app/core/rag/store/
 
 # Test / tooling caches
 .pytest_cache/

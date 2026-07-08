@@ -116,6 +116,31 @@ phase's own `specs/<phase>/tasks.md` remains the source of truth for individual 
   (`ollama/ollama:0.3.14`, `juice-shop:v17.1.1`, gobuster 3.6.0, ffuf 2.1.0, subfinder 2.6.6 — FR-006)
 - [x] CHK057 Lab is additive/optional and does not alter the WSL production path (FR-007)
 
+## Phase 017 — Restore ReAct Agent (Canonical Reconciliation)
+
+- [x] CHK064 `app/core/agent/brain_tools.py::build_argus_tools()` — one canonical 12-tool
+  list for `ArgusBrain`, replacing the pattern of hand-copying it into every GUI file
+  (verified: `tests/test_registry/test_brain_tools.py`, 3/3 passing)
+- [x] CHK065 `app/core/agent/react_callback.py::LiveFeedCallbackHandler` — streams
+  Thought/Action/Observation/error/finish into the existing state-file event contract
+  (verified: `tests/test_registry/test_react_callback.py`, 6/6 passing)
+- [x] CHK066 `scripts/run_agent.py` rewritten to drive `ArgusBrain.ask()` instead of
+  `build_tactical_graph()`; timeout-bounding thread wrapper and demo/test fallback preserved
+  unchanged; `_build_final_state()` never fabricates a structured report when the LLM's
+  output didn't parse (`parse_warning` instead) — verified end-to-end with an injected
+  `FakeListLLM` (no live Ollama/WSL needed), and unit-tested:
+  `tests/test_modules/test_run_agent.py`, 4/4 passing
+- [x] CHK067 `app/GUI/tabs/agent.py` Final Results section renders the real
+  `SecurityReport` shape (risk score, findings, next steps, full report) instead of the old
+  open_ports/vulnerabilities/exploit_success metrics — verified with a real Streamlit
+  `AppTest` run against a completed-run state file, zero exceptions, findings content
+  confirmed present in rendered output
+- [x] CHK068 `app/core/agent/graph.py` and its nodes retained unmodified (Constitution VII);
+  `tests/test_modules/test_tactical_graph_termination.py` still passes
+- [x] CHK069 `specs/010-langgraph-agent/spec.md` status line updated to record the
+  supersession; `docs/ARCHITECTURE_AUDIT_REPORT.md` traceability matrix row 010 updated,
+  new row 017 added
+
 ## Constitution IX — Single Source of Truth (No Duplication)
 
 Enforcement tool: `scripts/check_duplication.py` (built and verified 2026-07-08 -
@@ -154,11 +179,11 @@ below). Found via `--all` scan of `app/`, `scripts/`, `Setup/`:
 
 | Metric | Value |
 |--------|-------|
-| Phases completed | 5 (005-009) fully; 010/012/013/014 substantially; 011 code-complete but tracking-stale |
-| Tasks completed | 60+ (005-009) + 30/33 (010) + 0/31-tracked-but-code-complete (011) + 32/33 (012) + 34/34 (013) + 5/13 (014) |
-| Tests written | 68 (new, 005-009) |
-| Total tests passing | 163/163 per latest CHANGELOG.md validation (2026-07-07) |
+| Phases completed | 5 (005-009) fully; 010 (superseded as production driver, code retained)/012/013/014/017 substantially; 011 code-complete but tracking-stale |
+| Tasks completed | 60+ (005-009) + 30/33 (010) + 0/31-tracked-but-code-complete (011) + 32/33 (012) + 34/34 (013) + 5/13 (014) + 6/6 (017) |
+| Tests written | 68 (new, 005-009) + 13 (new, 017) |
+| Total tests passing | 163/163 per CHANGELOG.md 2026-07-07 validation + 13/13 new 017 tests (2026-07-08) |
 | Commits | 16+ (005-009) + ongoing |
-| New files created | 20+ (005-009) |
+| New files created | 20+ (005-009) + 5 (017: brain_tools.py, react_callback.py, 3 test files) |
 | Files refactored | 10+ (005-009) |
 | **Open compliance gaps** | **CHK052** (011 task tracking vs. code mismatch); **CHK055** (014 in progress, not a gap — expected); **CHK058-063** (Constitution IX duplication backlog, found 2026-07-08) |
