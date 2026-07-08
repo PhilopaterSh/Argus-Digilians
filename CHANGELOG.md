@@ -2,6 +2,28 @@
 
 All notable changes to this project will be documented in this file.
 
+## Fixed: Dashboard "Quick Actions" crashed with StreamlitAPIException on click (2026-07-08)
+Reported live: clicking "New Target" (or Start Agent/Generate Report/Settings) on
+the Dashboard tab crashed with `st.session_state.nav_radio cannot be modified
+after the widget with key nav_radio is instantiated`.
+
+Root cause: `app/GUI/dashboard.py` instantiates the sidebar navigation
+`st.radio(..., key='nav_radio')` before dispatching to any tab, including
+`render_dashboard()`. That tab's Quick Action buttons then tried to set
+`st.session_state.nav_radio` directly to navigate - but Streamlit forbids
+writing to a widget's own key once that widget has already run in the current
+script pass, regardless of the `st.rerun()` that follows.
+
+Fixed with the standard indirection: the buttons now set a plain
+`st.session_state["_pending_nav"]` flag instead, and `dashboard.py` applies it
+to `nav_radio` *before* the radio widget is (re)created on the next run -
+which is allowed, since the widget hasn't been instantiated yet in that pass.
+
+Verified with a real Streamlit `AppTest` run (not just a syntax check):
+loaded the dashboard, clicked "New Target", confirmed zero exception, and
+confirmed `session_state["nav_radio"]` actually changed to "Targets" -
+i.e. the feature now works, not just "no longer crashes".
+
 ## Investigated + fixed: dashboard header showed "Targets: 0 | Findings: 0" after a real, completed scan (2026-07-08)
 Reported symptom: a full recon->scanner->exploit run against a real target completed
 successfully (13 real findings visible in the Agent Feed and final_state), but the

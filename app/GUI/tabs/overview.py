@@ -53,23 +53,26 @@ def render_dashboard():
     # nothing ever read - dashboard.py's navigation is driven entirely by the
     # sidebar radio widget (key='nav_radio'), so clicking these did an
     # st.rerun() but never actually navigated anywhere. Setting nav_radio
-    # itself before rerun is the real fix: Streamlit re-reads a keyed
-    # widget's value from session_state on the next run.
+    # directly here raises StreamlitAPIException: that widget was already
+    # instantiated earlier in this same run (dashboard.py renders the sidebar
+    # radio before calling into this tab). Setting _pending_nav instead and
+    # letting dashboard.py apply it before the widget is (re)created on the
+    # next run is the actual fix.
     with qc1:
         if st.button(":dart: New Target", use_container_width=True):
-            st.session_state.nav_radio = "Targets"
+            st.session_state["_pending_nav"] = "Targets"
             st.rerun()
     with qc2:
         if st.button(":rocket: Start Agent", use_container_width=True):
-            st.session_state.nav_radio = "Agent"
+            st.session_state["_pending_nav"] = "Agent"
             st.rerun()
     with qc3:
         if st.button(":page_facing_up: Generate Report", use_container_width=True):
-            st.session_state.nav_radio = "Reports"
+            st.session_state["_pending_nav"] = "Reports"
             st.rerun()
     with qc4:
         if st.button(":gear: Settings", use_container_width=True):
-            st.session_state.nav_radio = "Settings"
+            st.session_state["_pending_nav"] = "Settings"
             st.rerun()
 
     st.markdown("---")

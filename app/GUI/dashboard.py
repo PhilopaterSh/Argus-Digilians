@@ -58,6 +58,16 @@ st.sidebar.title(':shield: Argus Studio')
 st.sidebar.markdown('---')
 st.sidebar.caption(f'Canonical dashboard entrypoint: `{STREAMLIT_DASHBOARD_ENTRYPOINT}`')
 
+# Quick Actions on the Dashboard tab (app/GUI/tabs/overview.py) need to
+# navigate to another tab on click. They cannot set st.session_state.nav_radio
+# directly - Streamlit raises StreamlitAPIException because that key already
+# belongs to the widget instantiated below, and it was already instantiated
+# once in this exact run before those buttons execute. The fix is the standard
+# indirection: buttons set _pending_nav + st.rerun(); on the next run, this
+# block applies it BEFORE the widget below is created, which is allowed.
+if '_pending_nav' in st.session_state:
+    st.session_state['nav_radio'] = st.session_state.pop('_pending_nav')
+
 page = st.sidebar.radio(
     'Navigation',
     ['Dashboard', 'Targets', 'Agent', 'Knowledge Graph', 'Reports', 'Settings'],
