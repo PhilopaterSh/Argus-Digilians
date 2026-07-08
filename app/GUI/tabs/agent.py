@@ -144,6 +144,12 @@ def render_agent():
 
             with st.expander(':card_index_drawer: View Full State', expanded=False):
                 st.json(current_state)
+
+            if controller:
+                log_tail = controller.get_log_tail()
+                if log_tail.strip():
+                    with st.expander(':page_facing_up: Agent Process Log (stdout/stderr)', expanded=False):
+                        st.code(log_tail, language=None)
         else:
             st.info('No results yet. Results populate here once the agent run completes.')
 

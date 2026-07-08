@@ -2,6 +2,45 @@
 
 All notable changes to this project will be documented in this file.
 
+## Investigated + fixed: dashboard header showed "Targets: 0 | Findings: 0" after a real, completed scan (2026-07-08)
+Reported symptom: a full recon->scanner->exploit run against a real target completed
+successfully (13 real findings visible in the Agent Feed and final_state), but the
+dashboard's top-of-page "Targets: N | Findings: N" counter stayed at zero.
+
+Traced the write path end to end: `recon_node` -> `ReconService.recon_suite()` ->
+`ArgusMemory.add_finding()`, which is the only Blackboard write in the entire
+LangGraph pipeline (scanner_node/exploit_node only mutate in-memory state, never
+the DB). Confirmed via direct inspection that `data/argus_intelligence.db` was
+genuinely empty after the real run - the write never landed. Called `add_finding()`
+directly (outside the agent) and it worked perfectly, proving the function itself
+is correct; the failure is specific to the live agent-subprocess context.
+
+Root cause (well-evidenced, not 100% reproduced live): each LangGraph node
+re-instantiates `WSLBridgeTools()` -> fresh `ArgusMemory()` -> several SQLite
+connections per run (migration check, init, integrity check, the actual write),
+all against the same file the Streamlit GUI's status bar concurrently polls via
+its `st.fragment` refresh. A single "database is locked" hit on the one
+`add_finding()` call per run silently drops that write with zero retry - and,
+separately, would have been invisible either way, because `AgentController`
+captured the agent subprocess's stdout/stderr via `subprocess.PIPE` and never
+read it (also a latent hang risk if the child ever filled the pipe buffer).
+
+Fixed both layers:
+- `app/core/memory/memory_service.py::_get_conn()`: SQLite busy-timeout raised
+  10s -> 30s, giving concurrent access from the GUI and the agent subprocess a
+  realistic window to resolve instead of failing fast and silently.
+- `app/GUI/utils/agent_controller.py`: agent subprocess stdout/stderr now
+  redirected to a real log file (`logs/agent_runs/agent_<run_id>.log`) instead
+  of an unread `subprocess.PIPE`, exposed via a new `get_log_tail()` method.
+- `app/GUI/tabs/agent.py`: added an "Agent Process Log" expander next to
+  "View Full State" so any future failure (this one or otherwise) is visible
+  in the GUI itself instead of requiring code inspection to diagnose.
+
+Not yet independently confirmed via a live re-run with the fix in place (would
+require another full multi-minute scan); the increased timeout is a well-reasoned
+mitigation for the evidenced lock-contention pattern, and the logging fix means
+the exact failure - if it recurs - will now be visible instead of silent.
+
 ## Fixed: pipeline gave up entirely on WAF/Cloudflare-protected targets (2026-07-07)
 recon -> scanner -> exploit each had a single, unconditional failure point:
 recon required nmap to parse a port; scanner required recon's port list to

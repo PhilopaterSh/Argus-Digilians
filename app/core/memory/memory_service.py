@@ -31,7 +31,14 @@ class ArgusMemory:
     # ------------------------------------------------------------------
     @contextmanager
     def _get_conn(self) -> Any:
-        conn = sqlite3.connect(self.db_path, timeout=10)
+        # 10s was too tight for the actual concurrency pattern: the LangGraph
+        # agent subprocess (each node re-instantiates ArgusMemory, so this
+        # opens/closes several connections per run) writes to this same file
+        # while the Streamlit GUI's status bar polls it on every st.fragment
+        # refresh. A single "database is locked" hit on the one add_finding()
+        # call per recon pass silently drops that write with no retry - see
+        # CHANGELOG.md 2026-07-08 Blackboard-write investigation.
+        conn = sqlite3.connect(self.db_path, timeout=30)
         conn.row_factory = sqlite3.Row
         try:
             conn.execute("PRAGMA journal_mode=WAL")

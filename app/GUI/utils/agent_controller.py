@@ -23,6 +23,8 @@ class AgentController:
         self.run_id = None
         self.state_file = None
         self.run_mode = AGENT_RUN_MODE_PRODUCTION
+        self.log_file = None
+        self.log_path = None
 
     def start(self, target, options=None):
         self.run_id = str(uuid.uuid4())
@@ -57,11 +59,21 @@ class AgentController:
         if options:
             env['AGENT_OPTIONS'] = json.dumps(options)
 
+        # subprocess.PIPE with nothing ever reading it has two problems, not
+        # one: everything the child logs (including any silently-caught
+        # exception like a "database is locked" write failure) is discarded
+        # with no way to see it, AND if the child ever writes enough to fill
+        # the OS pipe buffer, it blocks forever - a real hang risk on a
+        # verbose/long scan. Redirect to a real file instead: visible, and
+        # never blocks the child.
+        self.log_path = os.path.join(self.state_dir, f'agent_{self.run_id}.log')
+        self.log_file = open(self.log_path, 'w', encoding='utf-8', errors='replace')
+
         self.process = subprocess.Popen(
             [sys.executable, '-u', str(script), '--target', target, '--state-file', self.state_file],
             env=env,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            stdout=self.log_file,
+            stderr=subprocess.STDOUT,
             cwd=str(project_root),
         )
         return self.run_id
@@ -77,8 +89,24 @@ class AgentController:
                 'current_node': 'terminated',
                 'updated_at': utc_now_iso(),
             })
+            self._close_log()
             return True
         return False
+
+    def _close_log(self):
+        if self.log_file and not self.log_file.closed:
+            self.log_file.close()
+
+    def get_log_tail(self, max_lines=200):
+        """Read the agent subprocess's captured stdout/stderr for diagnostics."""
+        if not self.log_path or not os.path.exists(self.log_path):
+            return ""
+        try:
+            with open(self.log_path, 'r', encoding='utf-8', errors='replace') as handle:
+                lines = handle.readlines()
+            return "".join(lines[-max_lines:])
+        except OSError:
+            return ""
 
     def get_status(self):
         if not self.state_file or not os.path.exists(self.state_file):
@@ -96,7 +124,10 @@ class AgentController:
     def is_running(self):
         if self.process is None:
             return False
-        return self.process.poll() is None
+        running = self.process.poll() is None
+        if not running:
+            self._close_log()
+        return running
 
     def _write_state(self, updates):
         if not self.state_file:
