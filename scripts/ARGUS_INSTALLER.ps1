@@ -76,6 +76,8 @@ pypdf
 python-dotenv
 paramiko
 torchvision
+networkx
+pyvis
 "@
 
 # check_and_install.sh - Kali Linux tool installer (run inside WSL as root)

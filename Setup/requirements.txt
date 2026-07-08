@@ -15,3 +15,5 @@ pypdf
 python-dotenv
 paramiko
 torchvision
+networkx
+pyvis
