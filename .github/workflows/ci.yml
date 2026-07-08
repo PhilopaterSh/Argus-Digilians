@@ -30,10 +30,15 @@ jobs:
         run: python scripts/validate_ascii.py
 
   # Stage 1 + 2: lint (ruff) and type-check (mypy on typed modules). BLOCKING.
+  # Also runs the Constitution IX (no-duplication) and docstring-compliance gates,
+  # both diff-scoped: they block NEW violations without retroactively failing on
+  # the existing, separately-tracked backlog (specs/checklist.md CHK052/058-063).
   lint-type:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # required for `git diff <base>...HEAD` in the diff-scoped gates below
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -43,6 +48,10 @@ jobs:
         run: ruff check .
       - name: Mypy (typed modules)
         run: mypy app/core/rag/manifest.py app/core/rag/vector_store.py app/core/rag/embeddings.py app/core/llm_factory.py app/core/agent/brain.py app/core/agent/agent_factory.py app/core/agent/react_workflow.py scripts/validate_specs.py scripts/validate_ascii.py scripts/get_port.py
+      - name: Docstring compliance - new/changed code only (specs/016)
+        run: python scripts/check_docstrings.py --diff "origin/${{ github.base_ref || 'main' }}" app scripts tests
+      - name: No-duplication gate - new/changed code only (Constitution IX)
+        run: python scripts/check_duplication.py --diff "origin/${{ github.base_ref || 'main' }}" app scripts Setup
 
   # Stage 6 (partial): build validation via byte-compilation. BLOCKING.
   build-validation:
