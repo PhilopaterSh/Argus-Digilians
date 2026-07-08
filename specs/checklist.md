@@ -1,7 +1,9 @@
-# Implementation Checklist: Argus Security Framework (Phases 005-009)
+# Implementation Checklist: Argus Security Framework (Phases 005-014)
 
 **Purpose**: Verify all implementation phases meet spec requirements
 **Created**: 2026-06-29
+**Updated**: 2026-07-07 — extended to cover Phases 010-014 (previously untracked here; each
+phase's own `specs/<phase>/tasks.md` remains the source of truth for individual task items).
 
 ---
 
@@ -67,14 +69,64 @@
 
 ---
 
+## Phase 010 — LangGraph Agent
+
+- [x] CHK043 `build_tactical_graph()` implements recon → scanner → exploit → reflective →
+  self_heal/post_exploit as a LangGraph `StateGraph` (`app/core/agent/graph.py`)
+- [x] CHK044 Conditional `reflective → {exploit, END}` edge added so an exhausted retry
+  budget ends the run instead of guaranteeing one more failed exploit attempt
+  (`app/core/agent/graph.py::_route_after_reflective`)
+- [x] CHK045 Recon degrades explicitly (never silently) when nmap can't confirm a port:
+  `-Pn` retry tagged `ports_scan_degraded`, whatweb-confirmed scheme-port inference tagged
+  `ports_inferred` (`app/tools/recon.py`, `app/core/agent/nodes/recon.py`)
+- [x] CHK046 Scanner falls back to the target's own URL scheme when `open_ports` is empty
+  and persists it back into state so exploit doesn't redundantly fail
+  (`app/core/agent/nodes/scanner.py`)
+- [x] CHK047 30/33 tasks checked in `specs/010-langgraph-agent/tasks.md`; remaining 3
+  (T027/T029/T031-T033-range) are explicitly tracked as out-of-scope, not silent gaps
+- [x] CHK048 163/163 pytest passing per CHANGELOG.md validation entry (2026-07-07),
+  excluding one pre-existing unrelated network-dependent test
+
+## Phase 011 — GUI Enhancement
+
+- [x] CHK049 Non-functional Blackboard status, Knowledge Graph, and dashboard buttons wired
+  to real backend data (commit `179e979`)
+- [x] CHK050 Blocking sleep-loop polling replaced with non-blocking `st.fragment` (commit `1186adb`)
+- [x] CHK051 Agent state-file write race between parent/child process removed (commit `194dbc5`)
+- [ ] **CHK052 (OPEN — tracking gap)** `specs/011-gui-enhancement/tasks.md` still shows 0/31
+  tasks checked (`[ ]` on every line) despite the corresponding code (`app/GUI/dashboard.py`,
+  `agent_controller.py`, `blackboard.py`, etc.) existing and the fixes above being merged and
+  live-validated. The work is done; the tracking file was never updated to reflect it. **Action
+  owner must reconcile `specs/011-gui-enhancement/tasks.md` against actual code before this
+  phase can be marked compliant** — not fixed in this pass, since marking 31 individual items
+  done requires per-item code verification, not a blanket check.
+
+## Phase 012 — Spec Reconciliation
+
+- [x] CHK053 32/33 tasks checked in `specs/012-spec-reconciliation/tasks.md`
+
+## Phase 013 — LangGraph Workflow
+
+- [x] CHK054 34/34 tasks checked in `specs/013-langgraph-workflow/tasks.md`
+
+## Phase 014 — Containerized Lab
+
+- [ ] CHK055 5/13 tasks checked in `specs/014-containerized-lab/tasks.md` — in progress
+- [x] CHK056 `deploy/docker-lab/{Dockerfile,docker-compose.yml}` present, version-pinned
+  (`ollama/ollama:0.3.14`, `juice-shop:v17.1.1`, gobuster 3.6.0, ffuf 2.1.0, subfinder 2.6.6 — FR-006)
+- [x] CHK057 Lab is additive/optional and does not alter the WSL production path (FR-007)
+
+---
+
 ## Summary
 
 | Metric | Value |
 |--------|-------|
-| Phases completed | 5 (005-009) |
-| Tasks completed | 60+ |
-| Tests written | 68 (new) |
-| Total tests passing | 88 |
-| Commits | 16+ |
-| New files created | 20+ |
-| Files refactored | 10+ |
+| Phases completed | 5 (005-009) fully; 010/012/013/014 substantially; 011 code-complete but tracking-stale |
+| Tasks completed | 60+ (005-009) + 30/33 (010) + 0/31-tracked-but-code-complete (011) + 32/33 (012) + 34/34 (013) + 5/13 (014) |
+| Tests written | 68 (new, 005-009) |
+| Total tests passing | 163/163 per latest CHANGELOG.md validation (2026-07-07) |
+| Commits | 16+ (005-009) + ongoing |
+| New files created | 20+ (005-009) |
+| Files refactored | 10+ (005-009) |
+| **Open compliance gaps** | **CHK052** (011 task tracking vs. code mismatch); **CHK055** (014 in progress, not a gap — expected) |

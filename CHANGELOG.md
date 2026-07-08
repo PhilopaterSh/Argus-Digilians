@@ -2,6 +2,48 @@
 
 All notable changes to this project will be documented in this file.
 
+## Fixed: pipeline gave up entirely on WAF/Cloudflare-protected targets (2026-07-07)
+recon -> scanner -> exploit each had a single, unconditional failure point:
+recon required nmap to parse a port; scanner required recon's port list to
+be non-empty; exploit required scanner's payload to be non-None. Against a
+target like `https://example.com` fronted by Cloudflare, the heavy
+`nmap -sV --top-ports 100` scan routinely times out or gets most ports
+filtered, so `open_ports` came back empty even though whatweb/dig clearly
+proved the site was live - cascading into "No web-capable port available"
+(scanner) then "No payload selected" (exploit), with the graph still
+reaching `status: completed` and reporting all-zero results. Nothing
+crashed; it failed logically and silently, exactly as observed.
+
+Fixed with two independent, defense-in-depth layers:
+- `app/tools/recon.py::recon_suite()`: if the primary `-sV --top-ports 100`
+  scan times out, errors, or reports the host down/0 hosts up, automatically
+  retries with `nmap -Pn -T4 --top-ports 20` - `-Pn` skips the ICMP/TCP
+  host-discovery ping that WAFs/CDNs like Cloudflare often drop (the actual
+  reason nmap gives up against such targets), and dropping `-sV` avoids the
+  slow per-port version-probing that was timing out.
+- `app/core/agent/nodes/recon.py`: if even that retry can't confirm a port
+  but whatweb got a real HTTP(S) response, infers the target URL's scheme
+  port (443/80) as a last-resort fallback, explicitly tagged
+  `ports_inferred` (never silently presented as an nmap-confirmed result).
+- `app/core/agent/nodes/scanner.py`: no longer hard-blocks when
+  `open_ports` is empty - if the target itself is an `http(s)://` URL it
+  scans that scheme's port directly regardless of what port-scanning could
+  confirm, and persists that port back into `state["open_ports"]` so
+  `exploit_node` (which independently re-derives its port) doesn't
+  redundantly fail right after scanner just used it.
+
+Validated live against the exact target/scenario described
+(`https://example.com`, Cloudflare-fronted): the primary nmap scan needed
+the `-Pn` retry (`raw_recon.ports_scan_degraded: true` in the run's
+final_state), which then returned real confirmed ports `[80, 443, 8080]`
+(everything else correctly `filtered` by Cloudflare's edge). Scanner found
+19 real findings (explicit Cloudflare detection, missing security headers).
+Exploit ran three real probes through the reflective retry loop
+(generic_probe -> sqli -> path_traversal); `exploit_success: false` is now
+an honest, verified negative rather than a structural inability to test
+anything. `pytest`: 163/163 passing (excluding one pre-existing,
+network-dependent, unrelated failure in test_smart_web_search.py).
+
 ## Fixed: GUI performance + non-functional buttons + empty results (2026-07-07)
 Full root-cause writeup with before/after evidence in
 `specs/011-gui-enhancement/tasks.md`'s "Post-Implementation Bug Fixes"

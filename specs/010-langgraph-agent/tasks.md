@@ -61,4 +61,44 @@ below; see each item for evidence. Only T027 and T029 are genuine, real gaps.
 
 - [ ] T031 Add advanced multi-agent orchestration.
 - [ ] T032 Add nonessential demo-only fallback behaviors to production runtime.
+
+## Post-Implementation Debugging Session (2026-07-07)
+
+Requested live verification: run `scripts/LAUNCH_STUDIO.bat` for real and add a
+target through the actual dashboard to see if anything surfaces. Findings:
+
+- **Live server**: `LAUNCH_STUDIO.bat` started cleanly (Ollama/SSH checks
+  passed), Streamlit served real `HTTP 200` on the configured port (12199).
+- **Add-target flow**: driven programmatically via Streamlit's `AppTest`
+  harness (the same mechanism `tests/test_gui/test_dashboard_apptest.py`
+  uses) to simulate exactly what a browser click does: typed a URL, clicked
+  "Add Target" → success message shown, `session_state.targets` populated
+  correctly, Dashboard's metrics updated to reflect it (`Total Targets: 1`,
+  real `Completed`/`Failed` counts pulled from `logs/agent_runs/`), clicked
+  "Run" → `AgentController.start()` spawned a real agent subprocess with no
+  exceptions anywhere in the GUI flow.
+- **Real anomaly found, then isolated**: the spawned recon run failed
+  immediately (~15ms) with `[Errno 22] Invalid argument` - too fast to be a
+  real network/subprocess call. Investigated via three isolation steps: (1)
+  calling `ReconService.recon_suite()` directly in a standalone script -
+  succeeded cleanly, real whatweb/nmap output; (2) spawning
+  `scripts/run_agent.py` exactly as `AgentController.start()` does, but from
+  a normal process - also succeeded, ran the full real duration; (3) only
+  reproduces when spawned from *within* the `AppTest` "bare mode" process
+  itself. Conclusion: this is an artifact of the `AppTest` test harness's
+  non-standard process/stdio context propagating through the
+  `AgentController → subprocess.Popen(run_agent.py) → subprocess.Popen(wsl.exe)`
+  chain - not reachable through the real browser-driven dashboard, which a
+  normally-launched `streamlit run` server process doesn't share.
+- **Two small, permanent hardening fixes applied anyway** (safe, minimal,
+  no behavior change in the normal case): `app/tools/command_runner.py`'s
+  `_run_direct_wsl()` now passes `stdin=subprocess.DEVNULL` explicitly
+  instead of inheriting the parent's stdin handle (didn't resolve this
+  specific case, but closes a real class of Windows `CreateProcess` failure
+  in non-standard launch contexts); `app/core/agent/nodes/recon.py`'s
+  exception handler now uses `logger.exception()` instead of `.error()`,
+  capturing the full traceback instead of just `str(e)` for any future
+  silent-looking failure - this is what made the isolation possible.
+- **Validation**: `pytest`: 163/163 passing (1 pre-existing, unrelated,
+  network-dependent failure deselected).
 - [ ] T033 Add UI polish that does not change observability or correctness.

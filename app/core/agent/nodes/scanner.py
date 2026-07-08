@@ -30,6 +30,31 @@ def scanner_node(state: AgentState) -> AgentState:
     state["updated_at"] = utc_now_iso()
 
     web_port = _first_web_port(state.get("open_ports", []))
+    target_ip = state["target_ip"]
+
+    if not web_port:
+        # recon_node may have found zero confirmed ports (nmap timeout, or a
+        # WAF/CDN like Cloudflare blocking the scan outright - see
+        # app/core/agent/nodes/recon.py's own scheme-inference fallback,
+        # which itself can still come up empty on a transport-level
+        # failure). Don't hard-block scanning on that single failure point:
+        # if the target itself is an http(s) URL, it's unambiguously a web
+        # target regardless of what port-scanning could confirm - fall back
+        # to scanning it directly via its own scheme instead of giving up.
+        if target_ip.startswith("https://"):
+            web_port = 443
+            logger.warning("[Scanner Node] No confirmed port from recon; falling back to scheme-inferred port 443 for %s", target_ip)
+        elif target_ip.startswith("http://"):
+            web_port = 80
+            logger.warning("[Scanner Node] No confirmed port from recon; falling back to scheme-inferred port 80 for %s", target_ip)
+
+        if web_port:
+            # exploit_node independently re-derives its web port from
+            # state["open_ports"] - persist the fallback here too, or
+            # exploit would redundantly fail with "no web-capable port"
+            # right after scanner just successfully used this same port.
+            state["open_ports"] = [web_port]
+
     if not web_port:
         state["current_payload"] = None
         state["vulnerabilities"] = []

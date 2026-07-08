@@ -61,6 +61,15 @@ class CommandRunner:
                 timeout=timeout,
                 encoding="utf-8",
                 errors="ignore",
+                # Explicit stdin avoids inheriting the parent process's stdin
+                # handle. Normally harmless, but in a non-standard launch
+                # context (e.g. a test harness or headless spawn with no real
+                # console attached) an inherited/invalid stdin handle can
+                # make CreateProcess fail outright with
+                # OSError: [Errno 22] Invalid argument before the command
+                # ever runs - observed once via Streamlit's AppTest harness,
+                # not through the real dashboard.
+                stdin=subprocess.DEVNULL,
             )
 
             output = result.stdout if result.stdout else result.stderr

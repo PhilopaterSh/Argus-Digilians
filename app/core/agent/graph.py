@@ -70,6 +70,21 @@ def should_continue(state: AgentState):
     return "reflective"
 
 
+def _route_after_reflective(state: AgentState):
+    # reflective_node clears current_payload to None when it exhausts the
+    # retry budget (see app/core/agent/nodes/reflective.py), but the old
+    # unconditional edge to "exploit" still ran one more, guaranteed-to-fail
+    # exploit attempt anyway - producing a confusing trailing
+    # "Attempting controlled probe with payload None" / "No payload
+    # selected by scanner" pair on every single run that exhausts its
+    # retries, even though the real work was already done and reflective's
+    # own "Retry budget exhausted" event already explained why.
+    if state.get("current_payload") is None:
+        save_entry(state["target_ip"], dict(state), "FAILED")
+        return END
+    return "exploit"
+
+
 def build_tactical_graph():
     workflow = StateGraph(AgentState)
 
@@ -88,7 +103,11 @@ def build_tactical_graph():
         should_continue,
         {"post_exploit": "post_exploit", "reflective": "reflective", "self_heal": "self_heal", END: END},
     )
-    workflow.add_edge("reflective", "exploit")
+    workflow.add_conditional_edges(
+        "reflective",
+        _route_after_reflective,
+        {"exploit": "exploit", END: END},
+    )
     workflow.add_edge("self_heal", "exploit")
     workflow.add_edge("post_exploit", END)
 
