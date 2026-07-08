@@ -2,6 +2,32 @@
 
 All notable changes to this project will be documented in this file.
 
+## Fixed: same real site fragmented into multiple Blackboard targets (2026-07-08)
+Found while verifying the SQLite lock-contention fix against a real scan: a run
+against `https://www.cultbeauty.co.uk/` correctly incremented Targets by +1, but
+Findings jumped by +54 for a scan that found 27 real vulnerabilities. Direct
+inspection of `data/argus_intelligence.db` showed the same site split across two
+target rows - `www.cultbeauty.co.uk` (2 findings) and `www.cultbeauty.co.uk:80`
+(53 findings) - fragmenting both the counters and the Knowledge Graph.
+
+Root cause: `app/tools/recon.py::recon_suite()` derives its Blackboard domain key
+from the bare original URL (no port), while `app/tools/scanners.py`,
+`evasion.py`, `reflective_verification.py` (x2), `secrets.py`, `simulation.py`,
+and `crawler.py` each independently derived theirs from a port-qualified
+`target_url` (e.g. `http://example.com:80`) using the same
+`url.replace("https://", "").replace("http://", "").split("/")[0]` expression,
+which strips the scheme but not the port - so the same real site wrote to two
+different domain keys depending on which module recorded it.
+
+Fixed by extracting one canonical `normalize_domain_for_memory()` into
+`app/tools/utils.py` (strips both scheme and port) and repointing all 8 call
+sites at it instead of each hand-rolling the same incomplete expression
+(Constitution IX - Single Source of Truth). Verified the fix produces matching
+keys for both URL forms directly; existing fragmented data in a live DB is not
+retroactively merged by this fix, only future writes are correct. Full test
+suite (`tests/test_tools/`, `tests/test_memory.py`, unit tier): 60/60 passing,
+zero regressions.
+
 ## Fixed: Dashboard "Quick Actions" crashed with StreamlitAPIException on click (2026-07-08)
 Reported live: clicking "New Target" (or Start Agent/Generate Report/Settings) on
 the Dashboard tab crashed with `st.session_state.nav_radio cannot be modified

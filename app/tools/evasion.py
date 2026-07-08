@@ -1,6 +1,8 @@
 import random
 import time
 
+from app.tools.utils import normalize_domain_for_memory
+
 class EvasionService:
     """Performs targeted, WAF-evasive probes for SQLi and Path Traversal."""
 
@@ -40,7 +42,7 @@ class EvasionService:
         """Performs targeted, WAF-evasive probes for SQLi and Path Traversal."""
         print(f"[*] [Argus-Core] Starting Advanced Evasion Probes for: {url}")
         results = []
-        clean_target = url.replace("https://", "").replace("http://", "").split("/")[0]
+        clean_target = normalize_domain_for_memory(url)
 
         # 1. Path Traversal Evasion
         # --max-time/--connect-timeout let curl itself enforce the bound

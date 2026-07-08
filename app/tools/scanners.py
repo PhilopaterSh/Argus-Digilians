@@ -1,6 +1,9 @@
 import os
 from datetime import datetime
 
+from app.tools.utils import normalize_domain_for_memory
+
+
 class VulnerabilityScanners:
     """Specialized service for running automated scanners like Nikto and FFUF."""
 
@@ -25,7 +28,7 @@ class VulnerabilityScanners:
 
         findings = [l for l in res.split('\n') if l.strip().startswith("+")]
         if findings:
-            target_for_mem = url.replace("https://", "").replace("http://", "").split("/")[0]
+            target_for_mem = normalize_domain_for_memory(url)
             for f in findings:
                 self.memory.add_finding(target_for_mem, "nikto", "vulnerability", f, "Potential vulnerability detected")
 
@@ -42,7 +45,7 @@ class VulnerabilityScanners:
 
         if res.strip():
             paths = res.strip().splitlines()
-            clean_target = url.replace("https://", "").replace("http://", "").split("/")[0]
+            clean_target = normalize_domain_for_memory(url)
             for p in paths[:20]:
                 self.memory.add_finding(clean_target, "ffuf", "path", p, "Hidden path discovered")
             return f"--- [DIR] FFUF DISCOVERY REPORT ---\nDiscovered {len(paths)} paths. Top findings:\n" + "\n".join(paths[:40])

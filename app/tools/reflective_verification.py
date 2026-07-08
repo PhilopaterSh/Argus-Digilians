@@ -2,6 +2,7 @@ import re
 import json
 import urllib.parse
 from app.core.memory.memory_service import ArgusMemory
+from app.tools.utils import normalize_domain_for_memory
 
 MAX_HISTORY = 10
 LOOP_THRESHOLD = 3
@@ -72,7 +73,7 @@ class ReflectiveVerificationService:
         if not raw_output or not raw_output.strip():
             return "Analysis: Output is empty. Target might have timed out."
 
-        clean_target = url.replace("https://", "").replace("http://", "").split("/")[0]
+        clean_target = normalize_domain_for_memory(url)
 
         # 1. WAF Block Page Verification
         waf_indicators = [
@@ -129,7 +130,7 @@ class ReflectiveVerificationService:
         assessment_report = ["=== TASK DIFFICULTY ASSESSMENT (TDA) REPORT ==="]
         
         for target in target_list:
-            clean_target = target.replace("https://", "").replace("http://", "").split("/")[0]
+            clean_target = normalize_domain_for_memory(target)
             
             # Gather intelligence details from memory to compute metrics
             # 1. Path length (e.g., number of open ports / services)

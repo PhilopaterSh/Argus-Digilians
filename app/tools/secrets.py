@@ -1,5 +1,7 @@
 import re
 
+from app.tools.utils import normalize_domain_for_memory
+
 class SecretAnalyzer:
     """Analyzes page content and JS files for leaked secrets and credentials."""
 
@@ -25,7 +27,7 @@ class SecretAnalyzer:
         page_content = self.runner.run(f"curl -s -L {url} | head -n 500")
         
         found = []
-        clean_target = url.replace("https://", "").replace("http://", "").split("/")[0]
+        clean_target = normalize_domain_for_memory(url)
 
         for name, pattern in patterns.items():
             matches = re.findall(pattern, page_content, re.IGNORECASE)

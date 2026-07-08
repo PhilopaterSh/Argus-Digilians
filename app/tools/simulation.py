@@ -4,6 +4,7 @@ import time
 import random
 from datetime import datetime
 from app.core.memory.memory_service import ArgusMemory
+from app.tools.utils import normalize_domain_for_memory
 
 class ZEROAPTSimulation:
     """
@@ -23,7 +24,7 @@ class ZEROAPTSimulation:
           - L2: SOC / Sigma rules (Process tracing, detects standard exploits)
           - L3: Active Adversary Tracking (Threat intelligence matching, aggressive blocking)
         """
-        clean_target = target_url.replace("https://", "").replace("http://", "").split("/")[0]
+        clean_target = normalize_domain_for_memory(target_url)
         print(f"[*] Starting ZERO-APT Simulation against: {clean_target} (Defense: {defense_level})")
         
         # Attack Execution Lifecycle simulation

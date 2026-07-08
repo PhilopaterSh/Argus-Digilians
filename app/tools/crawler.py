@@ -1,3 +1,6 @@
+from app.tools.utils import normalize_domain_for_memory
+
+
 class CrawlerService:
     """Discovers internal links and entry points to expand the attack surface."""
 
@@ -13,7 +16,7 @@ class CrawlerService:
         
         links = [l for l in res.split('\n') if l.strip() and not l.startswith(('#', 'javascript'))]
         
-        clean_target = url.replace("https://", "").replace("http://", "").split("/")[0]
+        clean_target = normalize_domain_for_memory(url)
         for link in links[:20]:
             self.memory.add_finding(clean_target, "crawler", "link", link, f"Discovered link: {link}")        
 

@@ -2,6 +2,8 @@ import re
 import json
 from datetime import datetime
 
+from app.tools.utils import normalize_domain_for_memory
+
 class ReconService:
     """Handles subdomain enumeration, prioritization, and broad reconnaissance suites."""
 
@@ -80,7 +82,7 @@ class ReconService:
 
     def recon_suite(self, url, selected_targets=None):
         """Runs expanded recon with smart target prioritization and parallel execution."""
-        clean_target = url.replace("https://", "").replace("http://", "").rstrip('/')
+        clean_target = normalize_domain_for_memory(url)
         print(f"[*] Starting Full Recon Suite for: {clean_target}")
 
         results = {}
