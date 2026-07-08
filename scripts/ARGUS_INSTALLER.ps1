@@ -11,7 +11,7 @@
 
     This script embeds all external dependencies (requirements.txt,
     check_and_install.sh, argus_recon_fixed.sh) internally as here-strings.
-    It has ZERO external file dependencies ??? copy this ONE file and run it.
+    It has ZERO external file dependencies - copy this ONE file and run it.
 
     After a successful first run, the old Setup/ directory is archived to
     Setup_legacy/.
@@ -29,7 +29,7 @@
     Skip the embedded final health check.
 
 .PARAMETER OnlyHealthCheck
-    Run ONLY the embedded health check ??? no self-elevation, no install steps,
+    Run ONLY the embedded health check - no self-elevation, no install steps,
     no cleanup. Exits with 0 if healthy, non-zero otherwise.
 
 .PARAMETER RetryCount
@@ -59,7 +59,7 @@ param(
 # EMBEDDED DEPENDENCIES (self-contained: no external files needed)
 # ============================================================================
 
-# requirements.txt ??? Python package dependencies
+# requirements.txt - Python package dependencies
 $EMBEDDED_REQUIREMENTS = @"
 langchain
 langchain-ollama
@@ -78,7 +78,7 @@ paramiko
 torchvision
 "@
 
-# check_and_install.sh ??? Kali Linux tool installer (run inside WSL as root)
+# check_and_install.sh - Kali Linux tool installer (run inside WSL as root)
 $EMBEDDED_CHECK_INSTALL_SH = @'
 #!/usr/bin/env bash
 set -u
@@ -464,7 +464,7 @@ echo "[OK] Argus environment is synchronized."
 echo "========================================================"
 '@
 
-# argus_recon_fixed.sh ??? standalone recon script (legacy, embedded for reference)
+# argus_recon_fixed.sh - standalone recon script (legacy, embedded for reference)
 $EMBEDDED_ARGUS_RECON_SH = @'
 #!/bin/bash
 # Argus Recon Engine - Robust Version
@@ -526,6 +526,8 @@ $PYTHON_REQUIRED       = "3.12"
 $KALI_DISTRO           = "kali-linux"
 $OLLAMA_MODEL          = if ($env:ARGUS_MODEL) { $env:ARGUS_MODEL } else { "WhiteRabbitNeo/WhiteRabbitNeo-V3-7B:latest" }  # default AI model; overridden by config.yaml at runtime if present
 $OLLAMA_MODEL_MIN_GB   = if ($env:ARGUS_MODEL_MIN_GB) { [int]$env:ARGUS_MODEL_MIN_GB } else { 8 }
+$OLLAMA_EMBED_MODEL    = if ($env:ARGUS_EMBED_MODEL) { $env:ARGUS_EMBED_MODEL } else { "nomic-embed-text" }  # RAG embedding model; overridden by config.yaml's rag.embedding_model if present
+$OLLAMA_EMBED_MODEL_MIN_GB = 1
 $MODEL_PULL_RETRIES    = if ($env:ARGUS_MODEL_PULL_RETRIES) { [int]$env:ARGUS_MODEL_PULL_RETRIES } else { 3 }
 $VENV_NAME             = "Argus_venv"
 
@@ -582,6 +584,32 @@ function Write-Info  { param([string]$Msg) Write-Log "INFO" $Msg Cyan }
 function Record-Step {
     param([int]$Id, [string]$Name, [string]$Status, [string]$Detail = "")
     $script:StepResults.Add([pscustomobject]@{ Id = $Id; Name = $Name; Status = $Status; Detail = $Detail })
+}
+
+# ============================================================================
+# MODEL NAME RESOLUTION (config.yaml is the single source of truth when present)
+# ============================================================================
+function Resolve-OllamaModelNames {
+    # Explicit $script: scope so this actually persists back to the caller -
+    # the previous version of this logic lived inline inside the AI Environment
+    # step and did a bare `$OLLAMA_MODEL = ...` assignment, which in PowerShell
+    # only ever updates a function-local shadow, never the script-scope
+    # variable. That meant anything reading $OLLAMA_MODEL/$OLLAMA_EMBED_MODEL
+    # from a different function (like the health check, which can run standalone
+    # via -OnlyHealthCheck before this step ever executes) would silently see
+    # the env-var/hardcoded default instead of the config.yaml value.
+    $resolvedModel = $script:OLLAMA_MODEL
+    $resolvedEmbedModel = $script:OLLAMA_EMBED_MODEL
+    $cfgPath = Join-Path $ProjectRoot "config.yaml"
+    if (Test-Path -LiteralPath $cfgPath) {
+        try {
+            $yaml = Get-Content -LiteralPath $cfgPath -Raw
+            if (-not $env:ARGUS_MODEL -and $yaml -match 'model_name:\s*"(.+)"') { $resolvedModel = $Matches[1] }
+            if (-not $env:ARGUS_EMBED_MODEL -and $yaml -match 'embedding_model:\s*"(.+)"') { $resolvedEmbedModel = $Matches[1] }
+        } catch { }
+    }
+    $script:OLLAMA_MODEL = $resolvedModel
+    $script:OLLAMA_EMBED_MODEL = $resolvedEmbedModel
 }
 
 # ============================================================================
@@ -835,6 +863,44 @@ function Test-KaliDistro {
     } catch { return $false }
 }
 
+function Test-KaliDistroRunning {
+    # Distro can be installed but Stopped (a normal idle state, not an error) - the
+    # installer previously never checked this distinction at all, so a genuinely
+    # working install could be misreported as broken simply because the VM hadn't
+    # been booted yet this session.
+    if (-not (Test-KaliDistro)) { return $false }
+    try {
+        $verbose = (wsl -l -v 2>$null) -replace "`0", ""
+        $line = $verbose | Where-Object { $_ -match [regex]::Escape($KALI_DISTRO) }
+        return ($null -ne $line -and ($line -join " ") -match "Running")
+    } catch { return $false }
+}
+
+function Start-KaliDistroIfNeeded {
+    if (Test-KaliDistroRunning) {
+        Write-OK "Kali distro '$KALI_DISTRO' is already running."
+        return $true
+    }
+    if (-not (Test-KaliDistro)) { return $false }
+    if ($DryRun) {
+        Write-Info "[DryRun] Would boot Kali distro '$KALI_DISTRO' (wsl -d $KALI_DISTRO -- true)."
+        return $true
+    }
+    Write-Info "Kali distro '$KALI_DISTRO' is installed but not running. Booting it..."
+    try {
+        wsl -d $KALI_DISTRO -- true 2>&1 | ForEach-Object { Write-Info $_ }
+        if (Test-KaliDistroRunning) {
+            Write-OK "Kali distro '$KALI_DISTRO' booted successfully."
+            return $true
+        }
+        Write-Warn "Kali distro did not report Running state after boot attempt."
+        return $false
+    } catch {
+        Write-Warn "Failed to boot Kali distro: $($_.Exception.Message)"
+        return $false
+    }
+}
+
 function Install-KaliDistro {
     if (Test-KaliDistro) {
         Write-OK "Kali Linux distro '$KALI_DISTRO' is already installed."
@@ -867,6 +933,25 @@ function Test-Ollama {
     return $null -ne (Get-Command ollama.exe -ErrorAction SilentlyContinue)
 }
 
+function Test-OllamaApiResponding {
+    # A running *process* is not the same guarantee as a responding *API* - the
+    # engine could be starting up, crashed after launch, or bound to a different
+    # port. Check the actual port, matching what app/core/llm_factory.py talks to.
+    try {
+        $res = Test-NetConnection -ComputerName "127.0.0.1" -Port 11434 -WarningAction SilentlyContinue
+        return [bool]$res.TcpTestSucceeded
+    } catch { return $false }
+}
+
+function Wait-ForOllamaApi {
+    param([int]$MaxAttempts = 10, [int]$DelaySeconds = 2)
+    for ($i = 1; $i -le $MaxAttempts; $i++) {
+        if (Test-OllamaApiResponding) { return $true }
+        Start-Sleep -Seconds $DelaySeconds
+    }
+    return $false
+}
+
 function Install-Ollama {
     if (Test-Ollama) {
         Write-OK "Ollama engine is already installed."
@@ -896,23 +981,37 @@ function Install-Ollama {
 }
 
 function Start-OllamaIfNeeded {
-    $running = $false
-    $procs = Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.ProcessName -like "*ollama*" }
-    if ($procs) { $running = $true }
-
-    if ($running) {
-        Write-OK "Ollama engine is already running."
+    # Detect -> fix -> RE-VERIFY: a process existing is not proof the API is live,
+    # so every path below ends by actually polling the port rather than assuming
+    # success after a fixed sleep.
+    if (Test-OllamaApiResponding) {
+        Write-OK "Ollama engine is already running and the API is responding."
         return $true
     }
+
+    $procs = Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.ProcessName -like "*ollama*" }
+    if ($procs) {
+        Write-Warn "Ollama process is running but the API (port 11434) is not responding yet. Waiting..."
+        if (Wait-ForOllamaApi -MaxAttempts 10 -DelaySeconds 2) {
+            Write-OK "Ollama API is now responding."
+            return $true
+        }
+        Write-Warn "Ollama process is running but the API never came up. It may need a manual restart."
+        return $false
+    }
+
     if ($DryRun) {
-        Write-Info "[DryRun] Would start the Ollama engine."
+        Write-Info "[DryRun] Would start the Ollama engine and wait for the API to respond."
         return $true
     }
     try {
         Start-Process -FilePath "ollama" -ArgumentList "serve" -ErrorAction SilentlyContinue
-        Start-Sleep -Seconds 5
-        Write-OK "Ollama engine started."
-        return $true
+        if (Wait-ForOllamaApi -MaxAttempts 15 -DelaySeconds 2) {
+            Write-OK "Ollama engine started and API is responding."
+            return $true
+        }
+        Write-Warn "Ollama process started but the API did not respond within the wait window."
+        return $false
     } catch {
         Write-Warn "Could not auto-start Ollama: $($_.Exception.Message)"
         return $false
@@ -958,16 +1057,93 @@ function Invoke-StepHostFoundation {
         wsl --set-default-version 2 > $null 2>&1
     }
 
-    $ollamaOk = Install-Ollama
-    if ($ollamaOk) { $null = Start-OllamaIfNeeded }
+    # Detect -> fix -> re-verify: a distro can be installed but Stopped (a normal
+    # idle state after a reboot or `wsl --shutdown`) - this was never checked
+    # before, so a working install could be reported as broken simply because
+    # the VM hadn't booted yet this session.
+    $kaliRunningOk = Start-KaliDistroIfNeeded
+    if (-not $kaliRunningOk) {
+        Write-Warn "Kali distro is installed but could not be confirmed running. Later steps that need it may fail."
+    }
 
-    Record-Step 2 "Host Foundation" $(if ($kaliOk) { "OK" } else { "WARN" }) "Kali=$kaliOk Ollama=$ollamaOk Features=$featuresOk"
+    $ollamaOk = Install-Ollama
+    if ($ollamaOk) { $ollamaOk = Start-OllamaIfNeeded }
+
+    Record-Step 2 "Host Foundation" $(if ($kaliOk -and $kaliRunningOk -and $ollamaOk) { "OK" } else { "WARN" }) "Kali=$kaliOk Running=$kaliRunningOk Ollama=$ollamaOk Features=$featuresOk"
     return $true
 }
 
 # ============================================================================
 # STEP 3 - AI ENVIRONMENT (Argus_venv + pip + model pull)
 # ============================================================================
+function Test-OllamaModelResponds {
+    param([Parameter(Mandatory)][string]$ModelName)
+    try {
+        $modelResponse = & ollama run $ModelName "Say OK" 2>&1
+        return ($LASTEXITCODE -eq 0 -and $null -ne $modelResponse -and "$modelResponse".Trim().Length -gt 0)
+    } catch { return $false }
+}
+
+function Ensure-OllamaModel {
+    # Shared detect -> install -> verify -> (fix by pulling) -> re-verify flow for
+    # any Ollama model. Used for both the reasoning model and the RAG embedding
+    # model, which previously had no check/pull logic at all (a confirmed real
+    # gap: RAG silently disables itself when its embedding model is missing).
+    param(
+        [Parameter(Mandatory)][string]$ModelName,
+        [int]$MinFreeGB = 1
+    )
+
+    if ($DryRun) {
+        Write-Info "[DryRun] Would verify/pull model '$ModelName'"
+        return $true
+    }
+
+    try {
+        $driveName = ([System.IO.Path]::GetPathRoot($ProjectRoot)).TrimEnd("\").TrimEnd(":")
+        $free = [Math]::Round((Get-PSDrive -Name $driveName).Free / 1GB, 1)
+        if ($free -lt $MinFreeGB) {
+            Write-Warn "Less than ${MinFreeGB}GB free ($free GB). Skipping pull of '$ModelName'."
+            return $false
+        }
+    } catch { }
+
+    $already = $false
+    try {
+        $listOut = (ollama list 2>$null) -join "`n"
+        if ($listOut -match [regex]::Escape($ModelName.Split(':')[0])) { $already = $true }
+    } catch { }
+
+    if (-not $already) {
+        Write-Info "Pulling model '$ModelName' (depends on internet speed)..."
+        $pulled = $false
+        for ($a = 1; $a -le $MODEL_PULL_RETRIES; $a++) {
+            Write-Info "Pull attempt $a/$MODEL_PULL_RETRIES..."
+            & ollama pull $ModelName
+            if ($LASTEXITCODE -eq 0) { $pulled = $true; break }
+            Write-Warn "Pull failed (attempt $a). Retrying in 10s..."
+            Start-Sleep -Seconds 10
+        }
+        if (-not $pulled) {
+            Write-Warn "Model '$ModelName' pull failed after $MODEL_PULL_RETRIES attempts."
+            return $false
+        }
+        Write-OK "Model '$ModelName' pulled successfully."
+    } else {
+        Write-OK "Model '$ModelName' already present."
+    }
+
+    # Re-verify regardless of which branch got us here: listed (or freshly
+    # pulled) is not proof it actually loads and responds.
+    Write-Info "Verifying '$ModelName' responds..."
+    if (Test-OllamaModelResponds -ModelName $ModelName) {
+        Write-OK "Model '$ModelName' responds correctly."
+        return $true
+    }
+    Write-Warn "Model '$ModelName' is present but did not respond to a test prompt."
+    return $false
+}
+
 function Invoke-StepAiEnvironment {
     Write-Step 3 "AI Environment (venv + pip + model pull)"
     if (-not (Confirm-Step 3 "AI Environment")) { Record-Step 3 "AI Environment" "SKIPPED" ""; return $true }
@@ -1004,26 +1180,29 @@ function Invoke-StepAiEnvironment {
     }
 
     # --- pip install (using embedded requirements) ---
-    # Write embedded requirements to a temp file inside the venv
+    # Always (re)write the embedded requirements file, then decide whether to
+    # rerun pip based on a CONTENT hash, not file existence/timestamps. The old
+    # logic only ever wrote requirements_embedded.txt once (gated on
+    # -not Test-Path): if a later version of this installer changed
+    # $EMBEDDED_REQUIREMENTS, an existing venv would silently never pick up the
+    # change on rerun. Idempotent either way: identical content -> identical
+    # hash -> pip is skipped, exactly as before.
     $reqPath = Join-Path $venvPath "requirements_embedded.txt"
-    if (-not (Test-Path -LiteralPath $reqPath)) {
-        if ($DryRun) {
-            Write-Info "[DryRun] Would write embedded requirements.txt to $reqPath"
-        } else {
-            Set-Content -LiteralPath $reqPath -Value $EMBEDDED_REQUIREMENTS -ErrorAction Stop
-            Write-OK "Embedded requirements written to $reqPath"
-        }
+    $sha256 = [System.Security.Cryptography.SHA256]::Create()
+    $reqHash = [System.BitConverter]::ToString($sha256.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($EMBEDDED_REQUIREMENTS))) -replace '-', ''
+
+    if ($DryRun) {
+        Write-Info "[DryRun] Would write embedded requirements.txt to $reqPath"
     } else {
-        Write-OK "Embedded requirements file already exists (will use it)."
+        Set-Content -LiteralPath $reqPath -Value $EMBEDDED_REQUIREMENTS -ErrorAction Stop
     }
 
     $marker = Join-Path $venvPath ".requirements_installed"
     $runPip = $true
     if (Test-Path -LiteralPath $marker) {
         try {
-            $reqTime  = (Get-Item -LiteralPath $reqPath).LastWriteTime
-            $markTime = (Get-Item -LiteralPath $marker).LastWriteTime
-            if ($reqTime -le $markTime) { $runPip = $false }
+            $markedHash = (Get-Content -LiteralPath $marker -Raw -ErrorAction Stop).Trim()
+            if ($markedHash -eq $reqHash) { $runPip = $false }
         } catch { $runPip = $true }
     }
 
@@ -1039,7 +1218,7 @@ function Invoke-StepAiEnvironment {
                 if ($LASTEXITCODE -ne 0) { throw "pip install failed (exit $LASTEXITCODE)" }
             }
             if (Invoke-WithRetry -Action $action -Label "pip install requirements") {
-                Set-Content -LiteralPath $marker -Value "installed" -ErrorAction SilentlyContinue
+                Set-Content -LiteralPath $marker -Value $reqHash -ErrorAction SilentlyContinue
                 Write-OK "All Python libraries are up to date."
             } else {
                 Write-Err "Library synchronization failed."
@@ -1052,71 +1231,34 @@ function Invoke-StepAiEnvironment {
     }
 
     # --- model pull ---
-    # Override model from config.yaml if available (keeps installer in sync with Python config)
-    $resolvedModel = $OLLAMA_MODEL
-    $cfgPath = Join-Path $ProjectRoot "config.yaml"
-    if (-not $env:ARGUS_MODEL -and (Test-Path -LiteralPath $cfgPath)) {
-        try {
-            $yaml = Get-Content -LiteralPath $cfgPath -Raw
-            if ($yaml -match 'model_name:\s*"(.+)"') { $resolvedModel = $Matches[1] }
-        } catch { }
-    }
-    $OLLAMA_MODEL = $resolvedModel
+    # Override model names from config.yaml if available (keeps installer in
+    # sync with Python config). Shared with the health check so both agree.
+    Resolve-OllamaModelNames
 
-    $modelOk = (Test-Ollama)
-    if ($modelOk) {
-        if ($DryRun) {
-            Write-Info "[DryRun] Would verify/pull model '$OLLAMA_MODEL'"
-        } else {
-            # Disk space guard before pulling
-            try {
-                $driveName = ([System.IO.Path]::GetPathRoot($ProjectRoot)).TrimEnd("\").TrimEnd(":")
-                $free = [Math]::Round((Get-PSDrive -Name $driveName).Free / 1GB, 1)
-                if ($free -lt $OLLAMA_MODEL_MIN_GB) {
-                    Write-Warn "Less than ${OLLAMA_MODEL_MIN_GB}GB free ($free GB). Skipping model pull; set a smaller model via ARGUS_MODEL."
-                    $modelOk = $false
-                }
-            } catch { }
+    $modelOk = $false
+    $embedModelOk = $false
+    if (-not (Test-Ollama)) {
+        Write-Warn "Ollama is not installed; cannot verify/pull models."
+    } elseif (-not (Wait-ForOllamaApi -MaxAttempts 5 -DelaySeconds 2)) {
+        Write-Warn "Ollama API is not responding; cannot verify/pull models. Check Step 2 (Host Foundation)."
+    } else {
+        # Reasoning model (critical - the agent cannot run at all without it).
+        $modelOk = Ensure-OllamaModel -ModelName $OLLAMA_MODEL -MinFreeGB $OLLAMA_MODEL_MIN_GB
+        if (-not $modelOk) {
+            Write-Warn "Reasoning model '$OLLAMA_MODEL' is not ready. Set a different model via ARGUS_MODEL if needed."
+        }
 
-            if ($modelOk) {
-                $already = $false
-                try {
-                    $listOut = (ollama list 2>$null) -join "`n"
-                    if ($listOut -match [regex]::Escape($OLLAMA_MODEL.Split(':')[0])) { $already = $true }
-                } catch { }
-                if ($already) {
-                    Write-OK "Model '$OLLAMA_MODEL' already present."
-                    # Verify the model actually responds (not just listed)
-                    Write-Info "Verifying model responds..."
-                    try {
-                        $testPrompt = "Say OK"
-                        $modelResponse = & ollama run $OLLAMA_MODEL $testPrompt 2>&1
-                        if ($LASTEXITCODE -eq 0 -and $null -ne $modelResponse) {
-                            Write-OK "Model responds correctly."
-                        } else {
-                            Write-Warn "Model is listed but may not respond. Check Ollama status."
-                        }
-                    } catch {
-                        Write-Warn "Model verification failed (non-fatal): $($_.Exception.Message)"
-                    }
-                } else {
-                    Write-Info "Pulling model '$OLLAMA_MODEL' (depends on internet speed)..."
-                    $pulled = $false
-                    for ($a = 1; $a -le $MODEL_PULL_RETRIES; $a++) {
-                        Write-Info "Pull attempt $a/$MODEL_PULL_RETRIES..."
-                        & ollama pull $OLLAMA_MODEL
-                        if ($LASTEXITCODE -eq 0) { $pulled = $true; break }
-                        Write-Warn "Pull failed (attempt $a). Retrying in 10s..."
-                        Start-Sleep -Seconds 10
-                    }
-                    if ($pulled) { Write-OK "Model pulled successfully." }
-                    else { Write-Warn "Model pull failed after $MODEL_PULL_RETRIES attempts."; $modelOk = $false }
-                }
-            }
+        # Embedding model (optional - RAG degrades gracefully without it per
+        # app/core/rag/vector_store.py's manifest guard, so a failure here is a
+        # warning, not a step failure).
+        $embedModelOk = Ensure-OllamaModel -ModelName $OLLAMA_EMBED_MODEL -MinFreeGB $OLLAMA_EMBED_MODEL_MIN_GB
+        if (-not $embedModelOk) {
+            Write-Warn "Embedding model '$OLLAMA_EMBED_MODEL' is not ready. RAG will run in degraded (Blackboard-only) mode until it is pulled."
         }
     }
 
-    Record-Step 3 "AI Environment" $(if ($modelOk) { "OK" } else { "WARN" }) "venv + pip + model=$modelOk"
+    $status = if ($modelOk -and $embedModelOk) { "OK" } else { "WARN" }
+    Record-Step 3 "AI Environment" $status "venv + pip + model=$modelOk + embed_model=$embedModelOk"
     return $true
 }
 
@@ -1179,6 +1321,13 @@ function Invoke-StepKaliTools {
 # ============================================================================
 # STEP 5 - SSH BRIDGE
 # ============================================================================
+function Test-Port22Reachable {
+    try {
+        $res = Test-NetConnection -ComputerName "127.0.0.1" -Port 22 -WarningAction SilentlyContinue
+        return [bool]$res.TcpTestSucceeded
+    } catch { return $false }
+}
+
 function Invoke-StepSshBridge {
     Write-Step 5 "SSH Bridge to WSL (Kali)"
     if (-not (Confirm-Step 5 "SSH Bridge")) { Record-Step 5 "SSH Bridge" "SKIPPED" ""; return $true }
@@ -1189,22 +1338,54 @@ function Invoke-StepSshBridge {
     }
 
     if ($DryRun) {
-        Write-Info "[DryRun] Would start sshd inside Kali and test port 22."
+        Write-Info "[DryRun] Would ensure the distro is running, enable+start sshd, and test port 22."
         Record-Step 5 "SSH Bridge" "DRYRUN" "sshd + port 22 test (simulated)"
         return $true
     }
 
     try {
-        wsl -d $KALI_DISTRO -u root bash -c "mkdir -p /run/sshd && /usr/sbin/sshd" 2>&1 | ForEach-Object { Write-Info $_ }
-        Start-Sleep -Seconds 2
-        $res = Test-NetConnection -ComputerName "127.0.0.1" -Port 22 -WarningAction SilentlyContinue
-        if ($res.TcpTestSucceeded) {
+        # SSH needs a running VM underneath it - ensure that first rather than
+        # assuming Step 2 already covered it (this step can run standalone via
+        # -OnlyHealthCheck-adjacent flows or after a reboot).
+        if (-not (Start-KaliDistroIfNeeded)) {
+            Write-Warn "Could not confirm Kali is running; SSH bridge setup skipped."
+            Record-Step 5 "SSH Bridge" "WARN" "Kali not running"
+            return $true
+        }
+
+        # Persist across WSL restarts, not just this session: if systemd is
+        # active inside the distro (`systemctl enable` succeeds), the SSH
+        # daemon survives `wsl --shutdown`/reboot instead of going dormant
+        # again - which is exactly the state a prior real-environment check
+        # found (installed, but "inactive (dead)" and disabled at boot).
+        # Falls back to the direct sshd invocation on images without systemd.
+        $initSystem = (wsl -d $KALI_DISTRO -u root -- bash -c "cat /proc/1/comm 2>/dev/null" 2>&1 | Out-String).Trim()
+        if ($initSystem -eq "systemd") {
+            Write-Info "systemd detected inside Kali - enabling ssh to persist across restarts..."
+            wsl -d $KALI_DISTRO -u root -- bash -c "systemctl enable ssh && systemctl start ssh" 2>&1 | ForEach-Object { Write-Info $_ }
+        } else {
+            Write-Info "No systemd inside Kali (init: '$initSystem') - starting sshd directly for this session only."
+            wsl -d $KALI_DISTRO -u root -- bash -c "mkdir -p /run/sshd && /usr/sbin/sshd" 2>&1 | ForEach-Object { Write-Info $_ }
+        }
+
+        # Re-verify with an actual retry loop instead of one fixed sleep + check.
+        $reachable = $false
+        for ($a = 1; $a -le 5; $a++) {
+            if (Test-Port22Reachable) { $reachable = $true; break }
+            Start-Sleep -Seconds 2
+        }
+
+        if ($reachable) {
             Write-OK "SSH bridge (port 22) is active."
             Record-Step 5 "SSH Bridge" "OK" "port 22 reachable"
             return $true
         }
-        Write-Warn "SSH bridge (port 22) is not reachable yet. It may start on next WSL boot."
-        Record-Step 5 "SSH Bridge" "WARN" "port 22 not reachable"
+
+        # Diagnose why, rather than just reporting failure.
+        Write-Warn "SSH bridge (port 22) is not reachable after 5 attempts. Diagnosing..."
+        $sshdConfigCheck = (wsl -d $KALI_DISTRO -u root -- bash -c "sshd -t 2>&1; echo EXIT:\$?" 2>&1 | Out-String).Trim()
+        Write-Info "sshd config test: $sshdConfigCheck"
+        Record-Step 5 "SSH Bridge" "WARN" "port 22 not reachable; sshd -t: $sshdConfigCheck"
         return $true
     } catch {
         Write-Warn "SSH bridge setup issue: $($_.Exception.Message)"
@@ -1217,38 +1398,76 @@ function Invoke-StepSshBridge {
 # STEP 6 - INLINE HEALTH CHECK (no external file)
 # ============================================================================
 function Invoke-HealthCheck {
+    # This is the single source of truth for "is the system actually ready" -
+    # every check here probes real, observable state (a port responding, a
+    # distro's reported run state, a model actually listed) rather than a
+    # proxy for it (a process existing, a distro merely being installed).
+    # Resolve model names independently so -OnlyHealthCheck (which never runs
+    # Step 3) still checks against the config.yaml-driven names, not stale
+    # defaults.
+    Resolve-OllamaModelNames
+
     Write-Header "SYSTEM HEALTH CHECK (Embedded)"
     $healthy = $true
     $checks = @()
 
-    # venv
+    # venv - existence, then an actual import to catch a partially-installed
+    # environment (venv exists but a pip install was interrupted mid-way).
     $venvPy = Join-Path $ProjectRoot "$VENV_NAME\Scripts\python.exe"
     $venvOk = Test-Path -LiteralPath $venvPy
-    $checks += [pscustomobject]@{ Component = "Argus_venv";   Status = $(if ($venvOk) { "OK" } else { "MISSING" }) }
+    if ($venvOk) {
+        try {
+            & $venvPy -c "import streamlit, langchain, langgraph" 2>&1 | Out-Null
+            $venvOk = ($LASTEXITCODE -eq 0)
+        } catch { $venvOk = $false }
+    }
+    $checks += [pscustomobject]@{ Component = "Argus_venv (+imports)"; Status = $(if ($venvOk) { "OK" } else { "MISSING/BROKEN" }) }
     if (-not $venvOk) { $healthy = $false }
 
-    # Ollama running
-    $ollamaProc = Get-Process | Where-Object { $_.ProcessName -like "*ollama*" }
-    $ollamaOk = $null -ne $ollamaProc
-    $checks += [pscustomobject]@{ Component = "Ollama engine"; Status = $(if ($ollamaOk) { "ONLINE" } else { "OFFLINE" }) }
+    # Kali distro: installed vs actually running are different failure modes.
+    $kaliInstalled = Test-KaliDistro
+    $kaliRunning = if ($kaliInstalled) { Test-KaliDistroRunning } else { $false }
+    $kaliStatus = if (-not $kaliInstalled) { "NOT INSTALLED" } elseif ($kaliRunning) { "RUNNING" } else { "STOPPED" }
+    $checks += [pscustomobject]@{ Component = "Kali (WSL)"; Status = $kaliStatus }
+    if (-not $kaliInstalled) { $healthy = $false }
+    # Stopped-but-installed is not fatal on its own - `wsl -d ... -- true` boots
+    # it on demand (see Start-KaliDistroIfNeeded) - so it doesn't flip $healthy.
+
+    # Ollama: process existing is not proof the API is live.
+    $ollamaOk = Test-OllamaApiResponding
+    $checks += [pscustomobject]@{ Component = "Ollama API (11434)"; Status = $(if ($ollamaOk) { "ONLINE" } else { "OFFLINE" }) }
     if (-not $ollamaOk) { $healthy = $false }
 
-    # Kali
-    $kaliOk = Test-KaliDistro
-    $checks += [pscustomobject]@{ Component = "Kali (WSL)";    Status = $(if ($kaliOk) { "OK" } else { "NOT FOUND" }) }
-    if (-not $kaliOk) { $healthy = $false }
+    # Reasoning model: must actually be listed, not just "Ollama is up".
+    $modelOk = $false
+    if ($ollamaOk) {
+        try {
+            $listOut = (ollama list 2>$null) -join "`n"
+            $modelOk = ($listOut -match [regex]::Escape($OLLAMA_MODEL.Split(':')[0]))
+        } catch { }
+    }
+    $checks += [pscustomobject]@{ Component = "Model: $OLLAMA_MODEL"; Status = $(if ($modelOk) { "PRESENT" } else { "MISSING" }) }
+    if (-not $modelOk) { $healthy = $false }
 
-    # SSH bridge
-    $sshOk = $false
-    try {
-        $r = Test-NetConnection -ComputerName "127.0.0.1" -Port 22 -WarningAction SilentlyContinue
-        $sshOk = $r.TcpTestSucceeded
-    } catch { $sshOk = $false }
+    # Embedding model: reported, but non-fatal to overall health - RAG
+    # degrades to Blackboard-only without it (app/core/rag/vector_store.py's
+    # manifest guard), it does not break the agent.
+    $embedModelOk = $false
+    if ($ollamaOk) {
+        try {
+            $listOut = (ollama list 2>$null) -join "`n"
+            $embedModelOk = ($listOut -match [regex]::Escape($OLLAMA_EMBED_MODEL.Split(':')[0]))
+        } catch { }
+    }
+    $checks += [pscustomobject]@{ Component = "Embed model: $OLLAMA_EMBED_MODEL"; Status = $(if ($embedModelOk) { "PRESENT" } else { "MISSING (RAG degraded)" }) }
+
+    # SSH bridge.
+    $sshOk = Test-Port22Reachable
     $checks += [pscustomobject]@{ Component = "SSH bridge (22)"; Status = $(if ($sshOk) { "ACTIVE" } else { "DOWN" }) }
     if (-not $sshOk) { $healthy = $false }
 
     $checks | Format-Table -AutoSize | Out-String | Write-Host
-    $checks | ForEach-Object { Add-Content -LiteralPath $LogFile -Value ("{0,-20} {1}" -f $_.Component, $_.Status) -ErrorAction SilentlyContinue }
+    $checks | ForEach-Object { Add-Content -LiteralPath $LogFile -Value ("{0,-30} {1}" -f $_.Component, $_.Status) -ErrorAction SilentlyContinue }
 
     if ($healthy) { Write-OK "SYSTEM IS HEALTHY AND READY!" }
     else { Write-Warn "SYSTEM HAS ISSUES - see the table above." }
@@ -1335,7 +1554,7 @@ if ($MyInvocation.InvocationName -ne '.') {
 
     # -OnlyHealthCheck: fast diagnostic, no elevation, no install steps.
     if ($OnlyHealthCheck) {
-        Write-Info "OnlyHealthCheck mode ??? skipping self-elevation and all install steps."
+        Write-Info "OnlyHealthCheck mode - skipping self-elevation and all install steps."
         $healthy = Invoke-HealthCheck
         exit $(if ($healthy) { 0 } else { 1 })
     }
