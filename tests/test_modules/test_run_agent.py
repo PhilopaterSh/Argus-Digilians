@@ -5,11 +5,14 @@ the seam between the ReAct agent's output and what the GUI's Agent tab
 renders. Full subprocess/live-LLM flow is exercised by the Streamlit
 AppTest smoke test (manual verification, per specs/017/quickstart.md).
 """
+import json
 import sys
 from pathlib import Path
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
+import scripts.run_agent as run_agent_module
 from scripts.run_agent import _build_final_state
 
 
@@ -57,3 +60,44 @@ def test_build_final_state_with_non_dict_result_does_not_raise():
 
     assert final_state["overall_risk_score"] is None
     assert "parse_warning" in final_state
+
+
+def _fake_run_brain_analysis(target, run_id, mode, state_file, result_box):
+    result_box["result"] = {"output": {"summary": "ok", "findings": [], "overall_risk_score": 1, "next_steps": [], "output": "done"}}
+
+
+class TestRunIdPassthrough:
+    """Regression test: AgentController.start() generates a run_id to name the
+    state file itself, then spawned this process without telling it that
+    run_id - main() silently generated a SECOND, different run_id and
+    overwrote the state file's own run_id field with it, so the file's name
+    and its content disagreed about which run it was. --run-id closes that
+    gap; main() must use it verbatim, not generate its own."""
+
+    def test_main_uses_the_provided_run_id_verbatim(self, tmp_path):
+        state_file = tmp_path / "agent_test.json"
+        with patch.object(run_agent_module, "run_brain_analysis", _fake_run_brain_analysis), \
+             patch.object(sys, "argv", [
+                 "run_agent.py",
+                 "--target", "https://example.com",
+                 "--state-file", str(state_file),
+                 "--run-id", "caller-issued-run-id",
+             ]):
+            run_agent_module.main()
+
+        written = json.loads(state_file.read_text(encoding="utf-8"))
+        assert written["run_id"] == "caller-issued-run-id"
+
+    def test_main_falls_back_to_a_generated_run_id_when_not_provided(self, tmp_path):
+        state_file = tmp_path / "agent_test.json"
+        with patch.object(run_agent_module, "run_brain_analysis", _fake_run_brain_analysis), \
+             patch.object(sys, "argv", [
+                 "run_agent.py",
+                 "--target", "https://example.com",
+                 "--state-file", str(state_file),
+             ]):
+            run_agent_module.main()
+
+        written = json.loads(state_file.read_text(encoding="utf-8"))
+        assert written["run_id"]
+        assert written["run_id"] != "caller-issued-run-id"

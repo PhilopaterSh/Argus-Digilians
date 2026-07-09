@@ -2,6 +2,27 @@
 
 All notable changes to this project will be documented in this file.
 
+## Fixed: run_id mismatch between AgentController and its subprocess; confirmed GUI live-feed is genuinely incremental (2026-07-09, specs/018 CHK088)
+User asked why the Agent tab's live feed seemed to only update after the whole run finished
+rather than in real time. Verified directly rather than assumed: started a real run through
+`AgentController` (the actual GUI mechanism) and watched the state file's `events` array grow
+with real timestamps - a Thought/Action appeared, then ~3s later a real ping's Observation, then
+the next Thought, then **54 seconds later** a real subdomain-enumeration Observation. The
+live-feed mechanism genuinely writes and the GUI genuinely polls incrementally, not in one
+batch - the perceived "batch" feeling is real external tool latency (30s-3min per tool), not a
+code bug.
+
+While investigating, found and fixed a real, separate bug: `AgentController.start()` generates a
+`run_id` to name the state file, but `scripts/run_agent.py::main()` independently generated a
+SECOND, different `run_id` and overwrote the state file's own `run_id` field with it - the
+file's name and its content disagreed about the run's identity. Fixed: `start()` now passes
+`--run-id` to the subprocess; `main()` uses it verbatim, falling back to a fresh uuid4 only for
+standalone/manual invocations without the flag.
+
+New tests in `tests/test_modules/test_run_agent.py` verify the run_id is used verbatim when
+provided and a fallback is generated when it's not. Full suite: 207 passed, 1 pre-existing
+unrelated failure.
+
 ## Fixed: three more issues found live-testing the duplicate-call fix, then loosened it to allow one genuine retry (2026-07-09, specs/018 CHK086-087)
 A follow-up live run against `https://scanme.nmap.org` with CHK085's duplicate-call block active
 surfaced three more distinct, real issues, all fixed and live-reverified together:

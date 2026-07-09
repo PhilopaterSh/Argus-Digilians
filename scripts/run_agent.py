@@ -112,14 +112,39 @@ def _build_final_state(result: Dict[str, Any], mode: str, target: str) -> Dict[s
 
 
 def main() -> None:
+    """CLI entry point: run the agent against `--target`, write `--state-file`.
+
+    Parses `--target`/`--state-file`/`--run-id` (see `--run-id`'s own help
+    text), runs `run_brain_analysis` on a worker thread bounded by
+    `AGENT_TIMEOUT_SECONDS`, and persists the final run snapshot
+    (`_build_final_state`'s shape) to `--state-file` - `completed`,
+    `failed`, or a demo/test-mode fallback on timeout. Exits with status 1
+    on failure/timeout (outside demo/test mode) so the parent process (e.g.
+    `AgentController`) can detect it via the subprocess's return code.
+
+    Returns:
+        None
+    """
     parser = argparse.ArgumentParser()
     parser.add_argument('--target', required=True)
     parser.add_argument('--state-file', required=True)
+    parser.add_argument(
+        '--run-id',
+        help=(
+            'Run id to use for every event/snapshot written to --state-file. '
+            'AgentController already generates one to name the state file itself '
+            'before spawning this process - without this flag, this process used '
+            'to silently generate a SECOND, different run_id and overwrite the '
+            "state file's run_id field with it, so the file's name and its own "
+            'contents disagreed about the run\'s identity. Falls back to a fresh '
+            'uuid4 for standalone/manual invocations.'
+        ),
+    )
     args = parser.parse_args()
 
     state_file = args.state_file
     target = args.target
-    run_id = str(uuid.uuid4())
+    run_id = args.run_id or str(uuid.uuid4())
     mode = normalize_run_mode(os.getenv('AGENT_RUN_MODE') or os.getenv('ARGUS_AGENT_MODE'))
     timeout_seconds = int(os.getenv('AGENT_TIMEOUT_SECONDS', str(DEFAULT_TIMEOUT_SECONDS)))
     started_at = utc_now_iso()

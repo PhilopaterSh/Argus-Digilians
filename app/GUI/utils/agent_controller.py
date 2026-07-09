@@ -27,6 +27,23 @@ class AgentController:
         self.log_path = None
 
     def start(self, target, options=None):
+        """Spawn scripts/run_agent.py as a subprocess to analyze `target`.
+
+        Args:
+            target (str): Target URL/host to analyze.
+            options (dict, optional): Extra options forwarded to the child
+                process via the `AGENT_OPTIONS` env var (JSON-encoded).
+
+        Returns:
+            str: This run's id, also passed to the child via `--run-id` so
+            the state file's own `run_id` field matches the id used to name
+            the file - the child no longer generates its own, disagreeing,
+            second id.
+
+        Raises:
+            FileNotFoundError: If `scripts/run_agent.py` doesn't exist at
+                the expected path.
+        """
         self.run_id = str(uuid.uuid4())
         self.state_file = os.path.join(self.state_dir, f'agent_{self.run_id}.json')
         self.run_mode = normalize_run_mode(os.getenv('AGENT_RUN_MODE') or os.getenv('ARGUS_AGENT_MODE'))
@@ -70,7 +87,12 @@ class AgentController:
         self.log_file = open(self.log_path, 'w', encoding='utf-8', errors='replace')
 
         self.process = subprocess.Popen(
-            [sys.executable, '-u', str(script), '--target', target, '--state-file', self.state_file],
+            [
+                sys.executable, '-u', str(script),
+                '--target', target,
+                '--state-file', self.state_file,
+                '--run-id', self.run_id,
+            ],
             env=env,
             stdout=self.log_file,
             stderr=subprocess.STDOUT,

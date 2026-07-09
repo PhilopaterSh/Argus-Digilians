@@ -279,6 +279,23 @@ infrastructure-level crash, none reachable by the mock-LLM suite above.
   `test_custom_graph_allows_one_retry_before_blocking_third_identical_call` to assert the tool
   executes twice for real before the third identical attempt is blocked. Full suite (all of
   CHK085-087 together): 205 passed, 1 pre-existing unrelated failure.
+- [x] CHK088 (DONE 2026-07-09) User asked why the GUI's Agent tab feed seemed to update only
+  after the whole run finished rather than live. Verified directly rather than assumed: started a
+  real run through `AgentController` (the actual GUI mechanism, not the diagnostic CLI script)
+  and watched the state file's `events` array grow with real timestamps -
+  `16:34:39` (Thought/Action) -> `16:34:48` (~3s later, a real ping) -> `16:34:54` (next Thought)
+  -> `16:35:48` (**54s later**, real subdomain enumeration). Confirmed the live-feed mechanism
+  (`LiveFeedCallbackHandler`/`append_run_event`, `st.fragment(run_every="2s")`) genuinely writes
+  and polls incrementally, not in one batch - the perceived "batch" feeling is real external tool
+  latency (30s-3min per tool: nmap/nikto/ffuf), not a code bug.
+  While investigating, found and fixed a real, separate bug: `AgentController.start()` generates
+  a `run_id` to name the state file, but `scripts/run_agent.py::main()` independently generated
+  a SECOND, different `run_id` and overwrote the state file's own `run_id` field with it - the
+  file's name and its content disagreed about the run's identity. Fixed: `start()` now passes
+  `--run-id` to the subprocess; `main()` uses it verbatim, falling back to a fresh uuid4 only for
+  standalone/manual invocations without the flag. New tests in `tests/test_modules/test_run_agent.py`:
+  `test_main_uses_the_provided_run_id_verbatim`, `test_main_falls_back_to_a_generated_run_id_when_not_provided`.
+  Full suite: 207 passed, 1 pre-existing unrelated failure.
 
 ## Constitution IX — Single Source of Truth (No Duplication)
 
