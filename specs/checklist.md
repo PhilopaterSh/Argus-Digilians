@@ -207,9 +207,17 @@ catches exact-file and normalized-function-body duplication; `--diff` mode
 confirmed to only flag newly-touched duplication, not the pre-existing backlog
 below). Found via `--all` scan of `app/`, `scripts/`, `Setup/`:
 
-- [ ] CHK058 (OPEN) `Setup/requirements.txt` byte-identical to
-  `scripts/Setup/requirements.txt` — pick one canonical file; the other must
-  either be deleted or become a generated copy, not hand-maintained twice.
+- [x] CHK058 (RESOLVED 2026-07-09) `Setup/requirements.txt` was byte-identical to
+  `scripts/Setup/requirements.txt`. Investigation found `scripts/Setup/` was an
+  undocumented, unreferenced duplicate - nothing in `ARGUS_INSTALLER.ps1` or any
+  launcher invokes paths under `scripts/Setup/`, while root `Setup/` is the one
+  documented as the legacy manual fallback (`scripts/README.md`, `Setup/README.md`,
+  and `ARGUS_INSTALLER.ps1`'s own `Setup/` -> `Setup_legacy/` archive step all
+  reference the project-root path). `scripts/Setup/Step_1_Core_Foundation.bat` and
+  `Step_2_AI_Python_Env.bat` (which existed only there, not in root `Setup/`
+  despite `Setup/README.md`'s file table claiming otherwise) were moved into
+  `Setup/`; the duplicate `scripts/Setup/requirements.txt` was deleted. `Setup/`
+  is now the single canonical legacy-installer directory.
 - [ ] CHK059 (OPEN) `_first_web_port` identically defined in both
   `app/core/agent/nodes/exploit.py:11` and `app/core/agent/nodes/scanner.py:11`
   — consolidate into one shared helper (e.g. `app/core/agent/nodes/_shared.py`
@@ -226,11 +234,49 @@ below). Found via `--all` scan of `app/`, `scripts/`, `Setup/`:
   classes (`app/tools/{crawler,reachability,scanners,secrets,simulation}.py`)
   — candidate for a shared base class, but low urgency since it's idiomatic
   dependency-injection boilerplate rather than accidental drift.
-- [ ] CHK063 (OPEN, tracked but NOT simple duplication) `workspace/run_argus_cli.py`
-  vs `scripts/run_argus_cli.py` — these started as the same file and have
-  since diverged (workspace/ has 4 extra tools); `scripts/TEST_ARGUS.bat`
-  depends on the `workspace/` version. Requires a decision on which tool set
-  is current before reconciling, not a mechanical delete.
+- [x] CHK063 (RESOLVED 2026-07-09) `workspace/run_argus_cli.py` vs
+  `scripts/run_argus_cli.py` reconciled. Investigation found the `workspace/`
+  version's 4 "extra tools" were not a viable alternative to preserve as-is:
+  `bridge.run_zero_apt_simulation` does not exist on `WSLBridgeTools` at all
+  (the real class, `ZEROAPTSimulation.run_simulation()` in
+  `app/tools/simulation.py`, was never wired into the tool registry - a
+  separate orphaned-feature finding, not fixed here); `bridge.pre_execute_verify`/
+  `post_execute_verify`/`task_difficulty_assessment` were also wrong attribute
+  names (the real public methods are `verify_command`/`verify_output`/
+  `assess_difficulty` - `app/tools/tool_registry.py` lines 179-186). So
+  `workspace/run_argus_cli.py` and the `scripts/TEST_ARGUS.bat` menu option
+  that depended on it were **already broken** (`AttributeError` on the first
+  scan). Merged into `scripts/run_argus_cli.py` (config-driven model name,
+  correct `PROJECT_ROOT` path handling, kept): the websocket keepalive patch,
+  progress-log writer, and the two of the three verification/TDA tools that
+  are actually usable as single-input `Tool`s (`verify_command`,
+  `assess_difficulty` - `verify_output` needs 3 positional args and was
+  dropped, not silently mis-wired). `scripts/TEST_ARGUS.bat` and
+  `scripts/LAUNCH_CLI.bat` both now point at the one canonical file; verified
+  by importing the merged module directly (no `AttributeError`) rather than
+  assuming. `workspace/run_argus_cli.py` deleted.
+- [x] CHK064 (RESOLVED 2026-07-09) The 6 ad hoc `workspace/test_*.py` scripts
+  were never part of the pytest suite (`tests/` is the only path `pytest.ini`
+  collects) and each was checked individually before deletion, not deleted as
+  a batch assumption: `test_full_integration.py` and `test_graph_extraction.py`
+  both call a `graph_ask()` method that no longer exists on `ArgusBrain` and
+  both require an Ollama model (`llama3.1:latest`) that isn't installed -
+  confirmed broken, not just stale; `test_custom_graph.py`,
+  `test_langgraph_basic.py`, and `test_tool_errors.py` import only `langgraph`/
+  `langchain_ollama` directly with no `app.*` import at all - pure library
+  prototyping scratch with zero Argus-specific regression value;
+  `test_custom_mode_with_mock.py` was the one genuinely real test (mock LLM,
+  real `_build_custom_workflow`/`_build_tool_map` imports, no live network
+  needed) but is fully superseded by `tests/test_langgraph_workflow.py::test_custom_graph_full_cycle`
+  and its neighbors, which cover the identical scenario more thoroughly. All 6
+  deleted.
+- [x] CHK065 (RESOLVED 2026-07-09) Root `IMPLEMENTATION_GUIDE.md` had a generic
+  name but narrow content (a one-off writeup of the same "Invalid Format:
+  Missing 'Action:'" bug already covered by `docs/history/PARSING_ERROR_FIX.md`)
+  - it was missed by Cleanup Manifest C6's original `*_FIX.*`/`*_REPORT.*` glob
+  specifically because of its misleading name. Moved to
+  `docs/history/IMPLEMENTATION_GUIDE_parsing_error_fix.md`
+  (`docs/ARCHITECTURE_AUDIT_REPORT.md` C6 entry updated with this follow-up).
 
 ---
 

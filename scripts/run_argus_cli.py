@@ -1,6 +1,8 @@
 import os
 import sys
 import argparse
+import datetime
+import pathlib
 
 # Ensure the project root is on the import path before importing app modules.
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -16,10 +18,51 @@ from dotenv import load_dotenv
 load_dotenv()
 config = ArgusConfig.load()
 
+# Some lower-level dependency opens websocket connections without explicit
+# ping settings, causing spurious keepalive timeouts (close code 1011).
+# Patch forgiving defaults; fall back silently if websockets isn't installed
+# or its internal API changes.
+try:
+    from websockets.legacy.protocol import WebSocketCommonProtocol
+    _orig_ws_init = WebSocketCommonProtocol.__init__
+
+    def _patched_ws_init(self, *args, **kwargs):
+        kwargs.setdefault("ping_interval", 30)
+        kwargs.setdefault("ping_timeout", 60)
+        pi = kwargs.get("ping_interval")
+        pt = kwargs.get("ping_timeout")
+        if pi is not None and isinstance(pi, (int, float)) and pi < 5:
+            kwargs["ping_interval"] = 30
+        if pt is not None and isinstance(pt, (int, float)) and pt < 10:
+            kwargs["ping_timeout"] = 60
+        return _orig_ws_init(self, *args, **kwargs)
+
+    WebSocketCommonProtocol.__init__ = _patched_ws_init
+except Exception:
+    pass
+
+
+def _sanitize_filename(s: str) -> str:
+    return ''.join(c for c in s if c.isalnum() or c in '-_.').rstrip()
+
+
+def _write_progress(target_url: str, message: str):
+    try:
+        reports_dir = pathlib.Path(PROJECT_ROOT) / "reports"
+        reports_dir.mkdir(parents=True, exist_ok=True)
+        safe_name = _sanitize_filename(target_url.replace('https://', '').replace('http://', '').replace('/', '_'))
+        path = reports_dir / f"{safe_name}_progress.log"
+        timestamp = datetime.datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')
+        with path.open('a', encoding='utf-8') as fh:
+            fh.write(f"[{timestamp}] {message}\n")
+    except Exception:
+        pass
+
+
 def run_analysis(target_url):
     bridge = WSLBridgeTools()
     model = config.model_name
-    
+
     tools = [
         Tool(name="Check_Reachability", func=bridge.check_reachability, description="Verify if the target domain is reachable before scanning."),
         Tool(name="Subdomain_Enumeration", func=bridge.enumerate_subdomains, description="Discover subdomains to map the target's attack surface."),
@@ -31,11 +74,19 @@ def run_analysis(target_url):
         Tool(name="Run_Nikto", func=bridge.run_nikto, description="Run Nikto vulnerability scanner against a web target."),
         Tool(name="Run_FFUF", func=bridge.run_ffuf_discovery, description="Run FFUF for fast hidden path discovery."),
         Tool(name="Crawl_Target", func=bridge.crawl_target, description="Discover internal links and entry points to expand attack surface."),
-        Tool(name="Advanced_Evasion_Probe", func=bridge.advanced_vuln_probe, description="Perform targeted, WAF-evasive probes for SQLi and Path Traversal.")
+        Tool(name="Advanced_Evasion_Probe", func=bridge.advanced_vuln_probe, description="Perform targeted, WAF-evasive probes for SQLi and Path Traversal."),
+        Tool(name="Reflective_Pre_Verify", func=bridge.verify_command, description="Check commands for malformed parameters, illegal syntax, or missing tools before running."),
+        Tool(name="Task_Difficulty_Assessment", func=bridge.assess_difficulty, description="Compute TDA scores for target selection based on expected path length, version confidence, and history."),
     ]
-    
+    # Note: a "Reflective_Post_Verify" tool (bridge.verify_output) was
+    # considered but dropped - it requires 3 positional args (url, command,
+    # raw_output), which a single-string LangChain Tool cannot supply; the
+    # workspace/run_argus_cli.py version that inspired this also referenced
+    # it under a wrong attribute name (post_execute_verify) and had never
+    # actually been run successfully.
+
     brain = ArgusBrain(model, tools)
-    
+
     print(f"\n[!] ARGUS CLI MODE ACTIVATED")
     print(f"[*] Target: {target_url}")
     print(f"[*] Model: {model}")
@@ -43,14 +94,22 @@ def run_analysis(target_url):
     print("-" * 60)
 
     try:
+        _write_progress(target_url, 'CLI started')
         query = f"Perform a comprehensive security analysis for {target_url}. Start with reachability, then map the attack surface, and finally provide a deep risk assessment."
+        _write_progress(target_url, 'Preparing AI agent')
+
+        reach = bridge.check_reachability(target_url)
+        _write_progress(target_url, f'Reachability: {str(reach)[:800]}')
+
         # Brain.ask returns a dict with "output" (parsed JSON) or raw result
+        _write_progress(target_url, 'Starting main brain.ask analysis')
         result = brain.ask(query)
-        
+        _write_progress(target_url, 'AI analysis complete')
+
         print("\n" + "="*60)
         print("[REPORT] ARGUS AGENT FINAL REPORT")
         print("="*60)
-        
+
         if isinstance(result, dict) and "output" in result:
             output = result["output"]
             if isinstance(output, dict):
@@ -60,10 +119,13 @@ def run_analysis(target_url):
                 print(output)
         else:
             print(result)
-            
+
+        _write_progress(target_url, 'Completed')
     except KeyboardInterrupt:
+        _write_progress(target_url, 'Interrupted by user')
         print("\n[!] Analysis interrupted by user.")
     except Exception as e:
+        _write_progress(target_url, f'Error: {e}')
         print(f"\n[!] An error occurred during execution: {e}")
 
 if __name__ == "__main__":

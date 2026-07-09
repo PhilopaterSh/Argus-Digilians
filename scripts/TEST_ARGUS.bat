@@ -110,10 +110,10 @@ goto menu
 :test_cli
 cls
 echo.
-echo [TEST] CLI Demo Query...
+echo [TEST] CLI Demo Scan...
 echo.
 call Argus_venv\Scripts\activate.bat
-python workspace\run_argus_cli.py --query "What are the main phases of a penetration test?"
+python scripts\run_argus_cli.py https://example.com
 pause
 goto menu
 

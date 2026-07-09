@@ -1,5 +1,11 @@
 # Argus Security Framework: Master Installation and Technical Guide
 
+> **Note:** For day-to-day installation, use `INSTALL.bat` / `scripts/ARGUS_INSTALLER.ps1`
+> as described in `INSTALLATION_GUIDE.md` - it automates everything below in one command.
+> This document predates that unified installer and describes the same setup manually,
+> step by step; keep it as a technical reference for what the installer does under the
+> hood, or for manual/offline provisioning, not as the first thing to follow.
+
 This document provides the definitive, comprehensive guide for the Argus Security Framework, consolidating all infrastructure, AI environment, and security tooling documentation into a single reference.
 
 ---

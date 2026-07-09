@@ -77,16 +77,49 @@ LAUNCH_CLI.bat C         # Enhanced mode
 
 ---
 
+## Which Script Do I Run?
+
+| I want to... | Run this |
+|---|---|
+| Install everything from scratch | `INSTALL.bat` (repo root) or `scripts\ARGUS_INSTALLER.ps1` directly |
+| Start the Streamlit web UI (Argus Studio) | `scripts\LAUNCH_STUDIO.bat` |
+| Start the autonomous agent from the CLI, no GUI | `scripts\LAUNCH_CLI.bat` (runs `run_argus_cli.py`) |
+| Debug/watch an agent run step-by-step in a terminal | `python scripts\_diagnostic_cli_verbose.py <target-url>` (prints every graph step live; not a production entry point) |
+| Run the full automated test suite | `pytest` from the project root (uses `tests/`, not anything in `scripts/`) |
+| Manually smoke-test the agent/RAG pipeline during development | `scripts\test_agent.py` / `scripts\test_rag.py` (ad hoc dev scripts, not part of the pytest suite) |
+| Check for duplicate code before committing | `scripts\check_duplication.py` |
+| Check for missing/inconsistent docstrings | `scripts\check_docstrings.py` |
+| Validate Spec Kit artifacts (`specs/`) | `scripts\validate_specs.py` |
+| Check a file only uses ASCII (Windows console safety) | `scripts\validate_ascii.py` |
+| Find a free local port | `scripts\get_port.py` |
+
+---
+
 ## Directory Structure
 
 ```text
 scripts/
-+-- ARGUS_INSTALLER.ps1        # Self-contained installer (single source of truth)
-+-- LAUNCH_STUDIO.bat          # Streamlit web UI launcher
-+-- LAUNCH_CLI.bat             # CLI agent launcher
-+-- run_argus_cli.py           # CLI Python entry point
-+-- README.md                  # This file
++-- ARGUS_INSTALLER.ps1          # Self-contained installer (single source of truth)
++-- LAUNCH_STUDIO.bat            # Streamlit web UI launcher
++-- LAUNCH_CLI.bat               # CLI agent launcher
++-- TEST_ARGUS.bat               # Quick manual smoke-test launcher
++-- run_agent.py                 # ArgusBrain entry point used by the GUI's "Start Agent" button
++-- run_argus_cli.py             # CLI Python entry point (used by LAUNCH_CLI.bat)
++-- _diagnostic_cli_verbose.py   # Verbose step-by-step live debugging CLI (not production)
++-- test_agent.py                # Ad hoc manual dev smoke-test (not part of the pytest suite)
++-- test_rag.py                  # Ad hoc manual dev smoke-test (not part of the pytest suite)
++-- check_docstrings.py          # Spec Kit / Constitution compliance check
++-- check_duplication.py         # Constitution IX duplication scanner
++-- validate_specs.py            # Spec Kit artifact validator
++-- validate_ascii.py            # ASCII-only file checker
++-- get_port.py                  # Free local port finder
++-- clean_repo.bat                # Repo cleanup helper
++-- consolidate_canonical.sh     # Canonical-artifact consolidation helper
++-- README.md                    # This file
 ```
+
+Legacy manual install steps live in `Setup/` at the project root, not under `scripts/` -
+see `Setup/README.md`.
 
 ---
 

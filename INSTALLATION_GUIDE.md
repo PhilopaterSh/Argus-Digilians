@@ -1,7 +1,9 @@
 # Installation Guide - Argus Security Framework
 
 This guide covers the supported installation approach using the unified master
-installer, as well as the legacy manual fallback.
+installer, as well as the legacy manual fallback. For the underlying manual
+steps the installer automates (useful for offline/air-gapped provisioning or
+understanding what each step does), see `Argus_Master_Documentation.md`.
 
 ---
 

@@ -130,9 +130,9 @@ decisions required). Tracked as Cleanup Manifest C5.
 ### Problems found
 - **Duplicate/overlapping architecture docs**: `docs/ARGUS_FRAMEWORK_ARCHITECTURE_v2.md` (canonical),
   `docs/ARGUS_TECHNICAL_ARCHITECTURE_v1.5_LEGACY.md` (archived - acceptable), plus root
-  `Argus_Master_Documentation.md`, `IMPLEMENTATION_GUIDE.md`, `INSTALLATION_GUIDE.md`,
-  `INSTALL*.md`, and multiple `*_FIX.md`/`*_REPORT.md` that overlap installer/parsing content
-  already owned by specs `002`/`013`.
+  `Argus_Master_Documentation.md`, `INSTALLATION_GUIDE.md`, `INSTALL*.md`, and multiple
+  `*_FIX.md`/`*_REPORT.md` that overlap installer/parsing content already owned by specs
+  `002`/`013`.
 - **Single source of truth**: architecture -> `ARGUS_FRAMEWORK_ARCHITECTURE_v2.md`; decisions ->
   its ADR section; consolidation -> `012`. The root `*_FIX`/`*_REPORT` notes duplicate these.
 
@@ -184,7 +184,7 @@ Run these in a normal dev checkout (Python 3.12 + deps). Each is safe with the s
 | C3 | Rename `app/GUI/argus_studio.py` -> `dashboard.py`; reduce `app.py`/`argus_gui.py`/`gui_app.py`/`gui_main.py`/`gui_root.py`/`studio.py` to shims, then remove | Streamlit smoke test of dashboard passes | P1 | Rename+shims done (2026-07-06). **Precondition now met** (2026-07-06): `tests/test_gui/test_dashboard_apptest.py` uses Streamlit's `AppTest` harness to actually run `dashboard.py` and each of its 6 tabs in a simulated session (not just import) - zero exceptions. Physical shim removal still deferred to a dedicated pass, now unblocked. |
 | C4 | Merge `brain_v2`->`brain`, `agent_factory_v2`->`agent_factory`; migrate `app/core/workflow/*` into `app/core/agent/`; repoint 3 test files; delete shadows | `pytest` green after repoint | P0 | Done |
 | C5 | Author `research.md`/`data-model.md`/`quickstart.md` for `002` and `003-sqlite` | derive from existing spec/plan (no new decisions) | P2 | Done - all 6 files already present with substantial content (91-139 lines each), verified 2026-07-06 |
-| C6 | Move root `*_FIX.*` / `*_REPORT.*` notes to `docs/history/`; delete `Plan md/`; move `check_integration.py`/`test_parsing_fix.py` into `tests/` | none | P2 | Done - `test_parsing_fix.py` routed to `docs/history/verify_parsing_fix.py` instead of `tests/` (2 of its 4 assertions fail against current design; `tests/` would have made it live for the first time via pytest's `test_*.py` discovery) |
+| C6 | Move root `*_FIX.*` / `*_REPORT.*` notes to `docs/history/`; delete `Plan md/`; move `check_integration.py`/`test_parsing_fix.py` into `tests/` | none | P2 | Done - `test_parsing_fix.py` routed to `docs/history/verify_parsing_fix.py` instead of `tests/` (2 of its 4 assertions fail against current design; `tests/` would have made it live for the first time via pytest's `test_*.py` discovery). Follow-up (2026-07-09): `IMPLEMENTATION_GUIDE.md` was missed by the original C6 pass because its name doesn't match the `*_FIX.*`/`*_REPORT.*` glob, despite its content being exactly that (a one-off writeup of the same "Invalid Format: Missing 'Action:'" bug `PARSING_ERROR_FIX.md` already covers) - moved to `docs/history/IMPLEMENTATION_GUIDE_parsing_error_fix.md`. |
 | C7 | Delete `.pytest_cache/` (now gitignored) | none | P3 | Done |
 
 ---
