@@ -12,7 +12,8 @@ These are the authoritative sources of truth. When any other document disagrees,
 | [`../specs/012-spec-reconciliation/`](../specs/012-spec-reconciliation/) | Canonical cross-cutting decisions (naming, ports, RAG embedding, agent design, testing, CI/CD) |
 | [`ARCHITECTURE_AUDIT_REPORT.md`](ARCHITECTURE_AUDIT_REPORT.md) | Repository audit, duplication analysis, and the Cleanup Manifest (C1-C7) |
 | [`ARGUS_SPECKIT_ARCHITECTURE_REVIEW.md`](ARGUS_SPECKIT_ARCHITECTURE_REVIEW.md) | Point-in-time architecture review (pre-consolidation baseline) |
-| [`STRUCTURE_GUIDE.md`](STRUCTURE_GUIDE.md) / [`PROJECT_FILE_OVERVIEW.md`](PROJECT_FILE_OVERVIEW.md) | Repository structure and file overview |
+| [`../.specify/memory/constitution.md`](../.specify/memory/constitution.md) | Project governance and coding/process principles (supersedes the removed `GEMINI.md`) |
+| [`../scripts/README.md`](../scripts/README.md) | Repository structure and script/entry-point overview |
 | [`ARGUS_TECHNICAL_ARCHITECTURE_v1.5_LEGACY.md`](ARGUS_TECHNICAL_ARCHITECTURE_v1.5_LEGACY.md) | Archived pre-RAG architecture (historical) |
 
 Automation and validation: `scripts/validate_specs.py`, `scripts/validate_ascii.py`,
@@ -30,25 +31,23 @@ Automation and validation: `scripts/validate_specs.py`, `scripts/validate_ascii.
 - SSH bridge configuration
 - Troubleshooting guide
 
-### `arc42.md`
-**Architecture Documentation**: Formal system architecture
+### `ARGUS_FRAMEWORK_ARCHITECTURE_v2.md`
+**Architecture Documentation**: Formal system architecture (arc42 + C4 format)
 - System overview and context
 - Solution strategy
 - Building block view
 - Runtime view
 - Deployment view
-- Cross-cutting concepts
+- Cross-cutting concepts (ADRs 1-16)
 
 ## Project Standards
 
-### `GEMINI.md`
-**Project Standards & Guidelines**:
-- Code style requirements
-- File organization standards
-- Directory naming conventions
+### `.specify/memory/constitution.md`
+**Project Standards & Guidelines** (governance document, amendment-tracked):
+- Code style and duplication requirements
+- Testing and truthful-runtime requirements
 - Documentation requirements
-- Git workflow and commit messages
-- Performance benchmarks
+- Git commit discipline
 - Security considerations
 
 ## Quick References
@@ -97,34 +96,30 @@ docs/
 ├── ARGUS_TECHNICAL_ARCHITECTURE_v1.5_LEGACY.md # Archived pre-RAG architecture
 ├── ARCHITECTURE_AUDIT_REPORT.md                # Repository audit + Cleanup Manifest
 ├── ARGUS_SPECKIT_ARCHITECTURE_REVIEW.md        # Pre-consolidation review baseline
-├── STRUCTURE_GUIDE.md                          # Repository structure guide
-├── PROJECT_FILE_OVERVIEW.md                    # File-by-file overview
 ├── Argus_Master_Documentation.md               # Main technical reference
 ├── Multi_Agent_Pentest_Architectures.md        # Background research
-└── Information_Disclosure_Notes.md             # Findings notes
+├── Information_Disclosure_Notes.md             # Findings notes
+└── history/                                    # Superseded docs, retained not deleted (Constitution VII)
 ```
 
 > Canonical cross-cutting decisions live in [`../specs/012-spec-reconciliation/`](../specs/012-spec-reconciliation/), not in this directory.
+> Project governance and coding standards live in [`../.specify/memory/constitution.md`](../.specify/memory/constitution.md).
 
 ## How to Use This Documentation
 
 ### For New Users
-1. Start: `Argus_Master_Documentation.md` (Sections 1-4)
-2. Setup: Follow installation steps (Section 5)
-3. Quick Start: `README.md` in project root
-4. Launch: Use `LAUNCH_STUDIO.bat C` to test
+1. Start: `../README.md` in the project root (quick start)
+2. Setup: `../INSTALLATION_GUIDE.md`, then `Argus_Master_Documentation.md` for the manual steps it automates
+3. Launch: `scripts\LAUNCH_STUDIO.bat`
 
 ### For Developers
-1. Review: `GEMINI.md` (coding standards)
-2. Understand: `arc42.md` (system design)
-3. Deep Dive: Relevant section in `Argus_Master_Documentation.md`
-4. Code: Use `app/README.md` for component details
+1. Review: `../.specify/memory/constitution.md` (coding/process standards)
+2. Understand: `ARGUS_FRAMEWORK_ARCHITECTURE_v2.md` (system design, arc42 + C4)
+3. Code: `../scripts/README.md` for entry points, `../app/README.md` for component details
 
 ### For System Administrators
-1. Infrastructure: `Argus_Master_Documentation.md` (Section 5)
-2. Deployment: `arc42.md` (Deployment View)
-3. Troubleshooting: `Argus_Master_Documentation.md` (Section 7)
-4. Scaling: See performance optimization tips
+1. Infrastructure: `Argus_Master_Documentation.md`
+2. Troubleshooting: `Argus_Master_Documentation.md` (Operation and Troubleshooting section)
 
 ## Key Concepts
 
@@ -135,64 +130,13 @@ docs/
 - **Performance**: Local network (WSL2 on same machine = fast)
 
 ### ArgusBrain Integration
-- **Model**: WhiteRabbitNeo (7B parameter, specialized for penetration testing)
-- **Interface**: LangChain Tool use
-- **Context**: Receives target info, tool results, historical context
-- **Output**: Formatted analysis and recommendations
+- **Model**: config-driven (`config.yaml`'s `model_name`; currently a WhiteRabbitNeo-V3-7B build), not hardcoded
+- **Interface**: LangChain Tool use via a structured-output-first ReAct graph (`app/core/agent/react_workflow.py`)
+- **Context**: Receives target info, tool results, historical (Blackboard) context
+- **Output**: Formatted analysis and recommendations (`app.core.schemas.SecurityReport`)
 
 ### Tool Registry Pattern
 - **Purpose**: Centralized facade for all security tools
 - **Implementation**: `WSLBridgeTools` class in `app/tools/tool_registry.py`
 - **Extensibility**: Add new tools without modifying core UI
 - **Integration**: Tools can be local (Windows) or remote (Kali/WSL)
-
-## Contributing Documentation
-
-When adding new features or capabilities:
-
-1. **Code Documentation**
-   - Add inline comments for complex logic
-   - Update docstrings with parameters and return values
-   - Link to relevant sections in master docs
-
-2. **Technical Documentation**
-   - Update `Argus_Master_Documentation.md` with new sections
-   - Add diagrams to `arc42.md` if architectural changes
-   - Update `GEMINI.md` if adding new standards
-
-3. **User Documentation**
-   - Add usage examples to relevant README.md
-   - Document new launch options in `scripts/README.md`
-   - Update quick-start guides if adding new features
-
-## Standards & Best Practices
-
-Refer to `GEMINI.md` for:
-- Code style (PEP 8 for Python)
-- Git commit message format
-- Branch naming conventions
-- Pull request requirements
-- Documentation requirements
-- Testing requirements
-
-## Version Control
-
-- **Main Branch**: Production-ready code
-- **fix/** branches**: Bug fixes and improvements
-- **feature/** branches: New capabilities
-- **docs/** branches: Documentation updates
-- See `GEMINI.md` for complete git workflow
-
-## Support & Troubleshooting
-
-- **Installation Issues**: See `Argus_Master_Documentation.md` Section 7
-- **Architecture Questions**: See `arc42.md`
-- **Development Standards**: See `GEMINI.md`
-- **Tool-Specific Issues**: See component README files (`app/`, `scripts/`)
-
-## Related Documentation
-
-- `README.md` - Project overview and quick start
-- `Argus_Master_Documentation.md` - Complete technical reference
-- `GEMINI.md` - Development standards and guidelines
-- `arc42.md` - System architecture (ISO/IEC standard format)
