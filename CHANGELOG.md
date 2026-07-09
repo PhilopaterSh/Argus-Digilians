@@ -2,6 +2,32 @@
 
 All notable changes to this project will be documented in this file.
 
+## Fixed: agent repeated an identical, already-succeeded tool call 4 times in a row (2026-07-09, specs/018 CHK085)
+Live testing against `https://scanme.nmap.org` (immediately after the CHK084 ping fix) surfaced
+a new, real, repeating bug: the model called `Recon_Suite` with the *identical* input 4 times in
+a row, despite getting a complete, successful result on the very first call. `react_prompts.py`'s
+own Rule 2 ("NEVER repeat the same tool with the exact same input") turned out to be advisory
+text the model doesn't reliably follow - each repeat burned a real nmap scan for zero benefit.
+
+Fixed structurally instead of trusting the prompt alone: `react_workflow.py`'s `execute_node`
+now appends each successful `"{tool}::{input}"` pair to a new state field, `tool_call_history`;
+`parse_node` blocks any repeat of a pair already in that history with a "you already called
+this" Observation instead of re-executing it (new `phase: "duplicate_call"`, routed through the
+same `max_iterations`-bounded loop `format_error` already used). Also surfaced
+`tool_call_history` directly in the prompt itself (`react_prompts.py`'s new
+`TOOLS ALREADY CALLED THIS RUN` block) so the model has explicit visibility into what it already
+tried, rather than relying on it to infer that from the Blackboard/conversation history -
+prevention on top of the reactive block.
+
+New tests in `tests/test_langgraph_workflow.py`:
+`test_custom_graph_blocks_identical_repeated_tool_call` (verifies the real tool only executes
+once and the model receives exactly one duplicate warning) and
+`test_custom_graph_duplicate_call_loop_respects_max_iterations` (a model that keeps re-proposing
+a blocked call still terminates cleanly). Live-reverified against the exact scenario that
+exposed the bug: `Recon_Suite` now runs once, a repeat attempt is blocked with zero extra nmap
+scans, and the model immediately produces a complete, correct `SecurityReport` instead. Full
+suite: 193 passed, 1 pre-existing unrelated failure.
+
 ## Changed: switched the production model to a Q5_K_M quantization to fix the VRAM-headroom crash root cause (2026-07-09, specs/018 T021)
 CHK081's intermittent Ollama/CUDA crash was mitigated with a scoped retry, but the root
 contributing factor - the F16 `WhiteRabbitNeo/WhiteRabbitNeo-V3-7B:latest` model (~15GB) leaving

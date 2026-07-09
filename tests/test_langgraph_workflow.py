@@ -86,6 +86,7 @@ BASE_STATE = {
     "tool_input": None,
     "tool_result": None,
     "tool_error": None,
+    "tool_call_history": [],
     "remaining_steps": 10,
 }
 
@@ -149,6 +150,54 @@ def test_custom_graph_stops_at_max_iterations():
     assert result["iteration_count"] <= state["max_iterations"], \
         f"iteration_count {result['iteration_count']} exceeded max {state['max_iterations']}"
     print(f"  [PASS] test_custom_graph_stops_at_max_iterations (stopped at {result['iteration_count']})")
+
+
+def test_custom_graph_blocks_identical_repeated_tool_call():
+    """Regression test: a live run against scanme.nmap.org called Recon_Suite
+    with the exact same input 4 times in a row despite it succeeding the
+    first time - react_prompts.py's own "never repeat the same tool with the
+    same input" rule is advisory text the model doesn't reliably follow.
+    A model that keeps proposing the same already-executed call must be told
+    so and redirected, not allowed to silently re-run the same real tool."""
+    llm = MockLLM([
+        "Thought: Scan first.\nAction: mock_scan\nAction Input: https://test.com",
+        "Thought: Scan again just to be safe.\nAction: mock_scan\nAction Input: https://test.com",
+        "Thought: Understood, wrapping up.\nFinal Answer: Security report here.",
+    ])
+
+    graph = _build_custom_workflow(llm, [mock_scan])
+    result = graph.invoke(dict(BASE_STATE))
+
+    # mock_scan must have been executed exactly once, not twice - the second
+    # identical call should have been blocked before reaching execute_node.
+    tool_messages = [m for m in result["messages"] if "Open ports" in str(m.content)]
+    assert len(tool_messages) == 1, f"mock_scan's real result should appear once, got {len(tool_messages)}"
+
+    # The model must have been told about the block, not left guessing.
+    blocked_msgs = [m for m in result["messages"] if "already called" in str(m.content)]
+    assert len(blocked_msgs) == 1, "Model should receive exactly one duplicate-call warning"
+
+    assert result["phase"] == "done"
+    assert "Final Answer:" in result["messages"][-1].content
+    print("  [PASS] test_custom_graph_blocks_identical_repeated_tool_call")
+
+
+def test_custom_graph_duplicate_call_loop_respects_max_iterations():
+    """A model that keeps re-proposing the same blocked call forever must
+    still terminate at max_iterations, same as the format_error loop."""
+    llm = MockLLM([
+        "Thought: Scan.\nAction: mock_scan\nAction Input: https://test.com",
+    ])
+
+    state = dict(BASE_STATE)
+    state["max_iterations"] = 3
+
+    graph = _build_custom_workflow(llm, [mock_scan])
+    result = graph.invoke(state)
+
+    assert result["iteration_count"] <= state["max_iterations"]
+    assert result["phase"] != "done"
+    print(f"  [PASS] test_custom_graph_duplicate_call_loop_respects_max_iterations (stopped at {result['iteration_count']})")
 
 
 def test_custom_graph_handles_unknown_tool():

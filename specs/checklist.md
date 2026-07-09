@@ -220,6 +220,23 @@ infrastructure-level crash, none reachable by the mock-LLM suite above.
   (`check_reachability`, `_first_web_port`, `get_gui_db_connection`, `exploit_node`,
   `scanner_node`) - `app/GUI/components/session_manager.py`'s 5 functions have pre-existing
   docstring gaps unrelated to this session's one-line import change there, left as known debt.
+- [x] CHK085 (DONE 2026-07-09) Live testing against `https://scanme.nmap.org` (post-CHK084)
+  reproduced a real, repeating bug: the model called `Recon_Suite` with the *identical* input 4
+  times in a row despite complete success on the first call - `react_prompts.py`'s own Rule 2
+  ("NEVER repeat the same tool with the exact same input") is advisory text the model doesn't
+  reliably follow on its own. Fixed structurally rather than trusting the prompt alone:
+  `react_workflow.py`'s `execute_node` now records each successful `"{tool}::{input}"` pair into
+  new state field `tool_call_history`; `parse_node` blocks a repeat of any pair already in that
+  history with a "you already called this" Observation instead of re-executing (new `phase`:
+  `"duplicate_call"`, routed through the same `max_iterations`-bounded loop as `format_error`).
+  Also surfaced `tool_call_history` directly in the prompt (`react_prompts.py`'s new
+  `TOOLS ALREADY CALLED THIS RUN` block) so the model can see what it already tried without
+  relying on memory of the conversation - prevention, not just reaction. New tests:
+  `test_custom_graph_blocks_identical_repeated_tool_call`,
+  `test_custom_graph_duplicate_call_loop_respects_max_iterations`. Live-reverified against the
+  exact scenario that exposed the bug: `Recon_Suite` now executes once, a repeat attempt is
+  blocked with zero extra nmap runs, and the model produces a complete real `SecurityReport`
+  immediately after. Full suite: 193 passed, 1 pre-existing unrelated failure.
 
 ## Constitution IX — Single Source of Truth (No Duplication)
 

@@ -229,6 +229,7 @@ class ArgusBrain:
                 "tool_input": None,
                 "tool_result": None,
                 "tool_error": None,
+                "tool_call_history": [],
             }
             seen_messages = len(initial_state["messages"])
             final_state: Dict[str, Any] = initial_state

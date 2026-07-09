@@ -25,6 +25,7 @@ class ArgusAgentState(TypedDict):
     tool_input: Optional[str]
     tool_result: Optional[str]
     tool_error: Optional[str]
+    tool_call_history: list[str]
 
 
 class ArgusPrebuiltState(ArgusAgentState):

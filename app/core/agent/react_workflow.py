@@ -270,7 +270,20 @@ def _build_custom_workflow(
     def parse_node(state: ArgusAgentState) -> dict:
         """Extract Action or detect Final Answer from LLM output.
 
-        Returns tool_name/tool_input on success, format error on failure.
+        Also blocks a call whose (tool, input) pair exactly matches one
+        already in `state["tool_call_history"]` - see the inline comment
+        below for why.
+
+        Args:
+            state (ArgusAgentState): Current graph state; reads the latest
+                message (the agent's raw output) and `tool_call_history`.
+
+        Returns:
+            dict: A partial state update. On success: `tool_name`/`tool_input`/
+            `phase`. On a format error or blocked duplicate call: `tool_error`,
+            `tool_name`/`tool_input` cleared to `None`, `phase` set to
+            `"format_error"`/`"duplicate_call"`, and a guidance `HumanMessage`
+            appended to `messages`.
         """
         last = state["messages"][-1]
         content = str(last.content) if hasattr(last, "content") else str(last)
@@ -292,10 +305,47 @@ def _build_custom_workflow(
                 "messages": [HumanMessage(content=guidance)],
             }
 
+        # A live run against scanme.nmap.org repeated an identical
+        # Recon_Suite call 4 times in a row despite it succeeding the first
+        # time - the prompt's own "never repeat the same tool with the same
+        # input" rule is advisory text the model doesn't reliably follow.
+        # Enforce it structurally instead of trusting the model to self-police:
+        # block re-executing a (tool, input) pair already seen this run and
+        # tell the model so, rather than burning a real tool call to find out.
+        if result.get("tool_name"):
+            call_key = f"{result['tool_name']}::{result.get('tool_input', '')}"
+            if call_key in state.get("tool_call_history", []):
+                guidance = (
+                    f"Observation: You already called {result['tool_name']} with "
+                    f"input '{result.get('tool_input', '')}' earlier this run - "
+                    f"re-running it would repeat the same result. Use the "
+                    f"Blackboard/previous Observations above, try a different "
+                    f"tool or input, or give your Final Answer now."
+                )
+                return {
+                    "tool_error": guidance,
+                    "tool_name": None,
+                    "tool_input": None,
+                    "phase": "duplicate_call",
+                    "messages": [HumanMessage(content=guidance)],
+                }
+
         return result
 
     def execute_node(state: ArgusAgentState) -> dict:
-        """Run the chosen tool and feed back the Observation."""
+        """Run the chosen tool and feed back the Observation.
+
+        Args:
+            state (ArgusAgentState): Current graph state; reads `tool_name`/
+                `tool_input` (set by `parse_node`) and `tool_call_history`.
+
+        Returns:
+            dict: A partial state update with `tool_result`/`tool_error`/
+            `blackboard_summary`, an Observation `HumanMessage` appended to
+            `messages`, and - on success - `tool_call_history` with this
+            call's `"{name}::{input}"` key appended, so `parse_node` can
+            block an identical repeat next time.
+        """
         name = state.get("tool_name")
         inp = state.get("tool_input", state["target"])
 
@@ -310,11 +360,13 @@ def _build_custom_workflow(
                 f"{state['blackboard_summary']}\n"
                 f"- [{name}] {str(inp)[:80]} -> {str(result)[:200]}"
             ).strip()
+            call_key = f"{name}::{inp}"
             update = {
                 "tool_result": str(result)[:2000],
                 "tool_error": None,
                 "blackboard_summary": bb,
                 "messages": [HumanMessage(content=obs)],
+                "tool_call_history": state.get("tool_call_history", []) + [call_key],
             }
             if memory is not None:
                 try:
@@ -337,20 +389,34 @@ def _build_custom_workflow(
         return "parse"
 
     def route_after_parse(state: ArgusAgentState) -> str:
+        """Decide the next node after `parse_node`.
+
+        Args:
+            state (ArgusAgentState): Current graph state; reads `phase`,
+                `tool_name`, `iteration_count`, and `max_iterations`.
+
+        Returns:
+            str: One of `"end"` (done, or a format/duplicate-call loop that
+            hit `max_iterations`), `"agent"` (retry after a format error or
+            blocked duplicate call), or `"execute"` (a valid new tool call).
+        """
         phase = state.get("phase", "")
         if phase == "done":
             return "end"
-        if phase == "format_error":
+        if phase in ("format_error", "duplicate_call"):
             # Bug fixed (specs/018): this previously routed straight back to
             # "agent" with no iteration check at all, unlike the tool-execute
             # path below. A model that never once produces valid output (the
             # exact live failure this spec fixes) would loop here forever,
             # bounded only by LangGraph's default recursion_limit (25) via an
             # ungraceful GraphRecursionError - not by max_iterations, and not
-            # a clean "no final answer" result.
+            # a clean "no final answer" result. duplicate_call (specs/018
+            # addendum 2) shares this same bound for the same reason - a
+            # model that keeps re-proposing the same blocked call needs the
+            # same safety net a model that never produces valid output does.
             if state["iteration_count"] >= state["max_iterations"]:
                 return "end"
-            return "agent"  # loop back so model sees the format error
+            return "agent"  # loop back so model sees the format/duplicate-call error
         if state.get("tool_name"):
             return "execute"
         return "end"
