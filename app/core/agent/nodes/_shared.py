@@ -2,6 +2,16 @@ from urllib.parse import urlparse
 
 
 def _first_web_port(open_ports):
+    """Pick the most likely web-facing port from a list of open ports.
+
+    Args:
+        open_ports (list[int]): Open ports discovered by recon, in any order.
+
+    Returns:
+        int | None: The first port that matches a common web-server port
+        (80, 443, 8080, 8000, 8443), the first port in the list if none
+        match, or ``None`` if ``open_ports`` is empty.
+    """
     for port in open_ports:
         if port in {80, 443, 8080, 8000, 8443}:
             return port

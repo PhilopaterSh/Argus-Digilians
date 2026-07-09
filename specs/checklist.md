@@ -209,6 +209,17 @@ infrastructure-level crash, none reachable by the mock-LLM suite above.
   phase's scaffolding fixes already captured). Live-verified end-to-end: valid structured tool
   calls and a correctly parsed `SecurityReport` final answer, GPU usage ~7.9GB/16GB throughout
   (vs ~15.8GB before) - no crash.
+- [x] CHK084 (DONE 2026-07-09) `check_reachability()` passed a full scheme-qualified URL straight
+  to `ping`, which always fails with "Name or service not known" regardless of whether the host
+  is actually up - live-discovered against `https://scanme.nmap.org`, which the agent reported as
+  DOWN immediately before a real nmap scan (via `Recon_Suite`) found it up with open ports 22/80.
+  Fixed by reusing `app/tools/utils.py::normalize_domain_for_memory()` to strip scheme/port before
+  building the ping command. New `tests/test_tools/test_reachability.py` (no prior coverage
+  existed) - 5 tests. Also ran `scripts/check_docstrings.py` (specs/016) against every file
+  touched this session and closed the Google-style docstring gaps it found in new/modified code
+  (`check_reachability`, `_first_web_port`, `get_gui_db_connection`, `exploit_node`,
+  `scanner_node`) - `app/GUI/components/session_manager.py`'s 5 functions have pre-existing
+  docstring gaps unrelated to this session's one-line import change there, left as known debt.
 
 ## Constitution IX — Single Source of Truth (No Duplication)
 

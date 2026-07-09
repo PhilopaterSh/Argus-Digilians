@@ -9,6 +9,18 @@ logger = logging.getLogger(__name__)
 
 
 def scanner_node(state: AgentState) -> AgentState:
+    """Scan the recon-discovered web port for vulnerabilities (nikto/ffuf).
+
+    Args:
+        state (AgentState): Current graph state; reads `open_ports` (from
+            `recon_node`) and `target_ip`, falling back to a scheme-inferred
+            port (443/80) if recon confirmed none.
+
+    Returns:
+        AgentState: The same state, updated with `vulnerabilities`,
+        `current_payload` (selected for `exploit_node`), and
+        `extracted_data["scanner"]`.
+    """
     logger.info("[Scanner Node] Analyzing open ports for vulnerabilities...")
     record_state_event(state, "scanner", "running", "Starting vulnerability scanning")
     state["current_node"] = "scanner"
