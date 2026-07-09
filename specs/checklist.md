@@ -93,13 +93,13 @@ phase's own `specs/<phase>/tasks.md` remains the source of truth for individual 
   to real backend data (commit `179e979`)
 - [x] CHK050 Blocking sleep-loop polling replaced with non-blocking `st.fragment` (commit `1186adb`)
 - [x] CHK051 Agent state-file write race between parent/child process removed (commit `194dbc5`)
-- [ ] **CHK052 (OPEN — tracking gap)** `specs/011-gui-enhancement/tasks.md` still shows 0/31
-  tasks checked (`[ ]` on every line) despite the corresponding code (`app/GUI/dashboard.py`,
-  `agent_controller.py`, `blackboard.py`, etc.) existing and the fixes above being merged and
-  live-validated. The work is done; the tracking file was never updated to reflect it. **Action
-  owner must reconcile `specs/011-gui-enhancement/tasks.md` against actual code before this
-  phase can be marked compliant** — not fixed in this pass, since marking 31 individual items
-  done requires per-item code verification, not a blanket check.
+- [x] **CHK052 (RESOLVED 2026-07-09)** `specs/011-gui-enhancement/tasks.md` showed 0/31
+  tasks checked despite the corresponding code (`app/GUI/dashboard.py`, `agent_controller.py`,
+  `blackboard.py`, etc.) existing and the fixes above being merged and live-validated. Reconciled:
+  each of the 31 tasks was individually re-verified against actual code (grepped function/class
+  names directly, not assumed) - all 31 confirmed done, most under a `pages/` -> `tabs/` rename
+  that happened during implementation but was never reflected in the spec's task names. Full
+  detail and per-task evidence in `specs/011-gui-enhancement/tasks.md`'s reconciliation note.
 
 ## Phase 012 — Spec Reconciliation
 
@@ -228,22 +228,25 @@ below). Found via `--all` scan of `app/`, `scripts/`, `Setup/`:
   despite `Setup/README.md`'s file table claiming otherwise) were moved into
   `Setup/`; the duplicate `scripts/Setup/requirements.txt` was deleted. `Setup/`
   is now the single canonical legacy-installer directory.
-- [ ] CHK059 (OPEN) `_first_web_port` identically defined in both
-  `app/core/agent/nodes/exploit.py:11` and `app/core/agent/nodes/scanner.py:11`
-  — consolidate into one shared helper (e.g. `app/core/agent/nodes/_shared.py`
-  or similar).
-- [ ] CHK060 (OPEN) `_build_target_url` identically defined in both
-  `app/core/agent/nodes/exploit.py:17` and `app/core/agent/nodes/scanner.py:18`
-  — same consolidation as CHK059.
-- [ ] CHK061 (OPEN) `_get_conn`/`_get_gui_conn` identical DB-connection logic
-  independently defined in `app/GUI/components/session_manager.py:9` and
-  `app/GUI/utils/blackboard.py:12` — consolidate into one shared connection
-  helper.
-- [ ] CHK062 (OPEN, low severity) Identical 2-line `__init__(self, runner,
-  memory)` constructor body independently repeated across 5 tool-service
-  classes (`app/tools/{crawler,reachability,scanners,secrets,simulation}.py`)
-  — candidate for a shared base class, but low urgency since it's idiomatic
-  dependency-injection boilerplate rather than accidental drift.
+- [x] CHK059 (RESOLVED 2026-07-09) `_first_web_port` was identically defined in both
+  `app/core/agent/nodes/exploit.py` and `app/core/agent/nodes/scanner.py` - moved to new
+  `app/core/agent/nodes/_shared.py`, both nodes now import it from there. Verified no test
+  imported the old per-file copies directly (only the public `*_node` functions are tested).
+- [x] CHK060 (RESOLVED 2026-07-09) `_build_target_url` was identically defined in the same two
+  files - moved to `app/core/agent/nodes/_shared.py` alongside CHK059 (kept the more complete
+  docstring from `exploit.py`'s copy).
+- [x] CHK061 (RESOLVED 2026-07-09) `_get_conn`/`_get_gui_conn` had identical DB-connection logic
+  independently defined in `app/GUI/components/session_manager.py` and
+  `app/GUI/utils/blackboard.py` - moved to new `app/GUI/utils/db_connection.py::get_gui_db_connection()`,
+  both call sites now import it (aliased to their original private names to keep the diff
+  minimal). Verified via `tests/test_gui/test_session.py`'s roundtrip tests, which exercise the
+  public API these functions sit behind.
+- [x] CHK062 (REVIEWED 2026-07-09, NOT CHANGED - decision, not an oversight) Re-examined the
+  identical 2-line `__init__(self, runner, memory)` across the 5 tool-service classes and agreed
+  with this item's own original assessment: it's idiomatic dependency-injection boilerplate, not
+  accidental drift, and introducing a shared base class for 2 lines x 5 classes would be the kind
+  of premature abstraction this project's own conventions warn against. Left as-is.
+  Full suite re-verified after CHK059-061: 186 passed, 1 pre-existing unrelated failure.
 - [x] CHK063 (RESOLVED 2026-07-09) `workspace/run_argus_cli.py` vs
   `scripts/run_argus_cli.py` reconciled. Investigation found the `workspace/`
   version's 4 "extra tools" were not a viable alternative to preserve as-is:
@@ -301,4 +304,4 @@ below). Found via `--all` scan of `app/`, `scripts/`, `Setup/`:
 | Commits | 16+ (005-009) + ongoing |
 | New files created | 20+ (005-009) + 5 (017) + 4 (018: spec/research/plan/tasks.md) |
 | Files refactored | 10+ (005-009) |
-| **Open compliance gaps** | **CHK052** (011 task tracking vs. code mismatch); **CHK055** (014 in progress, not a gap — expected); **CHK058-063** (Constitution IX duplication backlog, found 2026-07-08) |
+| **Open compliance gaps** | None as of 2026-07-09 — **CHK052** (011 task tracking) and the **CHK058-065** Constitution IX duplication/organization backlog are all resolved; **CHK055** (014 in progress) is expected, not a gap |

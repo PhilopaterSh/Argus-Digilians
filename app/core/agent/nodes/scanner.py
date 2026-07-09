@@ -1,25 +1,11 @@
 import logging
-from urllib.parse import urlparse
 
 from app.core.agent.contracts import record_state_event, utc_now_iso
+from app.core.agent.nodes._shared import _build_target_url, _first_web_port
 from app.core.agent.state import AgentState
 from app.tools.tool_registry import WSLBridgeTools
 
 logger = logging.getLogger(__name__)
-
-
-def _first_web_port(open_ports):
-    for port in open_ports:
-        if port in {80, 443, 8080, 8000, 8443}:
-            return port
-    return open_ports[0] if open_ports else None
-
-
-def _build_target_url(target: str, port: int) -> str:
-    parsed = urlparse(target if target.startswith("http") else f"http://{target}")
-    host = parsed.netloc or parsed.path
-    scheme = "https" if port in {443, 8443} else "http"
-    return f"{scheme}://{host}:{port}" if ":" not in host else f"{scheme}://{host}"
 
 
 def scanner_node(state: AgentState) -> AgentState:

@@ -1,19 +1,10 @@
 import sys
 import os
-import sqlite3
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..")))
 
 from app.core.memory.memory_service import ArgusMemory
-
-_DEFAULT_DB_PATH = os.path.join("data", "argus_intelligence.db")
-
-
-def _get_gui_conn():
-    conn = sqlite3.connect(_DEFAULT_DB_PATH, timeout=10)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode=WAL")
-    return conn
+from app.GUI.utils.db_connection import get_gui_db_connection as _get_gui_conn
 
 
 _memory = None

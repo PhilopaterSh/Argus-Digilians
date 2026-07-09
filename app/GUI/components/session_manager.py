@@ -1,16 +1,8 @@
 import json
-import sqlite3
 import uuid
 from datetime import datetime, timezone
 
-_DEFAULT_DB_PATH = "data/argus_intelligence.db"
-
-
-def _get_conn():
-    conn = sqlite3.connect(_DEFAULT_DB_PATH, timeout=10)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode=WAL")
-    return conn
+from app.GUI.utils.db_connection import get_gui_db_connection as _get_conn
 
 
 def save_session(name, targets, settings, agent_state=None):
