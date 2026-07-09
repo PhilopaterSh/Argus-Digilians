@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file.
 
+## Changed: switched the production model to a Q5_K_M quantization to fix the VRAM-headroom crash root cause (2026-07-09, specs/018 T021)
+CHK081's intermittent Ollama/CUDA crash was mitigated with a scoped retry, but the root
+contributing factor - the F16 `WhiteRabbitNeo/WhiteRabbitNeo-V3-7B:latest` model (~15GB) leaving
+only ~500MB of VRAM headroom on a 16GB card - was still present. Researched alternatives
+(quantization-source quality across bartowski/mradermacher/unsloth; a base-model swap to Qwen3,
+cited in 2026 benchmarks as the most reliable small local model for tool-calling) before deciding:
+switched to `hf.co/bartowski/WhiteRabbitNeo_WhiteRabbitNeo-V3-7B-GGUF:Q5_K_M` (~5.4GB, ~95% of F16
+quality), keeping the same base model rather than swapping to Qwen3 - no mature small
+uncensored/pentest-tuned Qwen3 variant exists, and WhiteRabbitNeo's security-domain fine-tuning
+was judged more valuable than a tool-calling-reliability gain this phase's scaffolding work
+(CHK077-082) already largely captured. User-confirmed direction.
+
+Updated `config.yaml`'s `model_name`, `app/core/config.py`'s dataclass default, `.env.example`'s
+`SELECTED_MODEL`, and `scripts/ARGUS_INSTALLER.ps1`'s default `$OLLAMA_MODEL` (fresh installs now
+pull the same quantized model). Live-verified end-to-end via `scripts/_diagnostic_cli_verbose.py`:
+the quantized model produced valid `Thought:`/`Action:` structured JSON tool calls and a correctly
+parsed `SecurityReport` final answer, with GPU usage at ~7.9GB/16GB throughout the run (vs
+~15.8GB with the old F16 model) - no crash.
+
 ## Fixed: four more live-run failures found re-testing specs/018 against a real target (2026-07-09, specs/018 addendum)
 The T011 follow-up ("live Ollama/WSL re-run... nice-to-have, not a blocker") was performed
 against `https://www.cultbeauty.co.uk/` and surfaced four additional real bugs the mock-LLM

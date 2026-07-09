@@ -53,7 +53,7 @@ class ArgusConfig:
     max_web_search_attempts: int = 3
     web_search_timeout_seconds: int = 10
     early_stopping_method: str = "stop"
-    model_name: str = "WhiteRabbitNeo/WhiteRabbitNeo-V3-7B:latest"
+    model_name: str = "hf.co/bartowski/WhiteRabbitNeo_WhiteRabbitNeo-V3-7B-GGUF:Q5_K_M"
     command_timeout_seconds: int = 600
     recon_truncate_chars: int = 1000
     max_retries: int = 3

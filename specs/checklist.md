@@ -199,6 +199,16 @@ infrastructure-level crash, none reachable by the mock-LLM suite above.
   `test_ask_does_not_retry_non_infra_errors` (non-matching errors are never masked by a retry)
 - [x] CHK082 Full suite re-verified green after all five fixes: 186 passed, 1 pre-existing
   unrelated network-dependent failure (`test_smart_web_search.py::test_attempt_limit`)
+- [x] CHK083 (DONE 2026-07-09) Model switched from the F16
+  `WhiteRabbitNeo/WhiteRabbitNeo-V3-7B:latest` (~15GB, ~500MB VRAM headroom - the direct
+  contributing factor to CHK081's crash) to the Q5_K_M-quantized
+  `hf.co/bartowski/WhiteRabbitNeo_WhiteRabbitNeo-V3-7B-GGUF:Q5_K_M` (~5.4GB, ~95% of F16 quality
+  per quantization research). User-confirmed direction after comparing against a base-model swap
+  (Qwen3, rejected - no mature small uncensored/pentest-tuned variant exists, and WhiteRabbitNeo's
+  security-domain fine-tuning was judged more valuable than marginal tool-calling gains this
+  phase's scaffolding fixes already captured). Live-verified end-to-end: valid structured tool
+  calls and a correctly parsed `SecurityReport` final answer, GPU usage ~7.9GB/16GB throughout
+  (vs ~15.8GB before) - no crash.
 
 ## Constitution IX — Single Source of Truth (No Duplication)
 

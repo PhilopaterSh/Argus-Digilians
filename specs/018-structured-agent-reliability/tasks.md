@@ -69,8 +69,12 @@ see `spec.md`'s addendum (FR-007-011) and `research.md`'s addendum for full deta
   network-dependent failure)
 - [x] T020 Spec Kit paperwork for the addendum: this `tasks.md`/`spec.md`/`research.md`;
   `specs/checklist.md` CHK077-082; `CHANGELOG.md` entry
-- [ ] T021 Model/quantization switch (user-confirmed direction, 2026-07-09): pull
-  `hf.co/bartowski/WhiteRabbitNeo_WhiteRabbitNeo-V3-7B-GGUF:Q5_K_M` via Ollama, update
-  `config.yaml`'s `model_name` (and `scripts/ARGUS_INSTALLER.ps1`'s default `$OLLAMA_MODEL` for
-  fresh installs), verify live that the quantized model still produces valid structured output
-  and tool calls before treating this as done
+- [x] T021 (DONE 2026-07-09) Model/quantization switch (user-confirmed direction): pulled
+  `hf.co/bartowski/WhiteRabbitNeo_WhiteRabbitNeo-V3-7B-GGUF:Q5_K_M` via Ollama (~5.4GB vs the
+  original F16's ~15GB); updated `config.yaml`'s `model_name`, `app/core/config.py`'s dataclass
+  default, `.env.example`'s `SELECTED_MODEL`, and `scripts/ARGUS_INSTALLER.ps1`'s default
+  `$OLLAMA_MODEL` (+ lowered `$OLLAMA_MODEL_MIN_GB` 8->6) so fresh installs get the same model.
+  Live-verified end-to-end via `scripts/_diagnostic_cli_verbose.py`: the quantized model produced
+  valid `Thought:`/`Action:` structured JSON tool calls (no format errors) and a correctly
+  structured `SecurityReport` final answer; GPU usage stayed at ~7.9GB/16GB throughout (vs ~15.8GB
+  with the old F16 model, which left only ~500MB free) - no CUDA crash, no infra retry needed.
