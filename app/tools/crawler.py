@@ -5,13 +5,33 @@ class CrawlerService:
     """Discovers internal links and entry points to expand the attack surface."""
 
     def __init__(self, runner, memory):
+        """Store the shared command runner and memory service.
+
+        Args:
+            runner: Object with a `run(command)` method that executes a
+                shell command (via WSL/SSH) and returns its output as a str.
+            memory (ArgusMemory): Blackboard memory service used to persist
+                discovered links.
+        """
         self.runner = runner
         self.memory = memory
 
     def crawl_target(self, url):
-        """Discovers internal links and entry points using curl and grep."""
+        """Discovers internal links and entry points using curl and grep.
+
+        Args:
+            url (str): Target URL to crawl.
+
+        Returns:
+            str: A report of discovered links (up to 15 shown), or "Found 0
+            links" if the target is unreachable/times out (--max-time
+            bounds this to 15s so an unreachable target - live-confirmed
+            against a real, currently-down practice site during specs/018
+            CHK090's own verification - fails fast instead of blocking on
+            command_runner.py's much longer generic default timeout).
+        """
         print(f"[*] [Argus-Core] Crawling target: {url}")
-        cmd = f"curl -s -L {url} | grep -oE 'href=\"[^\"]+\"' | cut -d'\"' -f2 | sort -u"
+        cmd = f"curl -s -L --max-time 15 --connect-timeout 5 {url} | grep -oE 'href=\"[^\"]+\"' | cut -d'\"' -f2 | sort -u"
         res = self.runner.run(cmd)
         
         links = [l for l in res.split('\n') if l.strip() and not l.startswith(('#', 'javascript'))]

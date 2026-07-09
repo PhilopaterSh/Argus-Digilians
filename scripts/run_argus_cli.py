@@ -11,8 +11,8 @@ if PROJECT_ROOT not in sys.path:
 
 from app.tools.tool_registry import WSLBridgeTools
 from app.core.agent.brain import ArgusBrain
+from app.core.agent.brain_tools import build_argus_tools
 from app.core.config import ArgusConfig
-from langchain_core.tools import Tool
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -63,27 +63,16 @@ def run_analysis(target_url):
     bridge = WSLBridgeTools()
     model = config.model_name
 
-    tools = [
-        Tool(name="Check_Reachability", func=bridge.check_reachability, description="Verify if the target domain is reachable before scanning."),
-        Tool(name="Subdomain_Enumeration", func=bridge.enumerate_subdomains, description="Discover subdomains to map the target's attack surface."),
-        Tool(name="Recon_Suite", func=bridge.recon_suite, description="Execute parallel advanced recon (WAF, Nmap, WhatWeb, HTTP Headers, Spider) inside Kali."),
-        Tool(name="Query_Memory", func=bridge.get_intelligence_summary, description="Query the internal Shared Memory (Blackboard) for a summary of all findings."),
-        Tool(name="Query_Knowledge_Graph", func=bridge.query_knowledge_graph, description="Access the Knowledge Graph to find cross-target relationships, shared infrastructure, and lateral movement paths."),
-        Tool(name="Exploit_Suggester", func=bridge.suggest_payloads, description="Search PayloadsAllTheThings for test payloads."),
-        Tool(name="Smart_Web_Search", func=bridge.smart_web_search, description="Search internet for CVEs/Exploits/Security info."),
-        Tool(name="Run_Nikto", func=bridge.run_nikto, description="Run Nikto vulnerability scanner against a web target."),
-        Tool(name="Run_FFUF", func=bridge.run_ffuf_discovery, description="Run FFUF for fast hidden path discovery."),
-        Tool(name="Crawl_Target", func=bridge.crawl_target, description="Discover internal links and entry points to expand attack surface."),
-        Tool(name="Advanced_Evasion_Probe", func=bridge.advanced_vuln_probe, description="Perform targeted, WAF-evasive probes for SQLi and Path Traversal."),
-        Tool(name="Reflective_Pre_Verify", func=bridge.verify_command, description="Check commands for malformed parameters, illegal syntax, or missing tools before running."),
-        Tool(name="Task_Difficulty_Assessment", func=bridge.assess_difficulty, description="Compute TDA scores for target selection based on expected path length, version confidence, and history."),
-    ]
-    # Note: a "Reflective_Post_Verify" tool (bridge.verify_output) was
-    # considered but dropped - it requires 3 positional args (url, command,
-    # raw_output), which a single-string LangChain Tool cannot supply; the
-    # workspace/run_argus_cli.py version that inspired this also referenced
-    # it under a wrong attribute name (post_execute_verify) and had never
-    # actually been run successfully.
+    # specs/018 CHK090: this used to hand-maintain its own 13-tool list,
+    # independently drifted from app/core/agent/brain_tools.py's supposedly
+    # "canonical" one (4 tools existed only here: Crawl_Target,
+    # Advanced_Evasion_Probe, Reflective_Pre_Verify, Task_Difficulty_Assessment
+    # - now merged into the real canonical list, which this imports instead
+    # of re-declaring). A "Reflective_Post_Verify" tool (bridge.verify_output)
+    # was considered but dropped from the canonical list too - it requires 3
+    # positional args (url, command, raw_output), which a single-string
+    # LangChain Tool cannot supply.
+    tools = build_argus_tools(bridge)
 
     brain = ArgusBrain(model, tools)
 

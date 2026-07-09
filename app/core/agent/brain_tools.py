@@ -3,6 +3,16 @@
 Previously this exact list was hand-copied into four separate deprecated GUI
 files (app/GUI/{app,argus_gui,gui_main}.py, desktop_gui.py) - one canonical
 builder here instead, per Constitution IX (Single Source of Truth).
+
+2026-07-09 audit (specs/018 CHK090): this "canonical" list turned out to be
+missing 5 real, working `WSLBridgeTools` capabilities that a *sixth*,
+independently-drifted copy (`scripts/run_argus_cli.py`) still had -
+`crawl_target`/`advanced_vuln_probe`/`verify_command`/`assess_difficulty`
+were in that copy but not here; `analyze_secrets` was in neither. The
+"single canonical builder" had silently become incomplete relative to a
+copy it was supposed to have replaced. All 5 added below;
+`scripts/run_argus_cli.py` now imports this function instead of maintaining
+its own list.
 """
 from langchain_core.tools import Tool
 
@@ -17,12 +27,15 @@ def build_argus_tools(bridge: WSLBridgeTools) -> list[Tool]:
             Tool's `func`.
 
     Returns:
-        list[Tool]: 12 tools covering recon, memory/graph queries, scanning,
-        exploitation research, and raw command execution. Matches the
-        original 13-tool list from the historical `PHILOPATERSH` branch
-        GUI, minus `run_specialized_module` (no longer present on
-        `WSLBridgeTools` - the modules/ scripts it invoked were not
-        migrated during the tool-registry refactor).
+        list[Tool]: 17 tools covering recon, memory/graph queries, scanning,
+        exploitation research, reflective self-verification, and raw command
+        execution - the true union of every tool any of this project's
+        historical tool lists ever exposed (see the module docstring's
+        2026-07-09 audit), not just the 12 that happened to survive the
+        original consolidation. `run_specialized_module` is the one
+        intentional omission - it's no longer present on `WSLBridgeTools`
+        (the modules/ scripts it invoked were not migrated during the
+        tool-registry refactor).
     """
     return [
         Tool(
@@ -69,6 +82,31 @@ def build_argus_tools(bridge: WSLBridgeTools) -> list[Tool]:
             name="Run_FFUF",
             func=bridge.run_ffuf_discovery,
             description="Run FFUF for fast hidden path discovery.",
+        ),
+        Tool(
+            name="Crawl_Target",
+            func=bridge.crawl_target,
+            description="Discover internal links and entry points to expand the attack surface.",
+        ),
+        Tool(
+            name="Secret_Scanner",
+            func=bridge.analyze_secrets,
+            description="Scan the page body and JS files for leaked API keys, credentials, and secrets (AWS/Google keys, Slack webhooks, env vars).",
+        ),
+        Tool(
+            name="Advanced_Evasion_Probe",
+            func=bridge.advanced_vuln_probe,
+            description="Perform targeted, WAF-evasive probes for SQL injection and Path Traversal - actually attempts exploitation, not just suggestion.",
+        ),
+        Tool(
+            name="Reflective_Pre_Verify",
+            func=bridge.verify_command,
+            description="Check a command for malformed parameters, illegal syntax, or missing tools before running it.",
+        ),
+        Tool(
+            name="Task_Difficulty_Assessment",
+            func=bridge.assess_difficulty,
+            description="Compute a Task Difficulty Assessment (TDA) score for target selection, based on expected path length, version confidence, and history.",
         ),
         Tool(
             name="System_Self_Heal",

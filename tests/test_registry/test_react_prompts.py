@@ -24,6 +24,19 @@ class TestBuildReactSystemPrompt:
         assert "PHASE 7" in prompt
         assert "Check_Reachability first, always" in prompt
 
+    def test_phase_progression_references_all_5_tools_added_in_chk090(self):
+        """specs/018 CHK090: Crawl_Target, Secret_Scanner, Advanced_Evasion_Probe,
+        Reflective_Pre_Verify, and Task_Difficulty_Assessment were real, working
+        WSLBridgeTools capabilities the agent had no way to invoke - wired into
+        brain_tools.py's tool list, so the phase guidance must actually mention
+        them or the model has no reason to ever pick them."""
+        prompt = build_react_system_prompt(_make_state())
+        for tool_name in [
+            "Crawl_Target", "Secret_Scanner", "Advanced_Evasion_Probe",
+            "Reflective_Pre_Verify", "Task_Difficulty_Assessment",
+        ]:
+            assert tool_name in prompt, f"{tool_name} not mentioned in phase guidance"
+
     def test_includes_thoroughness_rule(self):
         prompt = build_react_system_prompt(_make_state())
         assert "Reconnaissance alone" in prompt

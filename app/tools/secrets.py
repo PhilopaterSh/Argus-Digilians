@@ -6,11 +6,31 @@ class SecretAnalyzer:
     """Analyzes page content and JS files for leaked secrets and credentials."""
 
     def __init__(self, runner, memory):
+        """Store the shared command runner and memory service.
+
+        Args:
+            runner: Object with a `run(command)` method that executes a
+                shell command (via WSL/SSH) and returns its output as a str.
+            memory (ArgusMemory): Blackboard memory service used to persist
+                leaked-secret findings.
+        """
         self.runner = runner
         self.memory = memory
 
     def analyze_secrets(self, url):
-        """Fetches the page body and JS files to look for leaked secrets using Regex."""
+        """Fetches the page body and JS files to look for leaked secrets using Regex.
+
+        Args:
+            url (str): Target URL whose landing page HTML is scanned.
+
+        Returns:
+            str: A report of possible leaked secrets found, or a clean "no
+            obvious secrets" message (--max-time bounds the fetch to 15s so
+            an unreachable target - live-confirmed against a real,
+            currently-down practice site during specs/018 CHK090's own
+            verification - fails fast instead of blocking on
+            command_runner.py's much longer generic default timeout).
+        """
         print(f"[*] [Argus-Core] Analyzing secrets for: {url}")
         
         # Regex patterns for common secrets
@@ -24,7 +44,7 @@ class SecretAnalyzer:
         }
 
         # Fetch page content via curl
-        page_content = self.runner.run(f"curl -s -L {url} | head -n 500")
+        page_content = self.runner.run(f"curl -s -L --max-time 15 --connect-timeout 5 {url} | head -n 500")
         
         found = []
         clean_target = normalize_domain_for_memory(url)

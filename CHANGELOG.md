@@ -2,6 +2,32 @@
 
 All notable changes to this project will be documented in this file.
 
+## Added: 5 real, working tools the agent had no way to invoke; fixed a hang risk found while verifying them (2026-07-09, specs/018 CHK090)
+User asked to get the greatest benefit from all existing files. Auditing every real public
+method on `WSLBridgeTools` against `brain_tools.py`'s supposedly-canonical tool list found real,
+working capabilities the agent couldn't use: `analyze_secrets` (leaked API key/credential
+detection) was in *no* tool list anywhere; `crawl_target`/`advanced_vuln_probe`/`verify_command`/
+`assess_difficulty` existed in a *sixth*, independently-drifted copy (`scripts/run_argus_cli.py`)
+but not in the "canonical" `brain_tools.py` - the original consolidation had silently become
+incomplete relative to a list it was supposed to replace.
+
+Added all 5 as new tools (`Secret_Scanner`, `Crawl_Target`, `Advanced_Evasion_Probe`,
+`Reflective_Pre_Verify`, `Task_Difficulty_Assessment`) to `brain_tools.py` (12 -> 17 tools);
+`scripts/run_argus_cli.py` now imports `build_argus_tools()` instead of re-declaring its own
+drifted list. Updated `react_prompts.py`'s PHASE guidance to reference all 5, and reframed
+Phase 6 as real exploitation (research with `Exploit_Suggester` *then* attempt with
+`Advanced_Evasion_Probe` - research alone isn't exploitation).
+
+Live-verifying all 5 directly found and fixed a real bug: `crawl_target`/`analyze_secrets`'s
+curl calls had no `--max-time`/`--connect-timeout`, unlike `advanced_vuln_probe`'s existing
+ones, so a check against a currently-unreachable practice site showed these would otherwise
+block on `command_runner.py`'s much longer generic default timeout instead of failing fast -
+fixed to match the existing pattern.
+
+New `tests/test_tools/{test_crawler,test_secrets}.py` (no prior coverage existed for either
+module) and extended `test_brain_tools.py`/`test_react_prompts.py`. Full suite: 222 passed, 1
+pre-existing unrelated failure.
+
 ## Fixed: GUI felt heavy on every click - a PowerShell subprocess was spawned on every rerun (2026-07-09, specs/018 CHK089)
 User reported the GUI itself feels heavy/slow when clicking or navigating tabs. Root cause:
 `render_status_bar()` runs at the top of every page render, and Streamlit reruns the *entire

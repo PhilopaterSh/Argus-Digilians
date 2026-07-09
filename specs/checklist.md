@@ -313,6 +313,33 @@ infrastructure-level crash, none reachable by the mock-LLM suite above.
   layer of protection against repeated reruns. New `tests/test_gui/test_status_bar.py` (no prior
   coverage existed for this module) - 6 tests, including one asserting no subprocess is spawned.
   Full suite: 213 passed, 1 pre-existing unrelated failure.
+- [x] CHK090 (DONE 2026-07-09) User asked to "extract the greatest benefit from all existing
+  files." Audited every real public method on `WSLBridgeTools` against `brain_tools.py`'s
+  supposedly-canonical tool list and found real, working capabilities the agent had no way to
+  invoke: `analyze_secrets` (leaked API key/credential detection - in *no* tool list anywhere),
+  and `crawl_target`/`advanced_vuln_probe`/`verify_command`/`assess_difficulty` (in a *sixth*,
+  independently-drifted copy, `scripts/run_argus_cli.py`, but not in the "canonical" one - the
+  original consolidation had silently become incomplete relative to a list it was supposed to
+  replace). Added all 5 as new tools (`Secret_Scanner`, `Crawl_Target`,
+  `Advanced_Evasion_Probe`, `Reflective_Pre_Verify`, `Task_Difficulty_Assessment`) to
+  `brain_tools.py` (12 -> 17 tools); `scripts/run_argus_cli.py` now imports
+  `build_argus_tools()` instead of re-declaring its own drifted list. Updated
+  `react_prompts.py`'s PHASE guidance to actually reference all 5 (Phase 2: Crawl_Target;
+  Phase 4: Secret_Scanner; Phase 6 reframed as real exploitation - Exploit_Suggester research
+  *then* Advanced_Evasion_Probe attempt, not research alone; utility tools:
+  Reflective_Pre_Verify/Task_Difficulty_Assessment).
+  Live-verified all 5 directly (bypassing non-deterministic LLM tool selection for a faster,
+  more targeted check): found and fixed a real bug in the process -
+  `crawl_target`/`analyze_secrets`'s curl calls had no `--max-time`/`--connect-timeout`, unlike
+  `advanced_vuln_probe`'s existing ones, so a live check against a currently-unreachable practice
+  site showed these would otherwise block on `command_runner.py`'s much longer generic default
+  timeout instead of failing fast - fixed to match the existing pattern. Re-verified against
+  `scanme.nmap.org`: all 5 completed correctly (`Crawl_Target` genuinely found 0 links - confirmed
+  by independently checking the raw HTML, not a bug; `Secret_Scanner`/`Advanced_Evasion_Probe`
+  correctly reported clean; `Reflective_Pre_Verify`/`Task_Difficulty_Assessment` both produced
+  real, correct reports). New `tests/test_tools/{test_crawler,test_secrets}.py` (no prior
+  coverage existed for either module) and extended `test_brain_tools.py`/`test_react_prompts.py`.
+  Full suite: 222 passed, 1 pre-existing unrelated failure.
 
 ## Constitution IX — Single Source of Truth (No Duplication)
 
