@@ -1,0 +1,95 @@
+import pytest
+from unittest.mock import MagicMock
+
+from app.tools.scanners import VulnerabilityScanners
+
+
+@pytest.fixture
+def service(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    runner = MagicMock()
+    memory = MagicMock()
+    return VulnerabilityScanners(runner, memory), runner, memory
+
+
+class TestRunNikto:
+    def test_success_on_first_scheme_does_not_retry(self, service):
+        svc, runner, _ = service
+        runner.run.return_value = "+ Server: Apache\n+ /admin/: found"
+
+        svc.run_nikto("http://example.com")
+
+        assert runner.run.call_count == 1
+
+    def test_retries_with_http_when_https_connection_fails(self, service):
+        """Regression test: a live run against scanme.nmap.org called Nikto
+        with https:// while Nmap had already shown only port 80/http was
+        open (443 was closed) - Nikto silently failed to connect and the
+        agent had no way to tell the difference from a clean empty scan.
+        Nikto itself should try the other scheme before giving up."""
+        svc, runner, _ = service
+        runner.run.side_effect = [
+            "+ [FAIL] Unable to connect to example.com:443.",
+            "+ Server: Apache\n+ /admin/: found",
+        ]
+
+        result = svc.run_nikto("https://example.com")
+
+        assert runner.run.call_count == 2
+        second_cmd = runner.run.call_args_list[1].args[0]
+        assert "http://example.com" in second_cmd
+        assert "https://example.com" not in second_cmd
+        assert "/admin/: found" in result
+
+    def test_returns_original_failure_when_both_schemes_fail(self, service):
+        svc, runner, _ = service
+        runner.run.side_effect = [
+            "+ [FAIL] Unable to connect to example.com:443.",
+            "+ [FAIL] Unable to connect to example.com:80.",
+        ]
+
+        result = svc.run_nikto("https://example.com")
+
+        assert runner.run.call_count == 2
+        assert "443" in result
+
+    def test_no_fallback_without_a_recognised_scheme(self, service):
+        svc, runner, _ = service
+        runner.run.return_value = "+ [FAIL] Unable to connect."
+
+        svc.run_nikto("example.com")
+
+        assert runner.run.call_count == 1
+
+
+class TestRunFfufDiscovery:
+    def test_success_on_first_scheme_does_not_retry(self, service):
+        svc, runner, _ = service
+        runner.run.return_value = "http://example.com/admin [Status: 200]"
+
+        svc.run_ffuf_discovery("http://example.com")
+
+        assert runner.run.call_count == 1
+
+    def test_retries_with_http_when_https_finds_nothing(self, service):
+        svc, runner, _ = service
+        runner.run.side_effect = [
+            "",
+            "http://example.com/admin [Status: 200]",
+        ]
+
+        result = svc.run_ffuf_discovery("https://example.com")
+
+        assert runner.run.call_count == 2
+        second_cmd = runner.run.call_args_list[1].args[0]
+        assert "http://example.com" in second_cmd
+        assert "admin" in result
+
+    def test_reports_no_paths_when_both_schemes_empty(self, service):
+        svc, runner, _ = service
+        runner.run.side_effect = ["", ""]
+
+        result = svc.run_ffuf_discovery("https://example.com")
+
+        assert runner.run.call_count == 2
+        assert "No notable paths" in result

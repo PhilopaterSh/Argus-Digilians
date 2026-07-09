@@ -237,6 +237,48 @@ infrastructure-level crash, none reachable by the mock-LLM suite above.
   exact scenario that exposed the bug: `Recon_Suite` now executes once, a repeat attempt is
   blocked with zero extra nmap runs, and the model produces a complete real `SecurityReport`
   immediately after. Full suite: 193 passed, 1 pre-existing unrelated failure.
+- [x] CHK086 (DONE 2026-07-09) Follow-up live run with CHK085's fix active surfaced three more
+  real, distinct issues, all fixed and live-reverified together:
+  1. **Oscillation between two blocked tools**: once `Run_Nikto` and `Smart_Web_Search` were
+     both individually blocked as duplicates, the model alternated re-proposing those same two
+     for 3 more turns instead of trying a genuinely new tool (`Run_FFUF` was never attempted).
+     Fixed: the duplicate-block Observation now explicitly lists every tool NOT yet tried this
+     run by name, giving a concrete next step instead of vague "try something different"
+     guidance.
+  2. **`Run_Nikto`/`Run_FFUF` targeting the wrong closed port**: the model called `Run_Nikto`
+     against `https://scanme.nmap.org` (port 443, closed per its own earlier Nmap scan) instead
+     of the actually-open port 80/http, so Nikto failed to connect. Fixed at the code level, not
+     the prompt: `app/tools/scanners.py`'s `run_nikto`/`run_ffuf_discovery` now auto-retry once
+     with the opposite scheme (http<->https) on a connection failure/empty result, mirroring
+     `app/tools/recon.py`'s existing nmap ->nmap -Pn fallback pattern - reliable regardless of
+     what the model passes in. New `tests/test_tools/test_scanners.py` (no prior coverage
+     existed) - 7 tests.
+  3. **`overall_risk_score` inconsistent with findings' severities**: one live run produced
+     `overall_risk_score: 10` (maximum) while every finding was `severity: Low` with
+     "No remediation needed". Fixed: new Rule 6 in `react_prompts.py` requires the score to
+     match the findings' actual severities.
+  New `tests/test_registry/test_react_prompts.py` (no prior coverage existed for this module) -
+  5 tests locking in the PHASE-progression, thoroughness, and risk-score-consistency guidance
+  text. Live-reverified all three together against the exact target that exposed them: the
+  model picked `Smart_Web_Search` then `Run_Nikto` (two genuinely different tools, zero
+  oscillation) after `Recon_Suite` was blocked; `Run_Nikto`'s scheme-fallback fired
+  (`"Nikto could not connect to https://... - retrying with http://..."`) and succeeded,
+  producing real findings (outdated Apache 2.4.7, `mod_negotiation`/MultiViews); the final
+  report had two `High`-severity findings and `overall_risk_score: 8` - consistent this time.
+- [x] CHK087 (DONE 2026-07-09) A follow-up review of CHK085/086 found the duplicate-call block
+  was zero-tolerance (blocked on the very first repeat), which is *stricter* than the original
+  `app/core/prompts.py` design's own explicit tolerance ("do not execute the same tool with the
+  same input more than **TWICE**") - leaving the model no room to retry a result it genuinely
+  doubts (e.g. a transient network blip), only to abandon a call after a single attempt.
+  Loosened `parse_node`'s check from "blocked if this pair has been called at all" to "blocked
+  only once this pair has been called **twice** already" (`.count(call_key) >= 2`), restoring
+  the original design's tolerance while still capping runaway repetition. Updated
+  `react_prompts.py`'s Rule 2 and the `TOOLS ALREADY CALLED THIS RUN` framing to describe the
+  one-retry allowance accurately. Renamed/updated
+  `test_custom_graph_blocks_identical_repeated_tool_call` ->
+  `test_custom_graph_allows_one_retry_before_blocking_third_identical_call` to assert the tool
+  executes twice for real before the third identical attempt is blocked. Full suite (all of
+  CHK085-087 together): 205 passed, 1 pre-existing unrelated failure.
 
 ## Constitution IX — Single Source of Truth (No Duplication)
 

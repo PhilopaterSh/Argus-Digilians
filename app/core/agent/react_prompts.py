@@ -1,4 +1,15 @@
-"""Dynamic prompt builders for Argus LangGraph workflows."""
+"""Dynamic prompt builders for Argus LangGraph workflows.
+
+`build_react_system_prompt`'s PHASE 1-7 progression (specs/018 CHK085
+addendum) restores the intent of the original `app/core/prompts.py`
+template's PHASE 1-9 structure - which ArgusBrain no longer uses directly
+(specs/018 replaced it with this shorter, more reliable prompt) - adapted
+to the tools `app/core/agent/brain_tools.py::build_argus_tools()` actually
+provides today (`Run_Specialized_Module`/`Crawl_Target` referenced by the
+old template don't exist on `WSLBridgeTools` and were dropped, not ported).
+Kept deliberately terser than the original per-phase prose to avoid
+reintroducing the prompt-length-driven format drift specs/018 fixed.
+"""
 
 
 def build_react_system_prompt(state: dict) -> str:
@@ -30,16 +41,44 @@ def build_react_system_prompt(state: dict) -> str:
         f"{state.get('blackboard_summary', 'No findings yet.')}\n\n"
         f"LAST TOOL OUTPUT:\n{state.get('tool_result', 'None')}\n"
         f"LAST ERROR:\n{state.get('tool_error', 'None')}\n\n"
-        f"TOOLS ALREADY CALLED THIS RUN (calling one of these again with the\n"
-        f"same input will be blocked, not re-executed):\n{called_block}\n\n"
+        f"TOOLS ALREADY CALLED THIS RUN (you may retry ONE of these with the\n"
+        f"exact same input if you doubt the result - a THIRD identical attempt\n"
+        f"will be blocked, not re-executed):\n{called_block}\n\n"
         f"TOOLS AVAILABLE:\n{tool_block}\n\n"
+        f"RECOMMENDED PHASE PROGRESSION (skip a phase only if it doesn't apply -\n"
+        f"e.g. no reachable service at all - not because it's inconvenient):\n"
+        f"  PHASE 1 (Connectivity): Check_Reachability first, always.\n"
+        f"  PHASE 2 (Surface Mapping): Subdomain_Enumeration, then Recon_Suite.\n"
+        f"  PHASE 3 (Context): Query_Memory/Query_Knowledge_Graph if this target\n"
+        f"    has prior history worth reviewing before scanning further.\n"
+        f"  PHASE 4 (Web Intelligence): Smart_Web_Search for CVEs/exploits on any\n"
+        f"    technology or version Phase 2 discovered.\n"
+        f"  PHASE 5 (Vulnerability Scanning): Run_Nikto and/or Run_FFUF against a\n"
+        f"    discovered web service.\n"
+        f"  PHASE 6 (Exploit Research): Exploit_Suggester for any vulnerability\n"
+        f"    class Phase 5 confirmed.\n"
+        f"  PHASE 7 (Final Analysis): synthesize everything into the Final Answer.\n"
+        f"Use Run_Kali_Command for anything the above tools can't do directly, and\n"
+        f"System_Self_Heal/Archive_Research_Subagent as needed at any point.\n\n"
         f"RULES:\n"
         f"1. Choose ONE tool per response.\n"
-        f"2. NEVER repeat a tool+input pair listed above under \"TOOLS ALREADY\n"
-        f"   CALLED THIS RUN\" - it will not run again; use its Observation\n"
-        f"   (in the Blackboard above) or the conversation history instead.\n"
+        f"2. A tool+input pair listed above under \"TOOLS ALREADY CALLED THIS\n"
+        f"   RUN\" may be retried ONCE if you genuinely doubt the result (e.g.\n"
+        f"   a transient network error) - but a THIRD identical attempt will\n"
+        f"   be blocked. Don't repeat just to double-check a result you\n"
+        f"   already trust; use its Observation (in the Blackboard above) or\n"
+        f"   the conversation history instead.\n"
         f"3. If a tool fails, analyse the error and choose a different approach.\n"
-        f"4. After running a tool, wait for the Observation before deciding next step.\n\n"
+        f"4. After running a tool, wait for the Observation before deciding next step.\n"
+        f"5. Reconnaissance alone (Phases 1-2) is NOT a complete analysis. Before\n"
+        f"   giving a Final Answer, also attempt Phase 5 or 6 against a discovered\n"
+        f"   service - a Final Answer based only on open-port data, with no\n"
+        f"   vulnerability findings attempted, is incomplete for a\n"
+        f"   comprehensive/deep assessment.\n"
+        f"6. Your overall_risk_score MUST match the severities of your own\n"
+        f"   findings - if every finding is Low severity with no remediation\n"
+        f"   needed, the score must be low (e.g. 1-3), not high. Do not assign a\n"
+        f"   high score to compensate for having few or inconclusive findings.\n\n"
         f"OUTPUT FORMAT (exact - choose ONE of these two formats):\n"
         f"\n"
         f"FORMAT A (JSON Action - preferred):\n"

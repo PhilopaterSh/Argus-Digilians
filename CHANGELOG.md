@@ -2,6 +2,37 @@
 
 All notable changes to this project will be documented in this file.
 
+## Fixed: three more issues found live-testing the duplicate-call fix, then loosened it to allow one genuine retry (2026-07-09, specs/018 CHK086-087)
+A follow-up live run against `https://scanme.nmap.org` with CHK085's duplicate-call block active
+surfaced three more distinct, real issues, all fixed and live-reverified together:
+
+1. **Oscillation between two blocked tools**: once `Run_Nikto` and `Smart_Web_Search` were both
+   individually blocked as duplicates, the model alternated re-proposing those same two for 3
+   more turns instead of trying `Run_FFUF`, which had never been attempted. Fixed: the
+   duplicate-block Observation now explicitly names every tool not yet tried this run.
+2. **`Run_Nikto`/`Run_FFUF` targeting the wrong closed port**: the model called `Run_Nikto`
+   against `https://scanme.nmap.org` (port 443, closed per its own earlier Nmap scan) instead of
+   the actually-open port 80/http. Fixed at the code level: `app/tools/scanners.py` now
+   auto-retries once with the opposite scheme on a connection failure/empty result, mirroring
+   `app/tools/recon.py`'s existing nmap fallback pattern.
+3. **`overall_risk_score` inconsistent with findings' severities**: one run produced
+   `overall_risk_score: 10` while every finding was `Low` severity with "No remediation needed".
+   Fixed with a new prompt rule requiring the score to match the findings' actual severities.
+
+A closer look at the duplicate-call block itself then found it was *stricter* than intended: it
+blocked on the very first repeat, whereas the original `app/core/prompts.py` design explicitly
+tolerated a tool+input pair running "not more than **TWICE**" - a model that doubts a result
+(e.g. a transient network blip) needs room for one real retry, not zero. Loosened the block to
+match: only a *third* identical attempt is now blocked.
+
+Live-reverified all three original fixes together: the model picked `Smart_Web_Search` then
+`Run_Nikto` (two genuinely different tools, zero oscillation) after `Recon_Suite` was blocked;
+`Run_Nikto`'s scheme-fallback fired and succeeded, producing real findings (outdated Apache
+2.4.7, `mod_negotiation`/MultiViews); the final report had two `High`-severity findings and
+`overall_risk_score: 8` - consistent. New test files with no prior coverage:
+`tests/test_tools/test_scanners.py` (7 tests) and `tests/test_registry/test_react_prompts.py`
+(5 tests). Full suite: 205 passed, 1 pre-existing unrelated failure.
+
 ## Fixed: agent repeated an identical, already-succeeded tool call 4 times in a row (2026-07-09, specs/018 CHK085)
 Live testing against `https://scanme.nmap.org` (immediately after the CHK084 ping fix) surfaced
 a new, real, repeating bug: the model called `Recon_Suite` with the *identical* input 4 times in

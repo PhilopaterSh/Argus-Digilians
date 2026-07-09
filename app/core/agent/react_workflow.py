@@ -309,18 +309,39 @@ def _build_custom_workflow(
         # Recon_Suite call 4 times in a row despite it succeeding the first
         # time - the prompt's own "never repeat the same tool with the same
         # input" rule is advisory text the model doesn't reliably follow.
-        # Enforce it structurally instead of trusting the model to self-police:
-        # block re-executing a (tool, input) pair already seen this run and
-        # tell the model so, rather than burning a real tool call to find out.
+        # Enforce it structurally instead of trusting the model to self-police
+        # - but allow exactly TWO real executions (matching the original
+        # app/core/prompts.py design's own tolerance: "do not execute the
+        # same tool with the same input more than TWICE") before blocking a
+        # third, rather than zero-tolerance on the very first repeat. A
+        # transient failure (flaky network blip, a WAF rate-limit that
+        # clears seconds later) deserves one real retry if the model doubts
+        # the first result - only a THIRD identical attempt is treated as
+        # the model just not making progress.
         if result.get("tool_name"):
             call_key = f"{result['tool_name']}::{result.get('tool_input', '')}"
-            if call_key in state.get("tool_call_history", []):
+            if state.get("tool_call_history", []).count(call_key) >= 2:
+                # A live run oscillated between two already-blocked tools for
+                # several turns before finally giving a Final Answer - vague
+                # "choose something different" guidance isn't concrete enough
+                # for the model to act on reliably. List the tools it hasn't
+                # touched at all this run by name, so there's always a
+                # concrete next step instead of another guess.
+                tried_names = {entry.partition("::")[0] for entry in state.get("tool_call_history", [])}
+                untried = [name for name in tool_map if name not in tried_names]
+                untried_block = (
+                    ", ".join(untried) if untried
+                    else "(none - every available tool has been tried at least once)"
+                )
                 guidance = (
                     f"Observation: You already called {result['tool_name']} with "
-                    f"input '{result.get('tool_input', '')}' earlier this run - "
-                    f"re-running it would repeat the same result. Use the "
-                    f"Blackboard/previous Observations above, try a different "
-                    f"tool or input, or give your Final Answer now."
+                    f"input '{result.get('tool_input', '')}' TWICE earlier this "
+                    f"run - a third identical attempt would not produce a new "
+                    f"result. Tools you have NOT tried yet this run: "
+                    f"{untried_block}. Pick one of those with a relevant input, "
+                    f"or a genuinely different input for a tool you've already "
+                    f"used. Only give your Final Answer if every relevant tool "
+                    f"for this target has truly been tried."
                 )
                 return {
                     "tool_error": guidance,
