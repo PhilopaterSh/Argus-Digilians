@@ -1,7 +1,7 @@
 from langchain_core.messages import HumanMessage
 from langchain_core.output_parsers import PydanticOutputParser
 from app.core.schemas import SecurityReport
-from app.core.llm_factory import build_llm
+from app.core.llm_factory import build_chat_llm
 from app.core.rag import RAGEngine, RAGConfig
 from app.core.memory.memory_service import ArgusMemory
 import json
@@ -14,6 +14,16 @@ from typing import Dict, Any, Optional
 # to 50) - see specs/018-structured-agent-reliability. Also bounds worst-case
 # wall-clock time better, since each iteration can be a slow real tool call.
 DEFAULT_MAX_ITERATIONS = 15
+
+# Live testing (specs/018) hit this exact Ollama-on-Windows crash twice,
+# independent of context size (once at num_ctx=8192 before KV-cache
+# quantization, once again afterward with a tiny ~400-char context) -
+# a known, intermittent llama.cpp/CUDA/Windows driver bug (matches upstream
+# ollama/ollama GitHub issues, e.g. #16650), not something fixable from
+# application code. One retry is a pragmatic mitigation since the crash
+# appears transient - Ollama reloads the model fresh on the next request.
+_TRANSIENT_INFRA_ERROR_MARKERS = ("llama-server process has terminated", "CUDA error")
+_MAX_INFRA_RETRIES = 1
 
 
 class ArgusBrain:
@@ -39,13 +49,21 @@ class ArgusBrain:
         memory: Optional[ArgusMemory] = None,
         llm: Optional[Any] = None,
     ):
-        """`llm` is an optional override of the Ollama-backed default from `build_llm()`.
+        """`llm` is an optional override of the Ollama-backed default from `build_chat_llm()`.
 
         Exists so tests can inject a fake/fake-list LLM (e.g. langchain_core's
         FakeListLLM) without needing a live Ollama server; production callers
         never pass it and get the normal Ollama-backed model.
+
+        Uses `build_chat_llm()` (ChatOllama), not `build_llm()` (OllamaLLM) -
+        specs/018-structured-agent-reliability found, via direct live
+        testing, that `OllamaLLM.with_structured_output()` raises
+        `NotImplementedError`, silently defeating this class's entire
+        structured-decoding reliability fix on every call. `ChatOllama`
+        verified working against the live model - see
+        `app/core/llm_factory.py::build_chat_llm()`.
         """
-        self.llm = llm if llm is not None else build_llm(model_name)
+        self.llm = llm if llm is not None else build_chat_llm(model_name)
         self.tools = tools_list
         self.tool_map = {tool.name: tool for tool in tools_list}
         self.output_parser = PydanticOutputParser(pydantic_object=SecurityReport)
@@ -142,15 +160,32 @@ class ArgusBrain:
         return query
 
     def ask(self, query: str, callbacks=None) -> Dict[str, Any]:
+        from app.core.agent.react_workflow import extract_target
+
+        # Extracted from the RAW query, before enrichment - see
+        # _run_structured_graph()'s docstring for why order matters here.
+        target = extract_target(query)
         self._refresh_blackboard()
         augmented_query = self._enrich_with_rag(query)
-        return self._run_structured_graph(augmented_query, callbacks)
+        return self._run_structured_graph(augmented_query, target, callbacks)
 
-    def _run_structured_graph(self, query: str, callbacks=None) -> Dict[str, Any]:
+    def _run_structured_graph(self, query: str, target: str, callbacks=None) -> Dict[str, Any]:
         """Run react_workflow.py's structured-output ReAct graph to completion.
 
         Args:
-            query (str): The (RAG/Blackboard-enriched) question/instruction.
+            query (str): The (RAG/Blackboard-enriched) question/instruction -
+                used as the graph's initial message content only.
+            target (str): The target being analyzed. MUST be extracted from
+                the raw, pre-enrichment query, not this enriched one - a
+                live run found `extract_target()` grabbing a JSON key like
+                `"www.example.com:80":` out of the prepended Blackboard
+                context block instead of the real target, because that
+                block sorts before the actual "Question: ..." text and
+                itself contains dot-separated, space-free tokens that look
+                exactly like what `extract_target()` searches for. That
+                corrupted "target" then got passed as tool input, breaking
+                every tool call downstream (observed live: a shell syntax
+                error from the stray embedded quote character).
             callbacks (list | None): Objects exposing an `on_graph_event(status,
                 detail)` method (e.g. `app/core/agent/react_callback.py`'s
                 `LiveFeedCallbackHandler`) - called once per new message the
@@ -167,37 +202,63 @@ class ArgusBrain:
             never reached a Final Answer within `self.max_iterations`
             (never fabricated - Constitution VIII).
         """
-        from app.core.agent.react_workflow import build_workflow, extract_target
+        from app.core.agent.react_workflow import _build_custom_workflow
+        # build_workflow() would route here via _supports_tool_calls(llm) -
+        # but ChatOllama (build_chat_llm()) reports True for tool-calling-
+        # capable models like WhiteRabbitNeo, which would silently switch to
+        # _build_prebuilt_workflow()'s ArgusPrebuiltState shape (no phase/
+        # tool_name/tool_result fields). This class's _finalize_graph_output()/
+        # _emit_graph_step() are only written against ArgusAgentState (the
+        # custom-mode shape) - confirmed live: routing to prebuilt mode made
+        # _finalize_graph_output() report "no_final_answer" unconditionally,
+        # even when the underlying prebuilt agent likely completed a real
+        # tool call correctly. Call the custom graph directly until prebuilt
+        # mode gets its own tested integration.
 
-        target = extract_target(query)
-        graph = build_workflow(self.llm, self.tools, self.memory)
-        initial_state = {
-            "messages": [HumanMessage(content=query)],
-            "target": target,
-            "phase": "init",
-            "blackboard_summary": self._blackboard_context,
-            "iteration_count": 0,
-            "max_iterations": self.max_iterations,
-            "tool_name": None,
-            "tool_input": None,
-            "tool_result": None,
-            "tool_error": None,
-        }
+        last_error: Optional[Exception] = None
+        for attempt in range(_MAX_INFRA_RETRIES + 1):
+            graph = _build_custom_workflow(self.llm, self.tools, self.memory)
+            initial_state = {
+                "messages": [HumanMessage(content=query)],
+                "target": target,
+                "phase": "init",
+                "blackboard_summary": self._blackboard_context,
+                "iteration_count": 0,
+                "max_iterations": self.max_iterations,
+                "tool_name": None,
+                "tool_input": None,
+                "tool_result": None,
+                "tool_error": None,
+            }
+            seen_messages = len(initial_state["messages"])
+            final_state: Dict[str, Any] = initial_state
+            try:
+                for state in graph.stream(initial_state, stream_mode="values"):
+                    final_state = state
+                    messages = state.get("messages", [])
+                    for message in messages[seen_messages:]:
+                        self._emit_graph_step(callbacks, message)
+                    seen_messages = len(messages)
+                return self._finalize_graph_output(final_state)
+            except Exception as e:
+                last_error = e
+                print(f"[BRAIN] Structured graph execution failed (attempt {attempt + 1}/{_MAX_INFRA_RETRIES + 1}): {e}")
+                # Ollama's llama-server subprocess crashing outright (a known,
+                # intermittent Windows/CUDA driver bug - not something app
+                # code can fix, confirmed via live testing and upstream
+                # GitHub issues, specs/018-structured-agent-reliability) is
+                # the ONE failure worth retrying: the server auto-reloads the
+                # model on the next request. Anything else (a real, likely
+                # persistent bug) fails immediately rather than masking it
+                # behind a retry.
+                is_transient_infra_crash = any(
+                    marker in str(e) for marker in _TRANSIENT_INFRA_ERROR_MARKERS
+                )
+                if not is_transient_infra_crash or attempt >= _MAX_INFRA_RETRIES:
+                    break
+                print("[BRAIN] Detected a transient Ollama/CUDA infrastructure crash - retrying once...")
 
-        seen_messages = len(initial_state["messages"])
-        final_state: Dict[str, Any] = initial_state
-        try:
-            for state in graph.stream(initial_state, stream_mode="values"):
-                final_state = state
-                messages = state.get("messages", [])
-                for message in messages[seen_messages:]:
-                    self._emit_graph_step(callbacks, message)
-                seen_messages = len(messages)
-        except Exception as e:
-            print(f"[BRAIN] Structured graph execution failed: {e}")
-            return {"output": {"error": "graph_execution_failed", "message": str(e)}}
-
-        return self._finalize_graph_output(final_state)
+        return {"output": {"error": "graph_execution_failed", "message": str(last_error)}}
 
     @staticmethod
     def _emit_graph_step(callbacks, message) -> None:
@@ -257,8 +318,14 @@ class ArgusBrain:
         return {"output": output}
 
     def simple_ask(self, prompt):
+        """Direct, single-turn LLM call bypassing the ReAct graph entirely."""
         response = self.llm.invoke(prompt)
-        return {"output": response}
+        # self.llm is a ChatOllama (build_chat_llm()) in production, whose
+        # .invoke() returns an AIMessage, not a bare string like OllamaLLM's
+        # does - normalize so callers always get a plain string regardless
+        # of which is injected (tests inject string-returning fakes).
+        content = getattr(response, "content", response)
+        return {"output": content}
 
     def dispatch(self, tool_name: str, **kwargs) -> Any:
         """Invoke a single registered tool directly by name, bypassing the LLM executor."""

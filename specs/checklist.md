@@ -170,6 +170,36 @@ First real production run of 017 (against `https://www.cultbeauty.co.uk/`) timed
   verified unaffected; zero regressions across `tests/test_registry/`,
   `tests/test_langgraph_workflow.py`, and all `017` tests
 
+### Phase 018 addendum — live re-run against a real target (2026-07-09)
+
+T011's live-run follow-up was performed and found four more real bugs plus one
+infrastructure-level crash, none reachable by the mock-LLM suite above.
+
+- [x] CHK077 `OllamaLLM.with_structured_output()` confirmed live to raise `NotImplementedError`
+  (silently degrading to regex fallback); `llm_factory.py::build_chat_llm()` added, returns a
+  `ChatOllama` verified live to support `with_structured_output`; `build_llm()` left untouched
+  for its other callers
+- [x] CHK078 `get_blackboard_summary()` confirmed to pull every finding across every target ever
+  scanned (56 findings / 3 targets, 6123-char fused prompt) - bounded to `max_chars=3000` by
+  default, priority/recency-ordered, never truncated mid-entry; regression test updated in
+  `tests/test_memory.py::test_large_insert_performance`
+- [x] CHK079 `ChatOllama.bind_tools()` succeeding (unlike `OllamaLLM`'s) confirmed to silently
+  route `build_workflow()` to the untested prebuilt tool-calling graph instead of this phase's
+  custom graph; `ArgusBrain` now calls `_build_custom_workflow()` directly
+- [x] CHK080 `extract_target()` confirmed live to read a corrupted target (a Blackboard JSON key)
+  from the RAG-enriched query instead of the real target; `ArgusBrain.ask()` now extracts the
+  target from the raw pre-enrichment query and passes it explicitly into the graph -
+  regression test: `test_ask_extracts_target_before_blackboard_enrichment_not_after`
+- [x] CHK081 Intermittent Ollama/CUDA/Windows `llama-server` crash reproduced twice, independent
+  of context size, matching upstream `ollama/ollama` issue #16650 - confirmed not fixable from
+  application code; mitigated with a scoped one-time retry keyed on the exact error signature
+  (`_TRANSIENT_INFRA_ERROR_MARKERS`) plus `OLLAMA_KV_CACHE_TYPE=q8_0`/`OLLAMA_FLASH_ATTENTION=1`
+  in `scripts/LAUNCH_STUDIO.bat` to reduce VRAM pressure. Regression tests:
+  `test_ask_retries_once_on_transient_ollama_cuda_crash`,
+  `test_ask_does_not_retry_non_infra_errors` (non-matching errors are never masked by a retry)
+- [x] CHK082 Full suite re-verified green after all five fixes: 186 passed, 1 pre-existing
+  unrelated network-dependent failure (`test_smart_web_search.py::test_attempt_limit`)
+
 ## Constitution IX — Single Source of Truth (No Duplication)
 
 Enforcement tool: `scripts/check_duplication.py` (built and verified 2026-07-08 -

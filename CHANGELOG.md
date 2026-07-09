@@ -2,6 +2,52 @@
 
 All notable changes to this project will be documented in this file.
 
+## Fixed: four more live-run failures found re-testing specs/018 against a real target (2026-07-09, specs/018 addendum)
+The T011 follow-up ("live Ollama/WSL re-run... nice-to-have, not a blocker") was performed
+against `https://www.cultbeauty.co.uk/` and surfaced four additional real bugs the mock-LLM
+tests couldn't reach, plus one infrastructure crash outside the application's control:
+
+1. **`OllamaLLM.with_structured_output()` raises `NotImplementedError`.** `_try_structured_action`/
+   `_try_structured_final_answer` both call `llm.with_structured_output(...)`, but `ArgusBrain`
+   built its LLM via `llm_factory.py::build_llm()`, which returns a completion-style `OllamaLLM`
+   - confirmed live that this raises, silently degrading every run to the weaker regex-fallback
+   path. Fix: new `llm_factory.py::build_chat_llm()` returns a chat-style `ChatOllama` (verified
+   working with `with_structured_output`); `build_llm()` is untouched (still used by
+   `reflective_node`/`rag_engine.py`, which don't need structured output).
+2. **Blackboard context grows unbounded.** `get_blackboard_summary()` pulled every finding across
+   every target ever scanned (56 findings from 3 targets in this run), producing a 6123-char
+   fused prompt that contributed to a context-window overflow. Fix: `get_blackboard_summary(max_chars=3000)`
+   default bound, greedily filling by priority/recency and never truncating mid-entry; explicit
+   larger `max_chars` still available for callers that want everything.
+3. **`ChatOllama` silently routes to the untested prebuilt graph.** `ChatOllama.bind_tools()`
+   succeeds where `OllamaLLM.bind_tools()` didn't, so `react_workflow.build_workflow()`'s
+   auto-detection picked the prebuilt tool-calling graph (`ArgusPrebuiltState`) instead of the
+   custom graph this phase built and tested - `ArgusBrain`'s output parsing didn't match its
+   shape, always reporting `no_final_answer`. Fix: `ArgusBrain` now calls
+   `react_workflow._build_custom_workflow()` directly, bypassing auto-detection.
+4. **`extract_target()` read a corrupted target from the RAG-enriched query.** `_enrich_with_rag()`
+   prepends the Blackboard JSON block before the actual question text; `extract_target()`'s
+   dot/whitespace heuristic grabbed a JSON key (e.g. `www.cultbeauty.co.uk:80":`, with a stray
+   quote and colon) as the "target," breaking every tool call with a shell syntax error. Fix:
+   `ArgusBrain.ask()` now extracts the target from the raw, pre-enrichment query and passes it
+   explicitly into the graph, instead of re-deriving it from the enriched text.
+5. **Intermittent Ollama/CUDA/Windows crash, not fixable from application code**: `llama-server
+   process has terminated: exit status 0xc0000409: ... stack-based buffer overrun ... CUDA error`
+   - reproduced twice, independent of context size (once at 8192 tokens, once at 439 chars),
+   matching upstream `ollama/ollama` GitHub issue #16650. Mitigated (not solved) with a
+   scoped one-time retry in `ArgusBrain._run_structured_graph()` keyed on this exact error
+   signature (`_TRANSIENT_INFRA_ERROR_MARKERS`) - the server reloads the model fresh on the next
+   request, so one retry is a pragmatic mitigation for a driver-level bug outside this
+   codebase's control. Also applied `OLLAMA_KV_CACHE_TYPE=q8_0` + `OLLAMA_FLASH_ATTENTION=1` in
+   `scripts/LAUNCH_STUDIO.bat` to reduce VRAM pressure, one contributing factor.
+
+Verified via mock LLMs (no live GPU needed for the regression suite): `_CrashOnceThenSucceedLLM`
+confirms exactly one retry then success; `_PersistentErrorLLM` confirms a non-matching error is
+*not* retried (Constitution VIII - no masking unrelated failures behind a retry).
+`tests/test_memory.py::test_large_insert_performance` updated for the new bounded-by-default
+behavior. Full suite: 186 passed (1 pre-existing, unrelated, network-dependent failure in
+`test_smart_web_search.py::test_attempt_limit`, excluded from this session's baseline all along).
+
 ## Fixed: ArgusBrain hung 900s with zero results on its first real production run (2026-07-08, specs/018)
 First live run of `017`'s restored `ArgusBrain` (against `https://www.cultbeauty.co.uk/`) timed
 out completely: `logs/agent_runs/agent_9a5671bc-....json` shows WhiteRabbitNeo-V3-7B repeating

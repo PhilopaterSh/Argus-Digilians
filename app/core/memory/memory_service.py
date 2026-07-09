@@ -332,7 +332,34 @@ class ArgusMemory:
     # ------------------------------------------------------------------
     # CRUD: Blackboard summary
     # ------------------------------------------------------------------
-    def get_blackboard_summary(self) -> str:
+    def get_blackboard_summary(self, max_chars: int = 3000) -> str:
+        """Build a JSON summary of Blackboard findings, bounded to `max_chars`.
+
+        Feeds directly into LLM prompts in several places (ArgusBrain's
+        context fusion, the `Query_Memory` tool's own return value,
+        `reflective_verification.py`'s TDA scoring) - all of them share
+        this one query instead of each re-deriving their own bound
+        (Constitution IX). Unbounded, this grows with every finding ever
+        recorded across every target, not just the one being analyzed -
+        live testing (specs/018) hit Ollama's context-size limit and, at
+        an incautious `num_ctx` increase, crashed the GPU process outright
+        (VRAM-constrained hardware). Per RAG token-budget best practice,
+        rows are added in existing priority/recency order until the next
+        one would exceed `max_chars`, then stopped - never truncated
+        mid-entry, which would both break the JSON and cut a finding's
+        text off mid-sentence.
+
+        Args:
+            max_chars (int): Maximum length of the returned JSON string.
+                Default 3000 is a conservative budget that comfortably
+                fits even a cautious `num_ctx` alongside the rest of the
+                system prompt, tool descriptions, and conversation history.
+
+        Returns:
+            str: A JSON object (`{domain: {data_type: summary}}`), never
+            longer than `max_chars`. `"{}"` on any error or if there are
+            no findings yet.
+        """
         try:
             with self._get_conn() as conn:
                 rows = conn.execute(
@@ -343,10 +370,14 @@ class ArgusMemory:
                 ).fetchall()
                 summary: dict[str, dict[str, str]] = {}
                 for domain, dtype, smry in rows:
-                    if domain not in summary:
-                        summary[domain] = {}
-                    if dtype not in summary[domain]:
-                        summary[domain][dtype] = smry
+                    candidate = dict(summary)
+                    candidate.setdefault(domain, dict(summary.get(domain, {})))
+                    if dtype in candidate[domain]:
+                        continue
+                    candidate[domain][dtype] = smry
+                    if len(json.dumps(candidate, indent=2)) > max_chars and summary:
+                        break
+                    summary = candidate
                 return json.dumps(summary, indent=2)
         except Exception as e:
             logger.error("get_blackboard_summary failed: %s", e)

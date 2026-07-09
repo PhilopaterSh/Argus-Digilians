@@ -146,3 +146,97 @@ def test_simple_ask_uses_injected_llm_directly():
     result = brain.simple_ask("hello")
 
     assert result["output"] == "direct response"
+
+
+def test_ask_extracts_target_before_blackboard_enrichment_not_after():
+    """specs/018 regression test: a live run passed a corrupted "target"
+    (a JSON key like `www.example.com:80":`, complete with stray quote/
+    colon) to every tool call, because the target was extracted from the
+    RAG/Blackboard-enriched query - which prepends the Blackboard JSON
+    block (containing exactly the kind of dot-separated, space-free token
+    extract_target() searches for) BEFORE the actual "Question: ..." text.
+    The real target must come from the raw, pre-enrichment query."""
+    memory = MagicMock()
+    memory.get_blackboard_summary.return_value = '{"www.example.com:80": {"vulnerability": "x"}}'
+    memory.get_graph_insights.return_value = ""
+
+    captured = {}
+
+    def fake_tool(x=""):
+        captured["input"] = x
+        return "ok"
+
+    llm = FakeListLLM(responses=[
+        'Thought: check it.\nAction: {"name": "fake", "input": ""}',
+        f'Thought: done.\nFinal Answer: {FULL_REPORT_JSON}',
+    ])
+    brain = ArgusBrain(
+        "test-model",
+        [Tool(name="fake", description="A fake tool", func=fake_tool)],
+        rag_config={"enabled": False}, memory=memory, llm=llm,
+    )
+
+    brain.ask("Perform a comprehensive security analysis for https://real-target.com/")
+
+    # An empty Action Input falls back to state["target"] (execute_node) -
+    # this must be the real target, never the Blackboard JSON key.
+    assert captured["input"] == "https://real-target.com/"
+
+
+class _CrashOnceThenSucceedLLM:
+    """Simulates the real live crash (specs/018): Ollama's llama-server
+    subprocess terminating outright with a CUDA error - a known,
+    intermittent Windows/CUDA driver bug (matches upstream ollama/ollama
+    GitHub issues), reproduced twice during live testing independent of
+    context size. The server reloads the model fresh on the next request,
+    so one retry is a reasonable, pragmatic mitigation."""
+
+    def __init__(self):
+        self.call_count = 0
+
+    def invoke(self, messages, **kwargs):
+        self.call_count += 1
+        if self.call_count == 1:
+            raise RuntimeError(
+                "llama-server process has terminated: exit status 0xc0000409: "
+                "The system detected an overrun of a stack-based buffer...: CUDA error"
+            )
+        return AIMessage(content=f"Thought: done.\nFinal Answer: {FULL_REPORT_JSON}")
+
+    def bind_tools(self, tools):
+        raise NotImplementedError
+
+
+def test_ask_retries_once_on_transient_ollama_cuda_crash():
+    llm = _CrashOnceThenSucceedLLM()
+    brain = ArgusBrain("test-model", [_make_tool()], rag_config={"enabled": False}, llm=llm)
+
+    result = brain.ask("scan example.com")
+
+    assert llm.call_count == 2
+    assert result["output"]["summary"] == "ok"
+
+
+class _PersistentErrorLLM:
+    def __init__(self):
+        self.call_count = 0
+
+    def invoke(self, messages, **kwargs):
+        self.call_count += 1
+        raise ValueError("some unrelated persistent bug")
+
+    def bind_tools(self, tools):
+        raise NotImplementedError
+
+
+def test_ask_does_not_retry_non_infra_errors():
+    """Only the specific known transient Ollama/CUDA crash signature should
+    trigger a retry - an unrelated persistent error must fail immediately,
+    not be silently masked behind a retry."""
+    llm = _PersistentErrorLLM()
+    brain = ArgusBrain("test-model", [_make_tool()], rag_config={"enabled": False}, llm=llm)
+
+    result = brain.ask("scan example.com")
+
+    assert llm.call_count == 1
+    assert result["output"]["error"] == "graph_execution_failed"

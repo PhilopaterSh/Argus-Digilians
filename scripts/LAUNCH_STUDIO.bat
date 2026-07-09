@@ -22,6 +22,16 @@ set "ARG_CHOICE=%~1"
 echo [*] Checking AI Engine (Ollama)...
 set "OLLAMA_MODE=GPU"
 
+:: KV cache quantization (specs/018-structured-agent-reliability): only takes
+:: effect if set BEFORE Ollama's own process starts (a server-level setting,
+:: not a per-request option) - must be set here, before either "start ollama
+:: app.exe" call below. Cuts KV-cache VRAM ~half (q8_0, negligible quality
+:: loss) vs the F16 default, which is what let a larger context size
+:: (needed for RAG+Blackboard fusion) crash the GPU process outright on a
+:: VRAM-constrained card instead of just failing to allocate cleanly.
+set "OLLAMA_FLASH_ATTENTION=1"
+set "OLLAMA_KV_CACHE_TYPE=q8_0"
+
 if /I "%ARG_CHOICE%"=="C" goto :force_cpu
 if /I "%ARG_CHOICE%"=="R" goto :clean_restart
 if /I "%ARG_CHOICE%"=="G" goto :check_running

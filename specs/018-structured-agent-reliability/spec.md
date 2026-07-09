@@ -109,3 +109,41 @@ parsing only as a fallback - built for the `013-langgraph-workflow` phase specif
 - A live Ollama/WSL re-run against the same real target is the strongest possible confirmation
   but is not required to land this fix - the failure and the fix are both independently
   verified with injected fake/mock LLMs, following this repo's established testing convention.
+
+## Addendum: live re-run findings (2026-07-09)
+
+The live re-run in the Assumptions section above was in fact performed, against the same real
+target. It found four additional real bugs the mock-LLM suite couldn't reach, plus one
+infrastructure-level crash outside this codebase's control. Full detail in `research.md`'s
+addendum and `CHANGELOG.md`; tracked as CHK077-082 in `specs/checklist.md`.
+
+- **FR-007**: `ArgusBrain`'s LLM MUST be chat-style (`ChatOllama`) when `with_structured_output`
+  is required - `OllamaLLM` (completion-style) raises `NotImplementedError`, confirmed live.
+  `llm_factory.py::build_chat_llm()` added; `build_llm()` unchanged for its other callers.
+- **FR-008**: `get_blackboard_summary()` MUST bound its output by default (`max_chars=3000`) -
+  unbounded growth across every target ever scanned fed an oversized prompt into a live run and
+  contributed to a GPU crash. An explicit larger `max_chars` MUST still return everything.
+- **FR-009**: `ArgusBrain` MUST route to `react_workflow.py`'s custom graph explicitly
+  (`_build_custom_workflow()`), not through `build_workflow()`'s tool-support auto-detection -
+  `ChatOllama.bind_tools()` succeeding (unlike `OllamaLLM`'s) was confirmed live to silently
+  select the untested prebuilt graph, whose state shape `ArgusBrain`'s output parsing doesn't
+  match.
+- **FR-010**: The agent's `target` MUST be extracted from the raw, pre-RAG-enrichment query, not
+  the enriched one - `_enrich_with_rag()` prepends a Blackboard JSON block that
+  `extract_target()`'s heuristic can mistake for the target, confirmed live to break every tool
+  call with a corrupted target string.
+- **FR-011**: A specific, known transient Ollama/CUDA crash signature
+  (`"llama-server process has terminated"` / `"CUDA error"`) MUST trigger exactly one retry
+  (fresh graph + fresh model load) before failing; any other exception MUST fail immediately
+  without a retry (Constitution VIII - never mask an unrelated failure behind a retry). This is
+  a mitigation, not a fix - the underlying driver/Ollama bug (matches upstream
+  `ollama/ollama` issue #16650) is out of scope for an application-level fix.
+
+### Success Criteria (addendum)
+
+- **SC-004**: `test_ask_extracts_target_before_blackboard_enrichment_not_after` proves the real
+  target reaches tool calls even when the Blackboard summary contains a JSON key shaped like a
+  dot-separated hostname.
+- **SC-005**: `test_ask_retries_once_on_transient_ollama_cuda_crash` and
+  `test_ask_does_not_retry_non_infra_errors` prove the retry is scoped to the exact known
+  failure signature, not a general safety net.

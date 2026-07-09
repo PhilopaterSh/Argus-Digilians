@@ -132,12 +132,27 @@ class TestArgusMemory:
                 f"target{i}.com", "nmap", "ports", f"{i}", f"port {i}"
             )
         import time
+
+        # specs/018-structured-agent-reliability: get_blackboard_summary()'s
+        # default is now bounded (max_chars=3000) - unbounded growth across
+        # every target ever scanned is exactly what fed an oversized prompt
+        # into a live agent run and crashed the GPU process. Default call
+        # must stay well within the bound, not return all 1000 targets.
         start = time.time()
-        summary = m.get_blackboard_summary()
-        elapsed = time.time() - start
-        assert elapsed < 2.0, f"get_blackboard_summary took {elapsed:.2f}s"
-        parsed = json.loads(summary)
-        assert len(parsed) == 1000
+        bounded_summary = m.get_blackboard_summary()
+        bounded_elapsed = time.time() - start
+        assert bounded_elapsed < 2.0, f"get_blackboard_summary took {bounded_elapsed:.2f}s"
+        assert len(bounded_summary) <= 3000
+        bounded_parsed = json.loads(bounded_summary)
+        assert 0 < len(bounded_parsed) < 1000
+
+        # Explicitly requesting a large-enough budget still performs well
+        # and returns everything - the bound is a default, not a hard cap.
+        start = time.time()
+        full_summary = m.get_blackboard_summary(max_chars=1_000_000)
+        full_elapsed = time.time() - start
+        assert full_elapsed < 2.0, f"get_blackboard_summary(max_chars=1_000_000) took {full_elapsed:.2f}s"
+        assert len(json.loads(full_summary)) == 1000
 
     def test_upsert_target_null_parent(self, mem):
         mem.upsert_target("root.com")
