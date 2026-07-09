@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
+## Fixed: GUI felt heavy on every click - a PowerShell subprocess was spawned on every rerun (2026-07-09, specs/018 CHK089)
+User reported the GUI itself feels heavy/slow when clicking or navigating tabs. Root cause:
+`render_status_bar()` runs at the top of every page render, and Streamlit reruns the *entire
+script* on any widget interaction (any click, any tab switch) - so `check_ssh_status()`, which
+spawned a whole new `powershell.exe` process (`Test-NetConnection`) on every call, ran on every
+single click anywhere in the app. PowerShell's cold-start overhead (hundreds of ms, often 1s+)
+on top of the actual check made the whole GUI feel heavy.
+
+Also found, while diagnosing this same report, an unrelated but real issue: a stale Streamlit
+process from **2 days earlier** was still bound to port 12199 alongside a freshly-started one,
+silently serving some requests on pre-fix code the whole time it went unnoticed - killed.
+
+Fixed `check_ssh_status()`: replaced the PowerShell/`Test-NetConnection` subprocess with the
+same lightweight raw socket connect `check_ollama_status()` already used for Ollama's port - no
+process spawn at all. Both status checks also wrapped in `@st.cache_data(ttl=5)` as a second
+layer of protection against repeated reruns. New `tests/test_gui/test_status_bar.py` (no prior
+coverage existed) - 6 tests. Full suite: 213 passed, 1 pre-existing unrelated failure.
+
 ## Fixed: run_id mismatch between AgentController and its subprocess; confirmed GUI live-feed is genuinely incremental (2026-07-09, specs/018 CHK088)
 User asked why the Agent tab's live feed seemed to only update after the whole run finished
 rather than in real time. Verified directly rather than assumed: started a real run through

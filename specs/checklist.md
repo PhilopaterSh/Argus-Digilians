@@ -296,6 +296,23 @@ infrastructure-level crash, none reachable by the mock-LLM suite above.
   standalone/manual invocations without the flag. New tests in `tests/test_modules/test_run_agent.py`:
   `test_main_uses_the_provided_run_id_verbatim`, `test_main_falls_back_to_a_generated_run_id_when_not_provided`.
   Full suite: 207 passed, 1 pre-existing unrelated failure.
+- [x] CHK089 (DONE 2026-07-09) User reported the GUI itself feels heavy/slow when clicking or
+  navigating tabs (a separate symptom from CHK088's live-feed question). Root cause found by
+  reading `app/GUI/dashboard.py`: `render_status_bar()` is called at the top level of every page
+  render, and Streamlit reruns the *entire script* on any widget interaction (any click, any tab
+  switch) - so `check_ssh_status()`, which spawned a whole new `powershell.exe` process
+  (`Test-NetConnection`) on every single call, ran on **every click anywhere in the app**.
+  PowerShell's own cold-start overhead (hundreds of ms, often 1s+) on top of the actual check
+  made the whole GUI feel heavy, exactly as reported. Also discovered live, while diagnosing this
+  same report, an unrelated but real issue: a stale Streamlit process from **2 days earlier**
+  (July 7) was still bound to port 12199 alongside a fresh one started today, silently serving
+  some of the user's requests on pre-fix code the whole time it went unnoticed - killed.
+  Fixed `check_ssh_status()`: replaced the `powershell.exe`/`Test-NetConnection` subprocess with
+  the same lightweight raw socket connect `check_ollama_status()` already used for Ollama's port
+  - no process spawn at all. Both functions also wrapped in `@st.cache_data(ttl=5)` as a second
+  layer of protection against repeated reruns. New `tests/test_gui/test_status_bar.py` (no prior
+  coverage existed for this module) - 6 tests, including one asserting no subprocess is spawned.
+  Full suite: 213 passed, 1 pre-existing unrelated failure.
 
 ## Constitution IX — Single Source of Truth (No Duplication)
 
