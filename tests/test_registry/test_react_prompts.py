@@ -21,8 +21,16 @@ class TestBuildReactSystemPrompt:
     def test_includes_phase_progression_guidance(self):
         prompt = build_react_system_prompt(_make_state())
         assert "PHASE 1" in prompt
-        assert "PHASE 7" in prompt
+        assert "PHASE 8" in prompt
         assert "Check_Reachability first, always" in prompt
+
+    def test_includes_chaining_and_escalation_phase(self):
+        """2026-07-10: PHASE 7 restores the old app/core/prompts.py template's
+        'Chaining & Escalation' depth using only tools that actually exist on
+        WSLBridgeTools today (no Run_Specialized_Module, which was dropped)."""
+        prompt = build_react_system_prompt(_make_state())
+        assert "PHASE 7 (Chaining & Escalation)" in prompt
+        assert "Run_Kali_Command" in prompt
 
     def test_phase_progression_references_all_5_tools_added_in_chk090(self):
         """specs/018 CHK090: Crawl_Target, Secret_Scanner, Advanced_Evasion_Probe,

@@ -7,10 +7,15 @@ import json
 import sys
 import os
 
-# Ensure we can import app modules
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+# Ensure we can import app modules. Moved into tests/manual/ 2026-07-10 - one
+# extra '..' than before to still reach the repo root from the new,
+# one-level-deeper location (confirmed live: without this, running
+# `python tests/manual/ai_benchmark.py` directly raised
+# `ModuleNotFoundError: No module named 'app'`).
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
 
 from app.core.agent.brain import ArgusBrain
+from app.core.config import ArgusConfig
 from app.tools.tool_registry import WSLBridgeTools
 from langchain_core.tools import Tool
 
@@ -62,7 +67,10 @@ def run_benchmark():
     time.sleep(1)
 
     bridge = WSLBridgeTools()
-    model = "WhiteRabbitNeo/WhiteRabbitNeo-V3-7B:latest"
+    # config.yaml is the single source of truth for the model name
+    # (2026-07-10 audit) - this used to hardcode the old Ollama-tag-style
+    # name, disagreeing with config.yaml's current GGUF-tagged model_name.
+    model = ArgusConfig.load().model_name
     
     # Define Tools
     tools = [

@@ -12,6 +12,7 @@ if PROJECT_ROOT not in sys.path:
 from app.tools.tool_registry import WSLBridgeTools
 from app.core.agent.brain import ArgusBrain
 from app.core.agent.brain_tools import build_argus_tools
+from app.core.agent.react_callback import ConsoleTraceCallbackHandler
 from app.core.config import ArgusConfig
 from dotenv import load_dotenv
 
@@ -87,12 +88,17 @@ def run_analysis(target_url):
         query = f"Perform a comprehensive security analysis for {target_url}. Start with reachability, then map the attack surface, and finally provide a deep risk assessment."
         _write_progress(target_url, 'Preparing AI agent')
 
-        reach = bridge.check_reachability(target_url)
-        _write_progress(target_url, f'Reachability: {str(reach)[:800]}')
-
-        # Brain.ask returns a dict with "output" (parsed JSON) or raw result
+        # User asked for the CLI to show the model's reasoning in as much
+        # detail as possible, not just tool print()s and the final report -
+        # ConsoleTraceCallbackHandler prints every Thought/Action/Observation/
+        # Reflection step live as the agent produces it.
+        # (Previously this also called bridge.check_reachability(target_url)
+        # here as a standalone pre-check whose result was only ever written
+        # to the progress log, never used by the query or to skip further
+        # steps - removed as dead work; Check_Reachability is one of the
+        # agent's own 17 tools and the query already asks it to check first.)
         _write_progress(target_url, 'Starting main brain.ask analysis')
-        result = brain.ask(query)
+        result = brain.ask(query, callbacks=[ConsoleTraceCallbackHandler()])
         _write_progress(target_url, 'AI analysis complete')
 
         print("\n" + "="*60)

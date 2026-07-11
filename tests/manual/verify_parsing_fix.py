@@ -1,13 +1,20 @@
 #!/usr/bin/env python
 """
-Historical verification script for the Argus Parsing Error Fix (see
-PARSING_ERROR_FIX.md / JSON_PARSING_FIX.md in this same directory).
+Historical verification script for the Argus Parsing Error Fix - see
+docs/history/2026-06-25_react_parsing_and_simplechain_fallback_incident.md
+(consolidated 2026-07-10 from the 7 separate writeups this docstring
+originally pointed at, including PARSING_ERROR_FIX.md/JSON_PARSING_FIX.md,
+which no longer exist as separate files).
 
-NOT a live test: `ArgusBrain` no longer branches `use_react` per model (it
-always defaults to SimpleChain, per app/core/agent/brain.py's own docstring),
-and `app.core.agent_factory_v2` was removed per specs/012-spec-reconciliation
+NOT a live test: `ArgusBrain` no longer branches `use_react` per model at
+all - that whole mechanism was found (specs/018) to never have actually
+worked (`_get_react_agent()`/`_get_simple_chain()` built the identical
+`AgentExecutor`) and was replaced with `react_workflow.py`'s structured-output
+graph. `app.core.agent_factory_v2` was removed per specs/012-spec-reconciliation
 T027. Kept here for historical reference only - intentionally named so
-pytest's `test_*.py` discovery pattern does not pick it up.
+pytest's `test_*.py` discovery pattern does not pick it up. Moved into
+tests/manual/ 2026-07-10 alongside this repo's other ad hoc diagnostic
+scripts (see tests/manual/README.md).
 
 Tests (as originally written, against the architecture at the time):
 1. WhiteRabbitNeo model detection
@@ -19,8 +26,9 @@ Tests (as originally written, against the architecture at the time):
 import sys
 import os
 
-# Add project root to path (this file lives in tests/, one level below root)
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Add project root to path - one extra dirname() than before the 2026-07-10
+# move into tests/manual/ (one level deeper than the old tests/ location).
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 def test_brain_initialization():
     """Test that brain correctly detects WhiteRabbitNeo and defaults to SimpleChain."""

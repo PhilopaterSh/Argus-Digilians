@@ -86,3 +86,49 @@ class LiveFeedCallbackHandler(BaseCallbackHandler):
             detail (str): Human-readable description of the step.
         """
         self._emit(status, detail)
+
+
+class ConsoleTraceCallbackHandler:
+    """Prints every ReAct step live to stdout - the CLI's equivalent of
+    `LiveFeedCallbackHandler` above, which writes to the GUI's state-file
+    feed instead. Added 2026-07-10: `scripts/run_argus_cli.py` previously
+    passed no callbacks at all to `brain.ask()`, so a CLI run showed only
+    individual tools' own `print()` statements and the final JSON report -
+    every `Thought:`/`Action:` the model actually reasoned through, every
+    `Observation:` it received, and every specs/019 `Reflection:` note was
+    invisible. This is the single source of truth for CLI trace-printing -
+    `scripts/run_argus_cli.py` and `scripts/_diagnostic_cli_verbose.py` both
+    import it rather than each keeping their own copy (Constitution IX).
+
+    Only implements `on_graph_event`, matching how `ArgusBrain`'s current
+    production path (`react_workflow.py`'s custom `StateGraph`) actually
+    drives callbacks - see `LiveFeedCallbackHandler.on_graph_event`'s own
+    docstring for why the four `AgentExecutor`-specific hooks above are not
+    triggered by this path.
+    """
+
+    def __init__(self):
+        self._step = 0
+
+    def on_graph_event(self, status: str, detail: str) -> None:
+        """Print one step, labeled by what it actually contains.
+
+        `detail` carries raw message text with no separate structured type
+        field, so the label is inferred from the message's own prefix -
+        `react_workflow.py`'s `_build_reflection_note()`/`_inter_reflect()`
+        (specs/019) messages start with "Reflection:", tool results start
+        with "Observation:" (`execute_node`), everything else is the
+        model's own Thought/Action/Final-Answer text (`agent_node`).
+        """
+        if detail.startswith("Reflection:"):
+            print(f"\n[REFLECTION] ({status})")
+            print(detail)
+        elif detail.startswith("Observation:"):
+            print("\n[TOOL RESULT]")
+            print(detail)
+        else:
+            self._step += 1
+            print(f"\n{'=' * 70}")
+            print(f"STEP {self._step} - AI Reasoning ({status})")
+            print("=" * 70)
+            print(detail)

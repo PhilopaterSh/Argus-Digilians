@@ -19,7 +19,8 @@ class ReachabilityService:
         self.memory = memory
 
     def check_reachability(self, domain):
-        """Verifies if a target is reachable using ping from WSL.
+        """Verifies if a target is reachable using ping from WSL, falling
+        back to a direct HTTP(S) probe if ping gets no reply.
 
         Args:
             domain (str): Target host or URL, e.g. ``"example.com"`` or
@@ -44,6 +45,27 @@ class ReachabilityService:
         if "4 received" in res or "3 received" in res:
             self.memory.upsert_target(domain)
             return f"Target {domain} is REACHABLE.\n{res}"
+
+        # ICMP is routinely dropped by WAFs/CDNs/cloud load balancers (the
+        # same root cause the 2026-07-07 CHANGELOG entry fixed for
+        # recon_suite's nmap scan via -Pn) - live-confirmed here too against
+        # a real PortSwigger Web Security Academy lab, which serves HTTP 200
+        # while dropping every ping. Without this fallback, any such target
+        # is permanently misreported as DOWN and the agent gives up before
+        # ever trying an HTTP-capable tool.
+        primary_scheme = "https" if not domain.startswith("http://") else "http"
+        fallback_scheme = "http" if primary_scheme == "https" else "https"
+        for scheme in (primary_scheme, fallback_scheme):
+            http_code = self.runner.run(
+                f"curl -s -o /dev/null -w '%{{http_code}}' --max-time 10 "
+                f"--connect-timeout 5 '{scheme}://{host}'"
+            ).strip()
+            if http_code.isdigit() and int(http_code) > 0:
+                self.memory.upsert_target(domain)
+                return (
+                    f"Target {domain} is REACHABLE (ICMP blocked, confirmed via "
+                    f"HTTP {scheme.upper()} - status {http_code}).\n{res}"
+                )
         return f"Target {domain} seems DOWN or unreachable.\n{res}"
 
 class JSONReportWriter:

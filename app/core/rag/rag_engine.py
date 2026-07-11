@@ -146,8 +146,17 @@ class RAGEngine:
         return result.answer
 
     def add_document(self, file_path: str) -> bool:
-        doc = self.processor.load_file(file_path)
-        if doc is None:
+        # DocumentProcessor.load_file() returns Optional[List[Document]] -
+        # one input file can legitimately produce multiple Document chunks
+        # (e.g. a markdown file split by H1/H2/H3 headers, a CSV split
+        # row-by-row - see document_processor.py's structural chunking).
+        # The previous `splitter.split_documents([doc])` wrapped this
+        # already-a-list in a second list, so split_documents() (which
+        # expects Iterable[Document]) iterated once and got the inner list
+        # itself where it expected a Document, crashing on `.page_content`
+        # - confirmed live via scripts/test_rag.py --smoke --no-llm.
+        docs = self.processor.load_file(file_path)
+        if not docs:
             return False
 
         from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -156,7 +165,7 @@ class RAGEngine:
             chunk_size=self.config.chunk_size,
             chunk_overlap=self.config.chunk_overlap,
         )
-        chunks = splitter.split_documents([doc])
+        chunks = splitter.split_documents(docs)
 
         self.initialize(rebuild=False)
         count = self.vector_store.build_index(chunks)

@@ -75,8 +75,14 @@ goto :select_model
 
 :select_model
 :: 4. Intelligence Core Selection
+:: config.yaml is the single source of truth for the model name (2026-07-10
+:: audit) - this legacy manual-fallback installer's default previously
+:: disagreed with it (the old Ollama-tag-style name vs. the current
+:: GGUF-tagged model_name ARGUS_INSTALLER.ps1, the primary installer,
+:: already uses) - a fresh install via this fallback path would have pulled
+:: a different model than config.yaml expects ArgusBrain to use at runtime.
 if "%ARGUS_MODEL%"=="" (
-    set "selected_model=WhiteRabbitNeo/WhiteRabbitNeo-V3-7B:latest"
+    set "selected_model=hf.co/bartowski/WhiteRabbitNeo_WhiteRabbitNeo-V3-7B-GGUF:Q5_K_M"
 ) else (
     set "selected_model=%ARGUS_MODEL%"
 )

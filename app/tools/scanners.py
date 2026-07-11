@@ -57,10 +57,16 @@ class VulnerabilityScanners:
 
         clean_target = url.replace("https://", "").replace("http://", "").rstrip('/').replace("/", "_")
         timestamp = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
-        filename = f"nikto_{clean_target}_{timestamp}.txt"
-        output_path = f"{output_dir}/{filename}"
+        # No .txt suffix here - nikto's own `-Format txt -o <path>` always appends
+        # the format extension itself, regardless of what's already on the path.
+        # Passing a pre-suffixed path produced real ".txt.txt" files on disk
+        # (confirmed in reports/nikto/) while this method's own return message
+        # kept reporting the un-suffixed (wrong) path.
+        base_name = f"nikto_{clean_target}_{timestamp}"
+        output_stem = f"{output_dir}/{base_name}"
+        output_path = f"{output_stem}.txt"
 
-        cmd = f"nikto -h {url} -nointeractive -maxtime 120s -Format txt -o {output_path}"
+        cmd = f"nikto -h {url} -nointeractive -maxtime 120s -Format txt -o {output_stem}"
         res = self.runner.run(cmd)
 
         if self._connection_failed(res):
@@ -72,7 +78,7 @@ class VulnerabilityScanners:
                 fallback_url = None
             if fallback_url:
                 print(f"[!] Nikto could not connect to {url} - retrying with {fallback_url}...")
-                fallback_cmd = f"nikto -h {fallback_url} -nointeractive -maxtime 120s -Format txt -o {output_path}"
+                fallback_cmd = f"nikto -h {fallback_url} -nointeractive -maxtime 120s -Format txt -o {output_stem}"
                 fallback_res = self.runner.run(fallback_cmd)
                 if not self._connection_failed(fallback_res):
                     url, res = fallback_url, fallback_res

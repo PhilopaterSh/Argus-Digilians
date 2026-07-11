@@ -2,7 +2,7 @@ import re
 import json
 import urllib.parse
 from app.core.memory.memory_service import ArgusMemory
-from app.tools.utils import normalize_domain_for_memory
+from app.tools.utils import normalize_domain_for_memory, SENSITIVE_CONTENT_INDICATORS
 
 MAX_HISTORY = 10
 LOOP_THRESHOLD = 3
@@ -101,14 +101,7 @@ class ReflectiveVerificationService:
                     return "ALERT: False Positive. Target returned status 200 OK, but Content-Length is 0."
 
         # 3. Analyze output for actual indicators of success (e.g. Web.config contents, /etc/passwd contents)
-        sensitive_indicators = {
-            "root:x:0:0:": "LFI/Path Traversal Confirmed (/etc/passwd read success)",
-            "DB_PASSWORD": "Secret Disclosure Confirmed (Database configuration leaked)",
-            "appSettings": "Web Configuration Leak Confirmed (web.config read success)",
-            "uid=": "RCE Confirmed (id command executed successfully)"
-        }
-        
-        for indicator, summary in sensitive_indicators.items():
+        for indicator, summary in SENSITIVE_CONTENT_INDICATORS.items():
             if indicator in raw_output:
                 # Document finding directly in memory
                 self.memory.add_finding(clean_target, "reflective_verification", "high_severity_vulnerability", command, f"VERIFIED: {summary}")

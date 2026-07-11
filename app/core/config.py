@@ -19,7 +19,14 @@ class RAGSettings:
     chunk_size: int = 600
     chunk_overlap: int = 100
     retriever_k: int = 4
-    similarity_threshold: float = 0.5
+    # Raised from 0.5 to 0.7 (2026-07-10) - live testing with the real
+    # nomic-embed-text embeddings + FAISS L2 distance found 0.5 rejected
+    # EVERY chunk for a query directly matching the knowledge base's own
+    # content (closest real match scored 0.643, others ~1.0-1.08) - RAG was
+    # silently contributing zero context on every live run, with no error
+    # to indicate why. 0.7 admits that closest real match while still
+    # rejecting the clearly-unrelated ~1.0+ chunks.
+    similarity_threshold: float = 0.7
     auto_rebuild: bool = True
     knowledge_base_dir: str = "knowledge_base"
 
@@ -57,6 +64,13 @@ class ArgusConfig:
     command_timeout_seconds: int = 600
     recon_truncate_chars: int = 1000
     max_retries: int = 3
+    # specs/019-shared-memory-reflection-upgrade: 3x self-consistency majority
+    # vote on exploitation-tool results, scoped to EXPLOITATION_TOOLS in
+    # react_workflow.py. Triples LLM calls for those specific tool calls only -
+    # default on since local GGUF inference has no per-token API cost, but an
+    # escape hatch in case it pushes a run past max_iterations' time budget in
+    # practice (NFR-002).
+    enable_inter_reflection: bool = True
 
     rag: RAGSettings = field(default_factory=RAGSettings)
     streamlit: StreamlitSettings = field(default_factory=StreamlitSettings)

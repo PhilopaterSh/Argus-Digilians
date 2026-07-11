@@ -1,0 +1,250 @@
+@startuml Argus_Class_Diagram
+' Argus Security Framework - Class Diagram (canonical design)
+' Source of truth: app/core/*, app/tools/*; specs 001/005/010/012/015; ADRs.
+' Patterns: Facade, Registry/Plugin, Strategy+Adapter, Factory, Blackboard, LangGraph State.
+
+skinparam classAttributeIconSize 0
+skinparam linetype ortho
+hide empty members
+
+' =====================================================================
+package "Agent (app/core/agent)" {
+
+  class ArgusBrain {
+    - registry : ToolRegistry
+    - rag : RAGEngine
+    - memory : ArgusMemory
+    + ask(query) : dict
+    + graph_ask(query) : dict
+    + dispatch(tool_name, **kwargs) : Any
+    + get_tool_names() : list
+  }
+
+  class AgentFactory <<factory>> {
+    + build_tactical_graph() : StateGraph
+    + build_agent_executor() : AgentExecutor
+    + create_default_registry() : ToolRegistry
+  }
+
+  class LangGraphWorkflow <<StateGraph>> {
+    + build_workflow(llm, tools)
+    + build_tactical_graph()
+    - route_after_parse(state)
+  }
+
+  class AgentState <<TypedDict>> {
+    + target : str
+    + phase : str
+    + messages : list
+    + payloads_tried : list
+    + exploit_status : str
+    + retry_count : int
+    + max_iterations : int
+    + final_state : dict
+  }
+
+  abstract class Node {
+    + {abstract} run(state) : dict
+  }
+  class ReconNode
+  class ScannerNode
+  class ExploitNode
+  class ReflectiveNode
+  class PostExploitNode
+
+  class PromptRegistry <<registry>> {
+    + build_react_system_prompt(state) : str
+    + build_prebuilt_system_prompt(state) : str
+    + REFLECTIVE_NEXT_PROBE_PROMPT
+    + RAG_PROMPT
+    + RAG_PROMPT_SUMMARIZE
+    + PROMPT_VERSION
+  }
+
+  class LLMFactory <<factory>> {
+    + build_llm(model_name) : OllamaLLM
+  }
+}
+
+Node <|-- ReconNode
+Node <|-- ScannerNode
+Node <|-- ExploitNode
+Node <|-- ReflectiveNode
+Node <|-- PostExploitNode
+
+LangGraphWorkflow *-- AgentState : manages >
+LangGraphWorkflow o-- Node : orchestrates >
+ReconNode ..> ScannerNode : ">"
+ScannerNode ..> ExploitNode : ">"
+ExploitNode ..> ReflectiveNode : ">"
+ReflectiveNode ..> ExploitNode : "retry (<= max)"
+ReflectiveNode ..> PostExploitNode : "success >"
+AgentFactory ..> LangGraphWorkflow : builds >
+AgentFactory ..> ArgusBrain : builds >
+ArgusBrain ..> PromptRegistry : uses >
+ArgusBrain ..> LLMFactory : uses >
+Node ..> PromptRegistry : uses >
+
+' =====================================================================
+package "RAG (app/core/rag)" {
+
+  class RAGEngine <<pipeline>> {
+    - config : RAGConfig
+    - processor : DocumentProcessor
+    - vector_store : VectorStore
+    + query(q, k) : RAGResult
+    + query_relevant(q, k) : str
+  }
+  class RAGConfig
+  class RAGResult
+  class DocumentProcessor {
+    + process(files) : List<Document>
+  }
+  class VectorStore {
+    + build_index(chunks) : int
+    + similarity_search(q, k)
+    + needs_rebuild() : bool
+  }
+  class EmbeddingFactory <<factory>> {
+    + get_embeddings(config)
+  }
+  class EmbeddingManifest {
+    + embedder_name : str
+    + dimension : int
+    + knowledge_base_hash : str
+    + needs_rebuild(...) : bool
+  }
+}
+
+RAGEngine *-- DocumentProcessor
+RAGEngine *-- VectorStore
+RAGEngine ..> RAGResult : returns >
+VectorStore ..> EmbeddingFactory : uses >
+VectorStore *-- EmbeddingManifest : pins one embedder >
+RAGEngine ..> RAGConfig
+
+' =====================================================================
+package "Memory / Blackboard (app/core/memory)" {
+  class ArgusMemory <<blackboard>> {
+    - db_path : str = "data/argus_intelligence.db"
+    + upsert_target(domain, ...)
+    + add_finding(domain, tool, type, raw, summary)
+    + upsert_entity(type, value)
+    + add_relation(e1, e2, rel)
+    + get_blackboard_summary() : dict
+    + get_graph_insights() : list
+  }
+}
+
+' =====================================================================
+package "Tools (app/core/registry + app/tools)" {
+
+  abstract class BaseToolService <<interface>> {
+    + name : str
+    + description : str
+    + {abstract} execute(**kwargs) : Any
+  }
+
+  class ToolRegistry <<registry>> {
+    - tools : dict
+    + register(tool : BaseToolService)
+    + get_tool(name) : BaseToolService
+    + get_tool_names() : list
+  }
+
+  class WSLBridgeTools <<facade>> {
+    - registry : ToolRegistry
+    + run_kali_command(cmd)
+    + subdomain_enumeration(domain)
+    + recon_suite(target)
+    + verify_command(cmd)
+  }
+
+  class ToolServiceAdapter <<adapter>> {
+    - service : object
+    + execute(**kwargs)
+  }
+
+  class ReconService
+  class VulnerabilityScanners
+  class CrawlerService
+  class EvasionService
+  class PayloadSuggester
+  class SecretAnalyzer
+  class SelfHealingService
+  class ReflectiveVerificationService
+  class ZEROAPTSimulation
+  class SmartWebSearch
+  class ReachabilityService
+
+  class CommandRunner {
+    + run(cmd) : str
+  }
+  class WSLBridge {
+    + exec(cmd) : str
+  }
+}
+
+BaseToolService <|.. ToolServiceAdapter
+BaseToolService <|.. SelfHealingService
+ToolRegistry o-- "many" BaseToolService : registers >
+WSLBridgeTools *-- ToolRegistry : wraps (Facade) >
+ToolServiceAdapter --> ReconService : adapts >
+ToolServiceAdapter --> VulnerabilityScanners : adapts >
+ToolServiceAdapter --> CrawlerService : adapts >
+ToolServiceAdapter --> EvasionService : adapts >
+ToolServiceAdapter --> PayloadSuggester : adapts >
+ToolServiceAdapter --> SecretAnalyzer : adapts >
+ToolServiceAdapter --> ReflectiveVerificationService : adapts >
+ToolServiceAdapter --> ZEROAPTSimulation : adapts >
+ToolServiceAdapter --> SmartWebSearch : adapts >
+ToolServiceAdapter --> ReachabilityService : adapts >
+ReconService ..> CommandRunner : uses >
+VulnerabilityScanners ..> CommandRunner : uses >
+CommandRunner --> WSLBridge : via >
+WSLBridge ..> "Kali (WSL)" : subprocess/SSH >
+
+' =====================================================================
+package "Schemas (app/core/schemas)" {
+  class SecurityReport {
+    + summary : str
+    + attack_surface_stats : str
+    + findings : List<Finding>
+    + overall_risk_score : int
+    + next_steps : List<str>
+    + output : str
+  }
+  class Finding {
+    + target : str
+    + issue : str
+    + severity : str
+    + description : str
+    + suggested_payload : str
+    + remediation : str
+  }
+}
+SecurityReport *-- "many" Finding
+
+' =====================================================================
+' Cross-package collaborations (the core "idea")
+ArgusBrain *-- RAGEngine : enrich context >
+ArgusBrain *-- ArgusMemory : live state >
+ArgusBrain o-- ToolRegistry : dispatch tools >
+ArgusBrain ..> SecurityReport : produces >
+Node ..> ArgusMemory : read/write blackboard >
+Node ..> WSLBridgeTools : invoke tools >
+RAGEngine ..> ArgusMemory : fuse live state >
+
+note as N1
+  Design patterns
+  --
+  Facade      : WSLBridgeTools
+  Registry/Plugin : ToolRegistry + BaseToolService
+  Strategy+Adapter : BaseToolService / ToolServiceAdapter
+  Factory     : EmbeddingFactory, LLMFactory, AgentFactory
+  Blackboard  : ArgusMemory (shared intelligence)
+  State graph : LangGraphWorkflow + AgentState + Nodes
+  Pipeline    : RAGEngine -> Processor -> VectorStore
+end note
+
+@enduml

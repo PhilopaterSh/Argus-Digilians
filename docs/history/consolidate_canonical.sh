@@ -1,4 +1,10 @@
 #!/usr/bin/env bash
+# ARCHIVED 2026-07-10: moved here from scripts/ - every item this script automates
+# (Cleanup Manifest C1-C7) is marked "Done" in docs/ARCHITECTURE_AUDIT_REPORT.md's
+# own table. Kept for historical reference (how the cleanup was planned/automated),
+# not as an actionable tool - do not run against the current repo state without
+# re-reading it first, since it assumes pre-cleanup paths that no longer exist.
+#
 # Canonical consolidation automation for the Argus repository.
 #
 # Executes the Cleanup Manifest from docs/ARCHITECTURE_AUDIT_REPORT.md (items C1-C7)

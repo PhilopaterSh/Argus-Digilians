@@ -383,6 +383,64 @@ class ArgusMemory:
             logger.error("get_blackboard_summary failed: %s", e)
             return "{}"
 
+    def summarize_for_planning(self, k: int = 3, max_chars: int = 3000) -> str:
+        """Per-source (tool_name), bounded-k aggregation across all targets (specs/019).
+
+        Additive to, and does not replace, `get_blackboard_summary()` above -
+        that method's `{domain: {data_type: summary}}` shape (one survivor
+        per domain+data_type pair) is relied on verbatim by existing callers/
+        tests (`tests/test_memory.py::test_add_finding_multiple_types` et
+        al.), so it is left untouched. This method instead adapts the
+        Red-MIRROR paper's SRMM `GetAggregatedContext(k)` (Algorithm 2) to
+        Argus's actual schema: the paper partitions by execution agent;
+        Argus's closest existing analog to "which agent produced this" is
+        `findings.tool_name`, not `data_type` - so this groups by
+        `(domain, tool_name)` and keeps the `k` most recent findings per
+        group, each formatted with an explicit `[tool_name]` prefix so
+        provenance is visible to the LLM (the paper's `Format` step), unlike
+        `get_blackboard_summary()`'s existing shape, which drops `tool_name`
+        from its output entirely.
+
+        Args:
+            k (int): Max findings kept per `(domain, tool_name)` group.
+                Default 3, matching the paper's own default.
+            max_chars (int): Safety-net truncation, matching
+                `get_blackboard_summary()`'s convention - `k` bounding
+                should make this rare in practice, not the primary bound.
+
+        Returns:
+            str: Newline-joined `"[tool_name] domain data_type: summary"`
+            lines, most-recent-first per group, or the paper's own
+            `"No shared memory available."` string if there are no
+            findings yet (matching SRMM's Algorithm 2 fallback verbatim).
+        """
+        try:
+            with self._get_conn() as conn:
+                rows = conn.execute(
+                    """SELECT t.domain, f.tool_name, f.data_type, f.summary
+                       FROM targets t
+                       JOIN findings f ON t.id = f.target_id
+                       ORDER BY t.priority DESC, f.tool_name ASC, f.timestamp DESC, f.id DESC"""
+                ).fetchall()
+                seen_per_group: dict[tuple[str, str], int] = {}
+                lines: list[str] = []
+                total_len = 0
+                for domain, tool_name, dtype, smry in rows:
+                    group_key = (domain, tool_name)
+                    count = seen_per_group.get(group_key, 0)
+                    if count >= k:
+                        continue
+                    seen_per_group[group_key] = count + 1
+                    line = f"[{tool_name}] {domain} {dtype}: {smry}"
+                    if lines and total_len + len(line) + 1 > max_chars:
+                        break
+                    lines.append(line)
+                    total_len += len(line) + 1
+                return "\n".join(lines) if lines else "No shared memory available."
+        except Exception as e:
+            logger.error("summarize_for_planning failed: %s", e)
+            return "No shared memory available."
+
     def get_blackboard_counts(self) -> dict:
         """Dict-shaped summary (target_count/findings_count) for the GUI status
         bar. get_blackboard_summary() above returns a JSON *string* of nested

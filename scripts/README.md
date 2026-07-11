@@ -86,7 +86,8 @@ LAUNCH_CLI.bat C         # Enhanced mode
 | Start the autonomous agent from the CLI, no GUI | `scripts\LAUNCH_CLI.bat` (runs `run_argus_cli.py`) |
 | Debug/watch an agent run step-by-step in a terminal | `python scripts\_diagnostic_cli_verbose.py <target-url>` (prints every graph step live; not a production entry point) |
 | Run the full automated test suite | `pytest` from the project root (uses `tests/`, not anything in `scripts/`) |
-| Manually smoke-test the agent/RAG pipeline during development | `scripts\test_agent.py` / `scripts\test_rag.py` (ad hoc dev scripts, not part of the pytest suite) |
+| Manually smoke-test the RAG pipeline during development | `scripts\test_rag.py` (ad hoc dev script, not part of the pytest suite) |
+| Manually smoke-test the *superseded* `010` tactical graph (not current production - that's `react_workflow.py`) | `scripts\diagnose_legacy_tactical_graph.py` (renamed 2026-07-10 from the misleading `test_agent.py`; ad hoc, not part of the pytest suite) |
 | Check for duplicate code before committing | `scripts\check_duplication.py` |
 | Check for missing/inconsistent docstrings | `scripts\check_docstrings.py` |
 | Validate Spec Kit artifacts (`specs/`) | `scripts\validate_specs.py` |
@@ -106,7 +107,7 @@ scripts/
 +-- run_agent.py                 # ArgusBrain entry point used by the GUI's "Start Agent" button
 +-- run_argus_cli.py             # CLI Python entry point (used by LAUNCH_CLI.bat)
 +-- _diagnostic_cli_verbose.py   # Verbose step-by-step live debugging CLI (not production)
-+-- test_agent.py                # Ad hoc manual dev smoke-test (not part of the pytest suite)
++-- diagnose_legacy_tactical_graph.py  # Ad hoc smoke-test for the superseded 010 graph only (renamed from test_agent.py)
 +-- test_rag.py                  # Ad hoc manual dev smoke-test (not part of the pytest suite)
 +-- check_docstrings.py          # Spec Kit / Constitution compliance check
 +-- check_duplication.py         # Constitution IX duplication scanner
@@ -114,7 +115,6 @@ scripts/
 +-- validate_ascii.py            # ASCII-only file checker
 +-- get_port.py                  # Free local port finder
 +-- clean_repo.bat                # Repo cleanup helper
-+-- consolidate_canonical.sh     # Canonical-artifact consolidation helper
 +-- README.md                    # This file
 ```
 

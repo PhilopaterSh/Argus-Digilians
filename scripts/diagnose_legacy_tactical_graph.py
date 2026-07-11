@@ -1,3 +1,13 @@
+"""Manual diagnostic for app/core/agent/graph.py's superseded LangGraph node graph
+(spec 010: Recon -> Scanner -> Exploit <-> Reflective -> Post-Exploit).
+
+Renamed 2026-07-10 from `test_agent.py` (misleading - it's not part of the pytest
+suite and does not exercise ArgusBrain's current production ReAct loop, which is
+`app/core/agent/react_workflow.py` per specs 017/018/019). Retained per
+Constitution VII (010's graph itself is retained, not deleted) as a way to
+manually smoke-test that legacy graph still runs; it does not need to be kept in
+sync with the current agent's behavior.
+"""
 import argparse
 from app.core.agent.graph import build_tactical_graph
 

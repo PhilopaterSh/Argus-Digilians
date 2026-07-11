@@ -2,10 +2,23 @@ import socket
 import subprocess
 import time
 import paramiko
+from app.core.config import ArgusConfig
 from app.tools.utils import clean_ansi_codes
 from app.tools.wsl_bridge import WSLBridge
 
-DEFAULT_COMMAND_TIMEOUT = 180
+# config.yaml is the single source of truth for this default (2026-07-10
+# audit): `command_timeout_seconds` was defined in ArgusConfig but nothing
+# in the codebase actually read it - confirmed via grep, every real
+# `.run(..., timeout=N)` call site hardcodes its own tool-specific value
+# (nmap gets 180s, DNS gets 20s, etc. - deliberately NOT overridden here,
+# those per-tool values are already well-tuned), so this constant was only
+# ever reached when a caller passed no `timeout=` at all. Wired to
+# config.yaml so that fallback path is actually controlled by it, instead
+# of being a second, silently-independent "default timeout" setting.
+try:
+    DEFAULT_COMMAND_TIMEOUT = ArgusConfig.load().command_timeout_seconds
+except Exception:
+    DEFAULT_COMMAND_TIMEOUT = 180
 
 class CommandRunner:
     """Responsible only for executing commands through WSL or SSH fallback."""

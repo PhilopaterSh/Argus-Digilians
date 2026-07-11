@@ -108,6 +108,96 @@ def test_ask_streams_live_feed_events_via_on_graph_event():
     assert any(status == "completed" and "Observation:" in detail for status, detail in cb.events)
 
 
+class _FakeRagEngine:
+    """Returns a fixed, `[Source: ...]`-tagged string, matching what
+    format_combined_context() actually produces - avoids needing a real
+    FAISS index/embedding backend to test source-attribution capture."""
+
+    def __init__(self, combined_text):
+        self._combined_text = combined_text
+
+    def format_combined_context(self, query, blackboard_context=""):
+        return self._combined_text
+
+
+def _make_brain_with_fake_rag(llm, combined_text):
+    """ArgusBrain has no constructor seam for injecting a fake RAG engine
+    (unlike `llm=`) - built with RAG disabled, then rag_enabled/_rag_engine
+    are set directly, matching test_rag_engine_threshold.py's established
+    pattern of swapping `engine.vector_store` post-construction."""
+    brain = ArgusBrain("test-model", [_make_tool()], rag_config={"enabled": False}, llm=llm)
+    brain.rag_enabled = True
+    brain._rag_engine = _FakeRagEngine(combined_text)
+    return brain
+
+
+def test_ask_attaches_rag_sources_actually_used_to_the_final_report():
+    """RAG source attribution (2026-07-10): a source-attribution UI existed
+    once (app/core/rag/rag_gui.py, commit 8e16cd4) but only on a side branch
+    that was never merged - RAGResult.sources existed in rag_engine.py but
+    was never threaded through to any user-facing output in mainline."""
+    combined = (
+        "===== STATIC KNOWLEDGE BASE =====\n"
+        "[Source: argus_security_knowledge.md]\nsome static knowledge chunk\n\n---\n\n"
+        "[Source: payloads_cheatsheet.md]\nanother chunk"
+    )
+    llm = FakeListLLM(responses=[f"Final Answer: {FULL_REPORT_JSON}"])
+    brain = _make_brain_with_fake_rag(llm, combined)
+
+    result = brain.ask("scan example.com")
+
+    assert result["output"]["sources_used"] == [
+        "argus_security_knowledge.md",
+        "payloads_cheatsheet.md",
+    ]
+
+
+def test_ask_dedupes_repeated_sources_preserving_order():
+    combined = (
+        "[Source: a.md]\nchunk1\n\n---\n\n"
+        "[Source: b.md]\nchunk2\n\n---\n\n"
+        "[Source: a.md]\nchunk3"
+    )
+    llm = FakeListLLM(responses=[f"Final Answer: {FULL_REPORT_JSON}"])
+    brain = _make_brain_with_fake_rag(llm, combined)
+
+    result = brain.ask("scan example.com")
+
+    assert result["output"]["sources_used"] == ["a.md", "b.md"]
+
+
+def test_ask_omits_sources_used_when_rag_retrieved_nothing():
+    llm = FakeListLLM(responses=[f"Final Answer: {FULL_REPORT_JSON}"])
+    brain = ArgusBrain("test-model", [_make_tool()], rag_config={"enabled": False}, llm=llm)
+
+    result = brain.ask("scan example.com")
+
+    # sources_used defaults to [] on the schema itself (not omitted), but
+    # _attach_rag_sources must not have overwritten it with anything when
+    # RAG contributed nothing this run.
+    assert result["output"]["sources_used"] == []
+
+
+def test_ask_streams_rag_source_retrieval_as_a_reflection_event():
+    combined = "[Source: argus_security_knowledge.md]\nsome chunk"
+    llm = FakeListLLM(responses=[f"Final Answer: {FULL_REPORT_JSON}"])
+    brain = _make_brain_with_fake_rag(llm, combined)
+
+    class _RecordingCallback:
+        def __init__(self):
+            self.events = []
+
+        def on_graph_event(self, status, detail):
+            self.events.append((status, detail))
+
+    cb = _RecordingCallback()
+    brain.ask("scan example.com", callbacks=[cb])
+
+    source_events = [d for s, d in cb.events if "retrieved knowledge base sources" in d]
+    assert len(source_events) == 1
+    assert "argus_security_knowledge.md" in source_events[0]
+
+
 def test_ask_falls_back_to_raw_output_on_unparseable_final_answer():
     llm = FakeListLLM(responses=["Final Answer: not json at all"])
     brain = ArgusBrain("test-model", [_make_tool()], rag_config={"enabled": False}, llm=llm)

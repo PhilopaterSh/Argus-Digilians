@@ -17,7 +17,9 @@ class RAGConfig:
         os.getcwd(), "app", "core", "rag", "store"
     ))
     auto_rebuild: bool = True
-    similarity_threshold: float = 0.5
+    # Raised from 0.5 to 0.7 (2026-07-10) - see app/core/config.py::RAGSettings's
+    # matching comment for the live measurement that motivated this.
+    similarity_threshold: float = 0.7
 
     @classmethod
     def from_central(cls) -> "RAGConfig":

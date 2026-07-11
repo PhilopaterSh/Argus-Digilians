@@ -2,8 +2,10 @@
 
 **Purpose**: Verify all implementation phases meet spec requirements
 **Created**: 2026-06-29
-**Updated**: 2026-07-07 — extended to cover Phases 010-014 (previously untracked here; each
+**Updated**: 2026-07-10 — extended to cover Phases 010-014 (previously untracked here; each
 phase's own `specs/<phase>/tasks.md` remains the source of truth for individual task items).
+See also the "Backlog — Proposed Future Phases" section near the end of this file for
+`019`-`026` (spec-kit-only, not yet implemented).
 
 ---
 
@@ -340,6 +342,146 @@ infrastructure-level crash, none reachable by the mock-LLM suite above.
   real, correct reports). New `tests/test_tools/{test_crawler,test_secrets}.py` (no prior
   coverage existed for either module) and extended `test_brain_tools.py`/`test_react_prompts.py`.
   Full suite: 222 passed, 1 pre-existing unrelated failure.
+- [x] CHK109 (DONE 2026-07-10) User recalled the old `app/core/prompts.py`/`agent_factory.py`
+  path (pre-specs/018, `max_iterations=50`, free-text parsing, 9-phase prompt) used to run for
+  roughly an hour and asked why current runs are shorter/lighter. Investigated and explained
+  honestly rather than just reverting: the old system's long runtimes were often the same
+  failure-retry loop CHK070's incident proved (900s/26 retries/zero results against
+  `cultbeauty.co.uk`), not necessarily extra thoroughness - but a real tradeoff does exist, since
+  the current 7-phase prompt has no analogue of the old "Chaining & Escalation" phase and
+  `DEFAULT_MAX_ITERATIONS=15` leaves little room for one. User approved restoring the depth on
+  top of (not instead of) specs/018/019's reliability fixes, and set a standing project direction
+  (see "Backlog" section below): `docs/history/2603.27127v1.pdf` is a continuing reference for
+  the rest of this project's development, not a one-time gap-analysis input.
+  Changes: `react_prompts.py` gained **PHASE 7 (Chaining & Escalation)** - combine confirmed
+  findings (leaked creds, a working injection, an exposed config/backup file) into a further step
+  via `Run_Kali_Command`/`Secret_Scanner` instead of stopping at first confirmation; deliberately
+  does NOT reference `Run_Specialized_Module` (confirmed absent from `brain_tools.py`'s real tool
+  list via `grep 'name="'`) unlike the old template's Phase 7/8, so the restored phase only
+  points at tools that actually exist. Final Analysis renumbered PHASE 7 -> PHASE 8.
+  `brain.py`'s `DEFAULT_MAX_ITERATIONS` raised 15 -> 25 to give PHASE 7 room to execute without
+  reverting to the old system's unreliable 50-iteration free-text ceiling.
+  `PHASE_5_6_TOOLS`/`EXPLOITATION_TOOLS` enforcement (specs/019) is keyed on tool-name sets, not
+  prompt phase numbers, so the renumbering needed no changes there - verified by reading
+  `react_workflow.py` before editing, not assumed.
+  Updated `tests/test_registry/test_react_prompts.py` (`PHASE 7` assertion moved to `PHASE 8`;
+  new `test_includes_chaining_and_escalation_phase`). Full suite: 256 passed, 1 pre-existing
+  unrelated failure (`test_smart_web_search.py::test_attempt_limit`, a real-network DuckDuckGo
+  call returning no results in this sandbox - unrelated to this change, matches CHK082/085's
+  prior observations of the same flake). Live-reverified against `https://scanme.nmap.org`:
+  5 clean steps, zero repeated/malformed output (no regression to the old failure-retry loop);
+  PHASE 5/6 nudge correctly forced a `Run_Nikto` attempt before allowing a Final Answer;
+  Inter-reflection majority vote fired on that result (`INCONCLUSIVE/NO FINDING`); since Nikto
+  found nothing actually exploitable (only an outdated Apache version, no CVE/injection/leaked
+  creds), the model correctly did NOT force PHASE 6/7 further - matching PHASE 7's own explicit
+  "skip only if Phase 4-6 found nothing to chain from" instruction. This run did not exercise
+  PHASE 7's chaining path itself (this target has nothing to chain), only confirmed the ceiling
+  raise/renumbering causes no regression and the skip condition works as written - PHASE 7 firing
+  on a target with something to actually chain (leaked creds + a login form, or a confirmed
+  injection) remains unverified live and should be checked opportunistically on a future
+  authorized target that has one.
+- [x] CHK110 (DONE 2026-07-10) User asked whether Argus could handle a real PortSwigger Web
+  Security Academy lab, then specifically recalled the project used to handle Path Traversal
+  before. Investigated rather than assumed: three more live attempts to trigger CHK109's still-
+  open PHASE 7 chaining path, each with a different, honestly-documented outcome -
+  `https://scanme.nmap.org` (repeat) had nothing to chain; `http://testphp.vulnweb.com` was
+  genuinely unreachable (confirmed independently via `curl` returning `HTTP_CODE:000` from WSL,
+  not a code bug); a local mock server with a guaranteed real leaked secret hit a **WSL-to-
+  Windows-host networking gap** - `Check_Reachability`/`Recon_Suite` run inside WSL, "localhost"
+  from inside WSL2 resolved to WSL's own loopback (found its own sshd on port 22), never reaching
+  the Windows-side mock process on port 8888 - a verification-methodology limitation, not an
+  Argus bug (confirmed by the nmap output itself showing WSL's own services, not the mock
+  server's).
+  While investigating the Path Traversal recollection specifically, found a real, separate,
+  confirmed gap: `app/tools/evasion.py::advanced_vuln_probe()` (the actual live-attack tool,
+  distinct from the old node-graph pipeline's historical `path_traversal` probe referenced in the
+  2026-07-07 CHANGELOG entry, which itself came back `exploit_success: false` against
+  `example.com`) only ever tried Windows/IIS-style `web.config` - useless against Linux-hosted
+  targets (PortSwigger's labs included, which test `/etc/passwd`) - and judged success by bare
+  HTTP status (`200`/`500`) alone, which both false-negatives (wrong file entirely) and false-
+  positives (any 200 "succeeds"). Separately, `app/tools/reflective_verification.py`'s
+  `post_execute_verify()` already had a real, content-signature-based verifier
+  (`root:x:0:0:`/`DB_PASSWORD`/`uid=` etc.) sitting unused - registered on `WSLBridgeTools` but
+  never exposed as a tool `brain_tools.py`'s ReAct agent can call.
+  Fixed: extracted the indicator dict into a new shared `SENSITIVE_CONTENT_INDICATORS` constant
+  in `app/tools/utils.py` (Constitution IX - was duplicated only in `reflective_verification.py`
+  before; now the one place either file reads from). `advanced_vuln_probe()` rewritten to fetch
+  real response bodies (not `-o /dev/null` status-only) and check them against that dict; added
+  Linux `/etc/passwd`-style traversal payloads (plain, URL-encoded, and dot-slash-obfuscated
+  variants) alongside the original Windows ones; SQLi check extended to also look for real SQL-
+  error text in the body, not just a bare `500`. New `tests/test_tools/test_evasion.py` (no prior
+  coverage existed for this module) - 6 tests. Full suite: **262 passed**, 1 pre-existing
+  unrelated failure (same DuckDuckGo network flake as CHK082/085/109).
+  Live-verified the fix directly: stood up a mock vulnerable server *inside* WSL Kali itself
+  (avoiding CHK110's own WSL-networking-gap finding above) serving real fake `/etc/passwd`
+  content; `curl` confirmed reachable from within WSL first. The subsequent live agent run
+  reached `Run_Nikto` (which satisfied the PHASE 5/6 nudge on its own, an inconclusive generic
+  scan) and stopped at a Final Answer without calling `Advanced_Evasion_Probe` at all - an honest
+  negative result, not a bug: PHASE_5_6_TOOLS enforcement requires *at least one* of
+  Nikto/FFUF/Exploit_Suggester/Advanced_Evasion_Probe, not all four, so the model reasonably
+  treated Nikto's attempt as sufficient. The traversal-detection fix itself remains verified only
+  by the 6 new unit tests, not yet observed firing inside a live agent run - tracked as a
+  follow-up, same status as CHK109's still-open PHASE 7 live-firing item.
+  Separately clarified for the user: confirmed live (`ls` inside WSL Kali) that
+  `/opt/payloads/PayloadsAllTheThings/` is a real, present local mirror, and that all 8 of
+  `app/tools/payloads.py`'s vulnerability-type-to-directory mappings resolve to real directories
+  in it - `Exploit_Suggester` genuinely works. But it is completely disconnected from
+  `Advanced_Evasion_Probe`: the former only returns research text for the model to read, the
+  latter's payload list is 100% hardcoded Python with no automatic pipeline pulling from
+  PayloadsAllTheThings. RAG's actual content (`knowledge_base/argus_security_knowledge.md`, 58
+  lines) is a general architecture/methodology summary, not a payload database - it does not
+  expand attack-payload diversity at all, contrary to what the user's phrasing assumed. Connecting
+  `Advanced_Evasion_Probe` to `Exploit_Suggester`/PayloadsAllTheThings automatically was proposed
+  to the user as a followup, not yet implemented.
+- [x] CHK111 (DONE 2026-07-10) User asked to actually test against a real PortSwigger Web
+  Security Academy lab URL, and separately to implement CHK110's proposed follow-up (wire
+  `Advanced_Evasion_Probe` to PayloadsAllTheThings, "make use of RAG"). Three real changes:
+  1. **`check_reachability()` false-DOWN on ICMP-blocked-but-HTTP-live targets** - live-discovered
+     against the actual PortSwigger lab URL: `curl` independently confirmed `HTTP_CODE:200`, but
+     `Check_Reachability` (ping-only, no fallback) reported it DOWN, stopping the agent
+     immediately - the same root-cause class as the 2026-07-07 CHANGELOG's Cloudflare/WAF fix for
+     `recon_suite`'s nmap scan, but `check_reachability()` had never received an equivalent fix.
+     Fixed: falls back to a direct `curl` HTTP(S) probe (trying the opposite scheme too, matching
+     `run_nikto`/`run_ffuf`'s established scheme-retry pattern) when ping gets no reply. New
+     tests added to `tests/test_tools/test_reachability.py` (3 new, 8 total). Live-reverified:
+     re-running against the same PortSwigger lab now correctly reports
+     `"REACHABLE (ICMP blocked, confirmed via HTTP HTTPS - status 200)"` and the run proceeds
+     into real recon (Recon_Suite's tech fingerprint even captured the lab's actual page title,
+     `Title[File path traversal, simple case...]` - PortSwigger literally names the vulnerability
+     class in the page title). Nikto then came back inconclusive and the model produced a Final
+     Answer without ever calling `Advanced_Evasion_Probe` - an honest finding, not a regression:
+     the model never acted on the page-title signal sitting in its own Recon_Suite output, so the
+     lab's actual traversal parameter was never attempted this run. Tracked as a new, distinct
+     follow-up (nothing in the prompt currently tells the model to specifically watch for and act
+     on strong signals like a page title naming the vulnerability class) - separate from CHK109's
+     still-open PHASE 7 live-firing item and CHK110's still-open traversal-fix live-firing item.
+  2. **`Advanced_Evasion_Probe` <-> PayloadsAllTheThings wiring**: researched first (per request)
+     - confirmed PayloadsAllTheThings ships a dedicated `<Category>/Intruder/` subfolder per
+     vulnerability class with plain one-payload-per-line wordlists (meant for Burp
+     Intruder/ffuf), a far more reliable source to parse than scraping `README.md` prose/code-
+     fences the way `suggest_payloads()` already does. Verified live in Kali WSL:
+     `Directory Traversal/Intruder/dotdotpwn.txt` (21k+ real payloads, confirmed contains plain
+     `../../../etc/passwd`-style entries) and `SQL Injection/Intruder/Generic_ErrorBased.txt`
+     (154 lines, real ` OR 1=1`-style entries) both exist and match. New
+     `app/tools/payloads.py::fetch_intruder_payloads()` samples a small (`limit=4`), bounded
+     random subset via `shuf -n N` and merges it (deduplicated) into `advanced_vuln_probe()`'s
+     existing static traversal/SQLi lists - fails soft (`[]`) if the mirror or file is missing, so
+     a fresh install without the mirror behaves exactly as before, never worse. New
+     `tests/test_tools/test_payloads.py` (6 tests) plus 2 new tests in `test_evasion.py`
+     (enrichment fires; existing tests' mock runner special-cases `shuf` to return empty so their
+     original deterministic payload set is preserved).
+  3. **RAG "made useful"**: confirmed the only knowledge-base document
+     (`argus_security_knowledge.md`) was 100% self-referential Argus architecture description -
+     zero actual security/exploitation knowledge, and even that description was stale (still
+     described the pre-specs/017 `AgentExecutor`/`SimpleChain` path). Corrected the stale line and
+     added new `knowledge_base/exploitation_techniques.md` - real, public OWASP/PayloadsAllTheThings
+     -class methodology (traversal OS-target selection and bypass encodings, SQLi WAF-evasion
+     techniques, verification pitfalls/false-positive patterns, and guidance on chaining a
+     confirmed finding further) - so the RAG fusion that already runs on every `ask()` call
+     actually retrieves something relevant to pentesting reasoning, not just facts about Argus's
+     own components.
+  Full suite after all three changes: **272 passed**, 1 pre-existing unrelated failure (same
+  DuckDuckGo network flake observed since CHK082).
 
 ## Constitution IX — Single Source of Truth (No Duplication)
 
@@ -421,6 +563,188 @@ below). Found via `--all` scan of `app/`, `scripts/`, `Setup/`:
   specifically because of its misleading name. Moved to
   `docs/history/IMPLEMENTATION_GUIDE_parsing_error_fix.md`
   (`docs/ARCHITECTURE_AUDIT_REPORT.md` C6 entry updated with this follow-up).
+  **Superseded 2026-07-10**: this file, `PARSING_ERROR_FIX.md`, and 5 other
+  writeups of the same incident were consolidated into one file and deleted -
+  see `docs/history/2026-06-25_react_parsing_and_simplechain_fallback_incident.md`.
+
+---
+
+## Phase 019 — Shared-Memory + Dual-Phase Reflection Upgrade
+
+First of the 8 `specs/019-026` backlog phases to move from "Proposed" to implemented, per the
+user's explicit request after the Red-MIRROR gap-analysis/spec-kit-writing/web-validation passes
+above. Full detail in `specs/019-shared-memory-reflection-upgrade/{spec,research,plan,tasks}.md`.
+
+- [x] CHK091 `ArgusMemory.summarize_for_planning(k=3, max_chars=3000)` added as a new,
+  additive method (`app/core/memory/memory_service.py`) - per-`(domain, tool_name)`-bounded
+  aggregation, the correct real-schema analog of SRMM's `GetAggregatedContext` (the spec had
+  assumed grouping by `data_type`; reading the real schema found `tool_name` is the actual
+  per-writer signal). `get_blackboard_summary()` itself deliberately left untouched - its exact
+  shape is asserted by existing tests and consumed as-is by `Query_Memory`/TDA/GUI callers, and
+  changing it risked a real regression for no benefit the new method doesn't already provide.
+  Added an `f.id DESC` query tiebreaker after finding, while writing this method's own test,
+  that same-microsecond timestamps under a tight write loop made "most recent" ambiguous.
+- [x] CHK092 `reflection_notes: list[str]` added to `ArgusAgentState`
+  (`app/core/agent/react_state.py`)
+- [x] CHK093 `_build_reflection_note()` (structured, response-aware Intra-reflection) replacing
+  the previous generic "try something different" duplicate-call guidance -
+  `app/core/agent/react_workflow.py`
+- [x] CHK094 `_inter_reflect()` (3x self-consistency majority vote, Wang et al. ICLR 2023 -
+  the same technique Red-MIRROR cites) scoped to `EXPLOITATION_TOOLS`
+  (`Advanced_Evasion_Probe`, `Secret_Scanner`, `Run_Nikto`, `Run_FFUF`) via a new
+  `enable_inter_reflection` config flag (default `true`) - `app/core/agent/react_workflow.py`,
+  `config.yaml`, `app/core/config.py`
+- [x] CHK095 `_check_early_termination()` (flag-pattern nudge, not a forced structural exit -
+  `_finalize_graph_output()`'s `"Final Answer:"` requirement remains the single source of truth
+  for completion, Constitution VIII) - `app/core/agent/react_workflow.py`
+- [x] CHK096 Observability implemented differently than the original plan: `react_workflow.py`'s
+  node functions don't receive callbacks at all (confirmed by reading `brain.py`'s actual
+  `_emit_graph_step()` mechanism before implementing) - reflection notes instead flow through
+  the existing per-message streaming loop as `"Reflection:"`-prefixed messages;
+  `_emit_graph_step()` gained one new status branch (`"reflecting"`) - `app/core/agent/brain.py`
+- [x] CHK097 18 new unit tests (13 in `tests/test_langgraph_workflow.py`, 5 in
+  `tests/test_memory.py`) plus one integration smoke test combining duplicate-call reflection +
+  Inter-reflection voting + early-termination in one realistic multi-step trace (7/7 assertions
+  passed) - all passing
+- [x] CHK098 Full regression verified: `tests/test_memory.py` + `tests/test_langgraph_workflow.py`
+  + `tests/test_registry/` = 91 passed, 0 failed. Full repo suite = 239 passed, 1 failed
+  (`test_smart_web_search.py::test_attempt_limit`) - confirmed via `git stash` (identical failure
+  with today's changes fully reverted) as pre-existing and unrelated: a live-DuckDuckGo-network-
+  dependent test in a file this phase never touched
+- [x] CHK099 T013 (live wall-clock cost measurement, NFR-002) completed against the real
+  production model (`hf.co/bartowski/WhiteRabbitNeo_WhiteRabbitNeo-V3-7B-GGUF:Q5_K_M` via live
+  Ollama, confirmed reachable) - isolated, warm-up-controlled, 3-round interleaved comparison
+  (not a full end-to-end scan, which would confound the measurement with variable tool/network
+  latency the flag doesn't control): a single normal ReAct action-generation call averaged
+  **10.96s**; a full `_inter_reflect()` 3x-vote call averaged **0.82s** (~8% of a single call's
+  time, not the ~300% naively expected from "3x the LLM calls"). Root cause: the vote prompt
+  constrains output to one word ("yes"/"no"), and autoregressive decode time is dominated by
+  *output* token count, not input size or round-trip count - three short-output calls are
+  cheaper than one long-output call. **Conclusion: `enable_inter_reflection=true` is confirmed
+  safe as the default** - the real measured overhead is the opposite of NFR-002's original
+  worry, not just "acceptable."
+- [x] CHK100 (T014) This checklist section + `docs/ARCHITECTURE_AUDIT_REPORT.md` traceability
+  row updated from "Proposed" to "Implemented" + `CHANGELOG.md` entries (both the implementation
+  pass and this verification pass)
+
+---
+
+## Repo Organization Pass (2026-07-10)
+
+User asked for a full organization pass so files/folders are "مفيدة ومنظمة بشكل صحيح" (useful
+and correctly organized) instead of having many discrepancies. Preceded by a dedicated audit
+(Explore agent, root/`docs/`/`app/`/`scripts/`/`tests/`) whose findings were independently
+verified (not taken on trust) before acting - see below for cases where verification corrected
+or added nuance to the audit's own claims.
+
+- [x] CHK101 `scripts/TEST_ARGUS.bat`'s option 6 called a `CHECK_HEALTH.bat` that never existed
+  anywhere in the repo (confirmed absent) - replaced with a one-line call into the real,
+  already-existing Python health-check logic (`app/tools/self_heal.py::SelfHealingService.health_check()`),
+  reusing it instead of writing a second, batch-script copy of the same WSL/Ollama/Python checks.
+  Verified live: returns real `{"wsl": "ok", "ollama": "ok", "python": "ok (...)"}`.
+- [x] CHK102 Deleted stray untracked zip `artifacts/Argus_GUI_files_20260624_180403.zip`
+  (confirmed via `git status` it was never tracked, matching `.gitignore`'s own comment that
+  this exact situation has recurred before).
+- [x] CHK103 Moved self-labeled-legacy `docs/ARGUS_TECHNICAL_ARCHITECTURE_v1.5_LEGACY.md` into
+  `docs/history/`; updated `docs/README.md` (2 references + ADR count 1-16 -> 1-19, stale since
+  `019`'s ADR-19 addition) and `docs/ARCHITECTURE_AUDIT_REPORT.md`'s Section 6 accordingly.
+  Left `specs/001-rag-integration/{plan,tasks}.md`'s references untouched - they're historical
+  snapshots of spec 001's own timeframe, not living docs.
+- [x] CHK104 **Real bug, not just clutter**: `app/tools/scanners.py::run_nikto()` built its
+  Nikto `-o` output path with a `.txt` suffix already applied, but Nikto's own `-Format txt -o
+  <path>` appends `.txt` itself regardless - confirmed via `reports/nikto/*.txt.txt` real files
+  on disk. Fixed to pass the un-suffixed stem to `-o` (both the primary and http/https-fallback
+  command); the method's own returned message now cites the correct, single-`.txt` path. New
+  regression test `test_output_path_has_no_double_extension` - `tests/test_tools/test_scanners.py`
+  (8/8 passing, including the 4 pre-existing tests unaffected).
+- [x] CHK105 `scripts/test_agent.py` exercised `app.core.agent.graph.build_tactical_graph` (the
+  superseded `010` node graph), not `ArgusBrain`'s current production ReAct loop
+  (`react_workflow.py`, `017`/`018`/`019`) despite its name suggesting the opposite - not part
+  of the pytest suite either way (no `test_` functions), but misleading. Renamed to
+  `scripts/diagnose_legacy_tactical_graph.py` with a clarifying docstring;
+  `scripts/README.md` updated (2 references).
+- [x] CHK106 **Real bug, not just clutter**: `app/GUI/{app.py, argus_gui.py, gui_main.py}` were
+  NOT the "deprecation shims" `docs/ARGUS_FRAMEWORK_ARCHITECTURE_v2.md` and
+  `docs/ARCHITECTURE_AUDIT_REPORT.md`'s C3 entry already claimed - each was a full,
+  independently-running 90-180-line Streamlit app with `DeprecationWarning`s bolted on top but
+  otherwise fully functional, each building its **own hardcoded, drifted tool list** (12, 3, and
+  9 tools respectively - none matching the canonical 17-tool `brain_tools.py::build_argus_tools()`
+  list, `gui_main.py` additionally hardcoding a stale model name bypassing `ArgusConfig`
+  entirely). Confirmed via grep that nothing in `scripts/`/`config.yaml` launches these 3
+  directly - pure dead weight with a real risk of giving anyone who ran them a materially worse,
+  stale experience while believing they were using Argus normally. All 3 converted to true
+  one-line `from app.GUI.dashboard import *` re-exports, matching the already-correct
+  `studio.py` pattern. `desktop_gui.py` (Tkinter) deliberately left untouched - it is a
+  genuinely distinct, intentional fallback GUI for non-Streamlit environments, not a duplicate
+  of `dashboard.py` (different framework entirely), despite superficially resembling the other
+  3 in the audit's initial framing. `tests/test_gui/` (35 tests, including the direct
+  `app.GUI.app` import test) confirmed green after.
+- [x] CHK107 Created `tests/manual/` and moved 6 ad hoc, non-pytest scripts into it:
+  `verify_core.py` (fixed a broken pre-reorg import, `from core.tools import WSLBridgeTools` ->
+  `from app.tools.tool_registry import WSLBridgeTools`, confirmed live via
+  `ModuleNotFoundError` before/fixed after), `check_integration.py` (fixed its `REPO_ROOT`
+  dirname-count for the new one-level-deeper location; documented 4 already-stale checks -
+  referencing module-level constants that no longer exist - rather than silently fixing or
+  hiding them), `ai_benchmark.py` (same one-level-deeper path fix - confirmed this one was a
+  **real, newly-introduced-by-the-move bug**: `python tests/manual/ai_benchmark.py` raised
+  `ModuleNotFoundError: No module named 'app'` before the fix, confirmed fixed after),
+  `exploit_test.py`, `test_cd.bat`, and `docs/history/verify_parsing_fix.py` (also relocated
+  here, not just the 5 originally-`tests/`-rooted ones, since a `.py` script doesn't belong in a
+  docs folder either - same one-level-deeper path fix applied and verified). New
+  `tests/manual/README.md` explains why each isn't part of CI and what each still needs (live
+  WSL/network/Ollama). Full suite reconfirmed green after: 240 passed, 1 pre-existing unrelated
+  failure (`test_smart_web_search.py`, already tracked separately).
+- [x] CHK108 Consolidated 7 separate `docs/history/` writeups of the single 2026-06-25
+  "Invalid Format: Missing 'Action:'" / ReAct-to-SimpleChain-fallback incident
+  (`JSON_PARSING_FIX.md`, `PARSING_ERROR_FIX.md`, `IMPLEMENTATION_GUIDE_parsing_error_fix.md`,
+  `REACT_FORMAT_ERROR_FIX.txt`, `RADICAL_FIX_SIMPLE_CHAIN_FALLBACK.txt`, `QUICK_START_FIX.txt`,
+  `TESTING_JSON_FIX.md`) into one chronological file,
+  `docs/history/2026-06-25_react_parsing_and_simplechain_fallback_incident.md`, deleting the 7
+  originals. **Correction to the audit's own framing**: the audit that identified "6 overlapping
+  files" also listed `STREAMLIT_JAVASCRIPT_FIX.txt` as one of them - reading it directly found
+  it documents a genuinely unrelated browser-cache/JS-asset issue, not the parsing incident; left
+  it alone rather than force-merging it. Conversely, `QUICK_START_FIX.txt` and
+  `TESTING_JSON_FIX.md` (not in the audit's list) were found, on reading `docs/history/`
+  directly, to also document the same parsing incident - the real count was 7, not 6. The
+  consolidated file explicitly connects this incident's confident, tested-at-the-time claims
+  ("0% -> 95%+ success rate", "4/4 tests passing") to `specs/018`'s later finding that the
+  fallback mechanism it describes never actually worked - preserved as a lesson, not scrubbed.
+  `docs/ARCHITECTURE_AUDIT_REPORT.md` (2 entries) and `specs/checklist.md`'s own CHK065 updated
+  with pointers to the new file rather than left citing deleted paths.
+
+---
+
+## Backlog — Proposed Future Phases (Red-MIRROR gap analysis, 2026-07-10)
+
+Produced from a gap analysis comparing Argus against `docs/history/2603.27127v1.pdf`
+("Red-MIRROR: Agentic LLM-based Autonomous Penetration Testing with Reflective Verification and
+Knowledge-augmented Interaction," arXiv:2603.27127v1), at the user's explicit request. `019` has
+since been implemented (see "Phase 019" section above, CHK091-100) - the rest remain spec-kit-
+only (`spec.md`/`research.md`/`plan.md`/`tasks.md` written, no implementation started). Each
+phase's own `specs/<phase>/tasks.md` tracks its task list.
+
+**Standing reference, not a one-time analysis (per explicit user direction, 2026-07-10):** this
+paper stays the project's continuing foundation through the rest of development, not just the
+source of this one backlog table. Changes made outside this backlog (e.g. the 2026-07-10
+`react_prompts.py` PHASE 7/`brain.py` `DEFAULT_MAX_ITERATIONS` restoration, see "Phase 018
+addendum" below) are still expected to be justified against it where relevant, and this table
+should be revisited whenever new capability is considered, not treated as closed once written.
+
+| Phase | Title | Status | Depends on | Risk |
+|-------|-------|--------|------------|------|
+| 019 | Shared-memory + Dual-Phase Reflection upgrade | **Implemented 2026-07-10** (CHK091-100) | none | Low — upgraded existing mechanisms |
+| 020 | Multi-agent role separation (Planner/Collector/Exploiter/Summarizer) | Proposed, **flagged high-risk/optional** | 019 (done) | High — core loop architecture change |
+| 021 | Specialized exploitation toolkit (JWT/IDOR/upload/XSS-fuzzer/code-injection) | Proposed, per-tool shippable | none (XSS fuzzer soft-depends on 019, now available) | Low — new tools, established pattern |
+| 022 | Browser automation via Playwright | Proposed | none | Medium — new Kali-side runtime dependency |
+| 023 | CVE intelligence & PoC retrieval | Proposed | none | Low-Medium — new external API dependency |
+| 024 | LoRA fine-tuning pipeline | Proposed | none (offline pipeline) | Medium — needs training-capable hardware not guaranteed on target machines |
+| 025 | Subtask-level benchmark suite (SR/SCR/TTE + ablation) | Proposed | none (needed to *measure* 019/020) | Low |
+| 026 | Ethical safeguards (auth gate, audit log, watermarking, RAG gating) | Proposed | none | Low |
+
+Recommended sequencing per each phase's own spec.md: `019` is done; `025` (benchmark suite) is
+next-most-valuable since it's what lets `020`'s "measure 019's residual gap before committing"
+recommendation actually be acted on with real numbers instead of guesses. `021`-`024`/`026` are
+independent and can proceed in any order the team prioritizes.
 
 ---
 
@@ -435,4 +759,5 @@ below). Found via `--all` scan of `app/`, `scripts/`, `Setup/`:
 | Commits | 16+ (005-009) + ongoing |
 | New files created | 20+ (005-009) + 5 (017) + 4 (018: spec/research/plan/tasks.md) |
 | Files refactored | 10+ (005-009) |
-| **Open compliance gaps** | None as of 2026-07-09 — **CHK052** (011 task tracking) and the **CHK058-065** Constitution IX duplication/organization backlog are all resolved; **CHK055** (014 in progress) is expected, not a gap |
+| New files created (backlog spec kits) | +32 (019-026: 4 files each, spec/research/plan/tasks.md — no `app/` code yet) |
+| **Open compliance gaps** | None as of 2026-07-09 — **CHK052** (011 task tracking) and the **CHK058-065** Constitution IX duplication/organization backlog are all resolved; **CHK055** (014 in progress) is expected, not a gap. `019`-`026` are an intentional, tracked backlog (not a gap) — see "Backlog — Proposed Future Phases" above |

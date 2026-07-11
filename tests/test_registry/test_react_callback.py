@@ -11,7 +11,7 @@ import uuid
 import pytest
 from langchain_core.agents import AgentAction, AgentFinish
 
-from app.core.agent.react_callback import LiveFeedCallbackHandler
+from app.core.agent.react_callback import ConsoleTraceCallbackHandler, LiveFeedCallbackHandler
 
 
 @pytest.fixture
@@ -108,3 +108,46 @@ def test_on_graph_event_appends_event_with_given_status(state_file):
     assert "Thought: about to scan." in events[0]["detail"]
     assert events[1]["status"] == "completed"
     assert "Observation: scan finished." in events[1]["detail"]
+
+
+class TestConsoleTraceCallbackHandler:
+    """Added 2026-07-10: user asked for the CLI to show the model's
+    reasoning in as much detail as possible - scripts/run_argus_cli.py
+    previously passed no callbacks to brain.ask() at all."""
+
+    def test_reasoning_step_prints_numbered_step_header(self, capsys):
+        handler = ConsoleTraceCallbackHandler()
+        handler.on_graph_event("running", "Thought: check reachability.\nAction: Check_Reachability")
+
+        out = capsys.readouterr().out
+        assert "STEP 1" in out
+        assert "Thought: check reachability." in out
+
+    def test_step_counter_increments_across_reasoning_steps_only(self, capsys):
+        handler = ConsoleTraceCallbackHandler()
+        handler.on_graph_event("running", "Thought: first.\nAction: A")
+        handler.on_graph_event("completed", "Observation: result of A")
+        handler.on_graph_event("running", "Thought: second.\nAction: B")
+
+        out = capsys.readouterr().out
+        assert "STEP 1" in out
+        assert "STEP 2" in out
+        assert "STEP 3" not in out  # the Observation must not consume a step number
+
+    def test_observation_prints_as_tool_result_not_a_numbered_step(self, capsys):
+        handler = ConsoleTraceCallbackHandler()
+        handler.on_graph_event("completed", "Observation: Nikto found 3 issues")
+
+        out = capsys.readouterr().out
+        assert "[TOOL RESULT]" in out
+        assert "Nikto found 3 issues" in out
+        assert "STEP" not in out
+
+    def test_reflection_prints_as_reflection_not_a_numbered_step(self, capsys):
+        handler = ConsoleTraceCallbackHandler()
+        handler.on_graph_event("reflecting", "Reflection: majority-vote assessment of Run_Nikto result = SUCCESS.")
+
+        out = capsys.readouterr().out
+        assert "[REFLECTION]" in out
+        assert "SUCCESS" in out
+        assert "STEP" not in out

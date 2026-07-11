@@ -26,6 +26,8 @@ class ArgusAgentState(TypedDict):
     tool_result: Optional[str]
     tool_error: Optional[str]
     tool_call_history: list[str]
+    reflection_notes: list[str]
+    phase56_nudged: bool
 
 
 class ArgusPrebuiltState(ArgusAgentState):

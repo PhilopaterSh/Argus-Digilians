@@ -8,16 +8,18 @@ These are the authoritative sources of truth. When any other document disagrees,
 
 | Document | Role |
 |----------|------|
-| [`ARGUS_FRAMEWORK_ARCHITECTURE_v2.md`](ARGUS_FRAMEWORK_ARCHITECTURE_v2.md) | Canonical architecture (arc42 + C4) and all ADRs (1-16) |
+| [`ARGUS_FRAMEWORK_ARCHITECTURE_v2.md`](ARGUS_FRAMEWORK_ARCHITECTURE_v2.md) | Canonical architecture (arc42 + C4) and all ADRs (1-19) |
 | [`../specs/012-spec-reconciliation/`](../specs/012-spec-reconciliation/) | Canonical cross-cutting decisions (naming, ports, RAG embedding, agent design, testing, CI/CD) |
 | [`ARCHITECTURE_AUDIT_REPORT.md`](ARCHITECTURE_AUDIT_REPORT.md) | Repository audit, duplication analysis, and the Cleanup Manifest (C1-C7) |
 | [`ARGUS_SPECKIT_ARCHITECTURE_REVIEW.md`](ARGUS_SPECKIT_ARCHITECTURE_REVIEW.md) | Point-in-time architecture review (pre-consolidation baseline) |
 | [`../.specify/memory/constitution.md`](../.specify/memory/constitution.md) | Project governance and coding/process principles (supersedes the removed `GEMINI.md`) |
 | [`../scripts/README.md`](../scripts/README.md) | Repository structure and script/entry-point overview |
-| [`ARGUS_TECHNICAL_ARCHITECTURE_v1.5_LEGACY.md`](ARGUS_TECHNICAL_ARCHITECTURE_v1.5_LEGACY.md) | Archived pre-RAG architecture (historical) |
+| [`history/ARGUS_TECHNICAL_ARCHITECTURE_v1.5_LEGACY.md`](history/ARGUS_TECHNICAL_ARCHITECTURE_v1.5_LEGACY.md) | Archived pre-RAG architecture (historical - moved into `history/` 2026-07-10) |
 
 Automation and validation: `scripts/validate_specs.py`, `scripts/validate_ascii.py`,
-`scripts/consolidate_canonical.sh`, and the CI pipeline `.github/workflows/ci.yml`.
+and the CI pipeline `.github/workflows/ci.yml`. `consolidate_canonical.sh` (the one-time
+Cleanup Manifest C1-C7 automation helper) moved to `docs/history/` 2026-07-10 - every item it
+automated is done (see `ARCHITECTURE_AUDIT_REPORT.md`'s Cleanup Manifest table).
 
 ## Documentation Files
 
@@ -38,7 +40,7 @@ Automation and validation: `scripts/validate_specs.py`, `scripts/validate_ascii.
 - Building block view
 - Runtime view
 - Deployment view
-- Cross-cutting concepts (ADRs 1-16)
+- Cross-cutting concepts (ADRs 1-19)
 
 ## Project Standards
 
@@ -92,14 +94,17 @@ Automation and validation: `scripts/validate_specs.py`, `scripts/validate_ascii.
 ```
 docs/
 ├── README.md                                   # This file (documentation index)
-├── ARGUS_FRAMEWORK_ARCHITECTURE_v2.md          # Canonical architecture (arc42 + C4) + ADRs 1-16
-├── ARGUS_TECHNICAL_ARCHITECTURE_v1.5_LEGACY.md # Archived pre-RAG architecture
-├── ARCHITECTURE_AUDIT_REPORT.md                # Repository audit + Cleanup Manifest
+├── ARGUS_FRAMEWORK_ARCHITECTURE_v2.md          # Canonical architecture (arc42 + C4) + ADRs 1-19
+├── ARCHITECTURE_AUDIT_REPORT.md                # Repository audit + Cleanup Manifest (living traceability doc)
 ├── ARGUS_SPECKIT_ARCHITECTURE_REVIEW.md        # Pre-consolidation review baseline
 ├── Argus_Master_Documentation.md               # Main technical reference
 ├── Multi_Agent_Pentest_Architectures.md        # Background research
 ├── Information_Disclosure_Notes.md             # Findings notes
-└── history/                                    # Superseded docs, retained not deleted (Constitution VII)
+├── diagrams/                                    # Current .puml/.drawio diagram sources
+└── history/                                    # Superseded docs + consolidated incident writeups,
+                                                  # retained not deleted (Constitution VII) - includes
+                                                  # ARGUS_TECHNICAL_ARCHITECTURE_v1.5_LEGACY.md (moved
+                                                  # here 2026-07-10, per its own self-declared status)
 ```
 
 > Canonical cross-cutting decisions live in [`../specs/012-spec-reconciliation/`](../specs/012-spec-reconciliation/), not in this directory.

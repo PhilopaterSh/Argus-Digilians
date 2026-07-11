@@ -27,6 +27,86 @@ from app.core.schemas import SecurityReport
 
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
+# specs/019-shared-memory-reflection-upgrade: tools whose raw output requires
+# judgment to interpret as success/failure (Red-MIRROR's Exploiter-Agent-
+# owned action space, Section 3.6.2) - scoped Inter-reflection (3x
+# self-consistency majority vote) to these only. Deliberately excludes purely
+# informational/deterministic tools (Check_Reachability, Query_Memory, etc.)
+# where a single pass already suffices and tripling LLM calls would add
+# latency for no benefit. Matches the exact tool names in
+# app/core/agent/brain_tools.py::build_argus_tools() - kept here as the one
+# place other modules should import from (Constitution IX), not re-listed.
+EXPLOITATION_TOOLS = frozenset({
+    "Advanced_Evasion_Probe",
+    "Secret_Scanner",
+    "Run_Nikto",
+    "Run_FFUF",
+})
+
+# react_prompts.py's Rule 5 ("Reconnaissance alone (Phases 1-2) is NOT a
+# complete analysis... also attempt Phase 5 or 6 before giving a Final
+# Answer") was advisory text only - a live run against scanme.nmap.org
+# concluded after just Check_Reachability/Subdomain_Enumeration/Recon_Suite
+# (Phases 1-2), never touching any of these, because nothing in the code
+# actually required it. Enforced structurally below (parse_node) as a
+# ONE-TIME nudge, not a hard block - forcing a scan against a target with no
+# reachable web service at all would be pointless, so the model is given one
+# chance to either use one of these or explicitly justify skipping them.
+PHASE_5_6_TOOLS = frozenset({
+    "Run_Nikto",
+    "Run_FFUF",
+    "Exploit_Suggester",
+    "Advanced_Evasion_Probe",
+})
+
+# specs/019: matches Red-MIRROR's Inter-reflection Step 2 (Algorithm 4) -
+# early-termination flag check, independent of Final Answer detection.
+_FLAG_PATTERN = re.compile(r"flag\{[^}]+\}", re.IGNORECASE)
+
+
+def _check_early_termination(text: str) -> Optional[str]:
+    """Return the first `flag{...}`-shaped match in `text`, or None.
+
+    Args:
+        text (str): Tool result / observation text to scan.
+
+    Returns:
+        Optional[str]: The matched flag string, or None if no flag-shaped
+        substring is present.
+    """
+    match = _FLAG_PATTERN.search(text or "")
+    return match.group(0) if match else None
+
+
+def _build_reflection_note(prior_action: str, prior_response: str) -> str:
+    """Structured Intra-reflection note (specs/019 FR-005; Red-MIRROR Algorithm 3
+    `ReflectAndUpdate`), replacing the previous generic "try something
+    different" guidance with a response-aware suggestion.
+
+    A lightweight keyword heuristic, not a second LLM call - keeps this on
+    the hot path of every blocked duplicate-call without adding latency.
+
+    Args:
+        prior_action (str): The `"{tool}::{input}"` call being blocked.
+        prior_response (str): The most recent tool_result/tool_error text
+            for that action, if available.
+
+    Returns:
+        str: A one-line note naming a concrete dimension to change.
+    """
+    text = (prior_response or "").lower()
+    if "403" in text or "blocked" in text or "forbidden" in text:
+        suggestion = "try a different encoding or bypass technique - the request appears to have been blocked (WAF/filter)"
+    elif "timeout" in text or "timed out" in text:
+        suggestion = "try a different endpoint or method - the previous attempt timed out"
+    elif "404" in text or "not found" in text:
+        suggestion = "try a different path/endpoint - the previous target path was not found"
+    elif "500" in text or "error" in text:
+        suggestion = "try a different payload - the server returned an error, which may itself be a signal worth investigating differently"
+    else:
+        suggestion = "try a genuinely different input or technique, not a repeat of the same request"
+    return f"Reflection: prior attempt '{prior_action}' -> {suggestion}."
+
 
 class _ArgusAction(BaseModel):
     """Structured Action decision (012 FR-C9 / ADR-13): Ollama format=json primary path."""
@@ -101,6 +181,46 @@ def _try_structured_final_answer(llm: Any, raw_answer: str) -> Optional[dict]:
         return report.model_dump()
     except Exception:
         return None
+
+
+def _inter_reflect(llm: Any, action: str, response: str) -> Optional[bool]:
+    """3x self-consistency majority vote on whether a tool call succeeded
+    (specs/019 FR-006; Red-MIRROR Algorithm 4 Step 1 / Eq. 10).
+
+    Invokes `llm.invoke()` three times with a fixed, low-variance prompt and
+    takes the majority (>=2/3) "yes" as the success verdict - reduces
+    single-pass hallucination in judging ambiguous tool output, per the
+    paper's own cited technique (Wang et al., ICLR 2023).
+
+    Args:
+        llm (Any): The LLM in use.
+        action (str): The `"{tool}::{input}"` call being judged.
+        response (str): The tool's raw result text.
+
+    Returns:
+        Optional[bool]: Majority verdict, or None if all 3 calls raised
+        (e.g. LLM unreachable) - callers must treat None as inconclusive,
+        never silently treat it as success (Constitution VIII).
+    """
+    prompt = (
+        f"A penetration-testing tool was invoked: {action}\n"
+        f"Its result was:\n{str(response)[:1500]}\n\n"
+        f"Did this tool call achieve a genuine security finding or successful "
+        f"exploitation step (not just execute without error)? Answer with "
+        f"exactly one word: yes or no."
+    )
+    votes = []
+    for _ in range(3):
+        try:
+            reply = llm.invoke([HumanMessage(content=prompt)])
+            content = str(getattr(reply, "content", reply)).strip().lower()
+            votes.append("yes" in content)
+        except Exception:
+            continue
+    if not votes:
+        return None
+    yes_count = sum(1 for v in votes if v)
+    return yes_count > len(votes) / 2
 
 
 def _supports_tool_calls(llm: ChatOllama) -> bool:
@@ -200,12 +320,24 @@ def _build_prebuilt_workflow(
 # Mode 2: Custom text-based ReAct for any model
 # =======================================================
 def _build_custom_workflow(
-    llm: Any, tools: list, memory: Optional[ArgusMemory] = None
+    llm: Any,
+    tools: list,
+    memory: Optional[ArgusMemory] = None,
+    enable_inter_reflection: bool = True,
 ) -> Any:
     """Build a custom StateGraph with text-based ReAct parsing.
 
     Works with any LLM (no native tool_calls needed).
     The LLM outputs: Thought/Action/Action Input/Final Answer.
+
+    Args:
+        enable_inter_reflection (bool): specs/019 FR-006/NFR-002 escape
+            hatch - when False, `execute_node` skips the 3x majority-vote
+            check for `EXPLOITATION_TOOLS` entirely, restoring the
+            pre-specs/019 single-pass behavior. Read from
+            `ArgusConfig.enable_inter_reflection` by callers; defaults True
+            here only for direct/test callers that don't thread config
+            through.
     """
     tool_map = _build_tool_map(tools)
 
@@ -333,22 +465,56 @@ def _build_custom_workflow(
                     ", ".join(untried) if untried
                     else "(none - every available tool has been tried at least once)"
                 )
+                # specs/019 FR-005: structured, response-aware Intra-reflection
+                # note - replaces the purely repetition-based guidance above
+                # with a concrete "why did this fail, what to change" signal
+                # drawn from the last real result for this exact call.
+                prior_response = state.get("tool_error") or state.get("tool_result") or ""
+                reflection_note = _build_reflection_note(call_key, str(prior_response))
                 guidance = (
                     f"Observation: You already called {result['tool_name']} with "
                     f"input '{result.get('tool_input', '')}' TWICE earlier this "
                     f"run - a third identical attempt would not produce a new "
-                    f"result. Tools you have NOT tried yet this run: "
-                    f"{untried_block}. Pick one of those with a relevant input, "
-                    f"or a genuinely different input for a tool you've already "
-                    f"used. Only give your Final Answer if every relevant tool "
-                    f"for this target has truly been tried."
+                    f"result. {reflection_note} Tools you have NOT tried yet "
+                    f"this run: {untried_block}. Pick one of those with a "
+                    f"relevant input, or a genuinely different input for a "
+                    f"tool you've already used. Only give your Final Answer if "
+                    f"every relevant tool for this target has truly been tried."
                 )
                 return {
                     "tool_error": guidance,
                     "tool_name": None,
                     "tool_input": None,
                     "phase": "duplicate_call",
+                    "reflection_notes": state.get("reflection_notes", []) + [reflection_note],
                     "messages": [HumanMessage(content=guidance)],
+                }
+
+        if result.get("phase") == "done":
+            tried_names = {entry.partition("::")[0] for entry in state.get("tool_call_history", [])}
+            # Only nudge a run that attempted at least one tool - a Final
+            # Answer with zero tool calls at all is a different, broader
+            # problem (skipping every phase, not specifically 5/6) out of
+            # scope for this check.
+            if tried_names and not (tried_names & PHASE_5_6_TOOLS) and not state.get("phase56_nudged", False):
+                nudge = (
+                    "Observation: Before concluding, note that you have not yet "
+                    "attempted vulnerability scanning or exploitation research "
+                    "(Run_Nikto, Run_FFUF, Exploit_Suggester, "
+                    "Advanced_Evasion_Probe) against this target. If a reachable "
+                    "web service exists, try one of these now. If Phase 5/6 "
+                    "genuinely does not apply (e.g. no reachable web service was "
+                    "found), state that explicitly in your Final Answer instead "
+                    "of omitting it silently."
+                )
+                return {
+                    "tool_error": nudge,
+                    "tool_name": None,
+                    "tool_input": None,
+                    "phase": "phase56_check",
+                    "phase56_nudged": True,
+                    "reflection_notes": state.get("reflection_notes", []) + [nudge],
+                    "messages": [HumanMessage(content=nudge)],
                 }
 
         return result
@@ -382,12 +548,43 @@ def _build_custom_workflow(
                 f"- [{name}] {str(inp)[:80]} -> {str(result)[:200]}"
             ).strip()
             call_key = f"{name}::{inp}"
+            extra_messages = []
+            reflection_notes = list(state.get("reflection_notes", []))
+
+            # specs/019 FR-007 (Red-MIRROR Algorithm 4 Step 2): early-termination
+            # flag check, independent of "Final Answer:" detection - a nudge
+            # via the message stream, not a forced structural exit, so
+            # _finalize_graph_output()'s existing "Final Answer:" requirement
+            # (Constitution VIII - never fabricate a report) stays the single
+            # source of truth for when the graph is actually done.
+            found_flag = _check_early_termination(str(result))
+            if found_flag:
+                nudge = (
+                    f"Reflection: a flag-shaped string was found in this "
+                    f"result ({found_flag}). Provide your Final Answer now "
+                    f"if this satisfies the objective."
+                )
+                extra_messages.append(HumanMessage(content=nudge))
+                reflection_notes.append(nudge)
+
+            # specs/019 FR-006 (Red-MIRROR Algorithm 4 Step 1): 3x
+            # self-consistency majority vote, scoped to EXPLOITATION_TOOLS
+            # only (informational/deterministic tools don't need it).
+            if enable_inter_reflection and name in EXPLOITATION_TOOLS:
+                verdict = _inter_reflect(llm, call_key, str(result))
+                if verdict is not None:
+                    verdict_text = "SUCCESS" if verdict else "INCONCLUSIVE/NO FINDING"
+                    reflect_msg = f"Reflection: majority-vote assessment of {name} result = {verdict_text}."
+                    extra_messages.append(HumanMessage(content=reflect_msg))
+                    reflection_notes.append(reflect_msg)
+
             update = {
                 "tool_result": str(result)[:2000],
                 "tool_error": None,
                 "blackboard_summary": bb,
-                "messages": [HumanMessage(content=obs)],
+                "messages": [HumanMessage(content=obs)] + extra_messages,
                 "tool_call_history": state.get("tool_call_history", []) + [call_key],
+                "reflection_notes": reflection_notes,
             }
             if memory is not None:
                 try:
@@ -417,14 +614,15 @@ def _build_custom_workflow(
                 `tool_name`, `iteration_count`, and `max_iterations`.
 
         Returns:
-            str: One of `"end"` (done, or a format/duplicate-call loop that
-            hit `max_iterations`), `"agent"` (retry after a format error or
-            blocked duplicate call), or `"execute"` (a valid new tool call).
+            str: One of `"end"` (done, or a format/duplicate-call/phase56-check
+            loop that hit `max_iterations`), `"agent"` (retry after a format
+            error, blocked duplicate call, or phase5/6 nudge), or `"execute"`
+            (a valid new tool call).
         """
         phase = state.get("phase", "")
         if phase == "done":
             return "end"
-        if phase in ("format_error", "duplicate_call"):
+        if phase in ("format_error", "duplicate_call", "phase56_check"):
             # Bug fixed (specs/018): this previously routed straight back to
             # "agent" with no iteration check at all, unlike the tool-execute
             # path below. A model that never once produces valid output (the
@@ -432,12 +630,13 @@ def _build_custom_workflow(
             # bounded only by LangGraph's default recursion_limit (25) via an
             # ungraceful GraphRecursionError - not by max_iterations, and not
             # a clean "no final answer" result. duplicate_call (specs/018
-            # addendum 2) shares this same bound for the same reason - a
-            # model that keeps re-proposing the same blocked call needs the
-            # same safety net a model that never produces valid output does.
+            # addendum 2) and phase56_check (specs/019 follow-up) share this
+            # same bound for the same reason - any soft-block/nudge path that
+            # loops back to "agent" needs the same safety net a model that
+            # never produces valid output does.
             if state["iteration_count"] >= state["max_iterations"]:
                 return "end"
-            return "agent"  # loop back so model sees the format/duplicate-call error
+            return "agent"  # loop back so model sees the format/duplicate-call/nudge message
         if state.get("tool_name"):
             return "execute"
         return "end"

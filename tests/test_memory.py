@@ -154,6 +154,49 @@ class TestArgusMemory:
         assert full_elapsed < 2.0, f"get_blackboard_summary(max_chars=1_000_000) took {full_elapsed:.2f}s"
         assert len(json.loads(full_summary)) == 1000
 
+    def test_summarize_for_planning_empty(self, mem):
+        assert mem.summarize_for_planning() == "No shared memory available."
+
+    def test_summarize_for_planning_bounds_per_source_not_globally(self, mem):
+        """specs/019 SC-003: 3 sources x 5 findings each -> exactly the last
+        k=3 per (domain, tool_name) group, not the last 9 overall."""
+        mem.upsert_target("x.com")
+        for source in ("nmap", "whatweb", "nikto"):
+            for i in range(5):
+                mem.add_finding("x.com", source, "type1", f"raw{i}", f"{source}-finding-{i}")
+        summary = mem.summarize_for_planning(k=3)
+        lines = summary.split("\n")
+        assert len(lines) == 9, f"expected 9 lines (3 sources x k=3), got {len(lines)}"
+        for source in ("nmap", "whatweb", "nikto"):
+            source_lines = [l for l in lines if l.startswith(f"[{source}]")]
+            assert len(source_lines) == 3, f"{source} should contribute exactly 3 lines, got {len(source_lines)}"
+            # Most recent 3 (finding-2, finding-3, finding-4) must be kept, not the oldest 3.
+            kept_indices = {int(l.rsplit("-", 1)[1]) for l in source_lines}
+            assert kept_indices == {2, 3, 4}, f"{source} kept the wrong findings: {kept_indices}"
+
+    def test_summarize_for_planning_formats_with_source_prefix(self, mem):
+        mem.upsert_target("y.com")
+        mem.add_finding("y.com", "nikto", "vuln", "raw", "found XSS")
+        summary = mem.summarize_for_planning()
+        assert summary == "[nikto] y.com vuln: found XSS"
+
+    def test_summarize_for_planning_respects_max_chars(self, mem):
+        mem.upsert_target("z.com")
+        for i in range(50):
+            mem.add_finding("z.com", f"tool{i}", "type1", "raw", "x" * 100)
+        summary = mem.summarize_for_planning(k=3, max_chars=500)
+        assert len(summary) <= 500
+
+    def test_get_blackboard_summary_unaffected_by_summarize_for_planning(self, mem):
+        """specs/019: the new method is additive - get_blackboard_summary()'s
+        existing domain->data_type shape (relied on by test_add_finding_multiple_types
+        et al.) must be completely unchanged."""
+        mem.add_finding("x.com", "nmap", "ports", "80/tcp", "HTTP")
+        mem.add_finding("x.com", "whatweb", "tech", "nginx", "Nginx 1.24")
+        summary = json.loads(mem.get_blackboard_summary())
+        assert summary["x.com"]["ports"] == "HTTP"
+        assert summary["x.com"]["tech"] == "Nginx 1.24"
+
     def test_upsert_target_null_parent(self, mem):
         mem.upsert_target("root.com")
         mem.upsert_target("sub.root.com", parent_domain="root.com")

@@ -2,7 +2,10 @@
 
 ## Architecture Overview
 Argus is a multi-agent AI penetration testing system.
-- **Brain**: Core reasoning engine using LangChain AgentExecutor (ReAct or SimpleChain fallback)
+- **Brain**: Core reasoning engine using a structured-output-first LangGraph ReAct loop
+  (JSON-schema-constrained tool calls with a text-format fallback, plus Dual-Phase Reflection -
+  intra-run duplicate-call blocking and inter-reflection self-consistency voting on exploitation
+  tools)
 - **Agent Factory**: Builds tool-enabled agents from available tools
 - **Memory**: SQLite-backed knowledge graph (entities, relations, targets, findings)
 - **LLM**: Ollama-hosted models (default: WhiteRabbitNeo V3 7B)

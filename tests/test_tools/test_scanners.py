@@ -61,6 +61,24 @@ class TestRunNikto:
 
         assert runner.run.call_count == 1
 
+    def test_output_path_has_no_double_extension(self, service):
+        """Regression test: nikto's own `-Format txt -o <path>` appends `.txt`
+        itself regardless of what the given path already ends in - passing an
+        already-`.txt`-suffixed path produced real `.txt.txt` files on disk
+        (confirmed in reports/nikto/) while the returned message kept citing
+        the un-suffixed (wrong) path. The `-o` flag's argument must have no
+        extension; the returned message's cited path must have exactly one."""
+        svc, runner, _ = service
+        runner.run.return_value = "+ Server: Apache"
+
+        result = svc.run_nikto("http://example.com")
+
+        cmd = runner.run.call_args_list[0].args[0]
+        assert " -o reports/nikto/nikto_example.com_" in cmd
+        assert ".txt" not in cmd.split(" -o ")[1]
+        assert "Saved to reports/nikto/nikto_example.com_" in result
+        assert ".txt.txt" not in result
+
 
 class TestRunFfufDiscovery:
     def test_success_on_first_scheme_does_not_retry(self, service):

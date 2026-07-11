@@ -8,6 +8,7 @@ PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
+from app.core.config import ArgusConfig
 from app.core.rag.config import RAGConfig
 from app.core.rag.rag_engine import RAGEngine
 
@@ -46,12 +47,17 @@ def main():
         return 1
 
     print('Initializing RAG Engine...')
-    config = RAGConfig(
-        embedding_model='nomic-embed-text',
-        auto_rebuild=False,
-    )
+    # config.yaml is the single source of truth for these settings (2026-07-10
+    # audit) - this used to construct RAGConfig() directly with its own
+    # hardcoded defaults (bypassing config.yaml for chunk_size/retriever_k/
+    # similarity_threshold/knowledge_base_dir entirely) and a stale
+    # hardcoded model name ('WhiteRabbitNeo/WhiteRabbitNeo-V3-7B:latest',
+    # the old Ollama-tag style, disagreeing with config.yaml's current
+    # GGUF-tagged model_name).
+    config = RAGConfig.from_central()
+    config.auto_rebuild = False  # this is a manual smoke-test run, not a live agent session
 
-    llm_model = None if args.no_llm else 'WhiteRabbitNeo/WhiteRabbitNeo-V3-7B:latest'
+    llm_model = None if args.no_llm else ArgusConfig.load().model_name
     engine = RAGEngine(config=config, model_name=llm_model)
 
     print(f'Ingesting document: {ingest_path}')

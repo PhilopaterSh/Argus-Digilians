@@ -16,3 +16,12 @@ class SecurityReport(BaseModel):
     overall_risk_score: int = Field(description="Overall risk score from 1 to 10", ge=1, le=10)
     next_steps: List[str] = Field(description="Recommended actions for further deep testing")
     output: Optional[str] = Field(description="The full professional structured Markdown report")
+    sources_used: List[str] = Field(
+        default_factory=list,
+        description=(
+            "Knowledge-base document filenames RAG actually retrieved and fused into this "
+            "run's context (app/core/agent/brain.py::_attach_rag_sources) - populated "
+            "automatically by Argus after this report is produced, not something the model "
+            "itself should fill in; any value present at generation time is overwritten."
+        ),
+    )

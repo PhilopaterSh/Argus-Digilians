@@ -1,9 +1,19 @@
 import os
 import sys
 
-REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+# Moved into tests/manual/ 2026-07-10 - one extra dirname() than before to
+# still reach the repo root from the new, one-level-deeper location.
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, REPO_ROOT)
 errors = []
+
+# Checks 7-10 below reference module-level config-derived constants
+# (_CMD_TIMEOUT, _WEB_TIMEOUT, _TRUNCATE, _PROJECT_ROOT) that no longer exist
+# on their respective modules as of 2026-07-10 (confirmed live: these 4 fail
+# with AttributeError) - the refactor that removed the module-level-constant
+# pattern predates this reorganization pass and is out of scope for it. Left
+# as-is, not silently fixed, so a future run's failures are informative
+# rather than surprising - see tests/manual/README.md.
 
 # Test 1: config.yaml loads correctly
 try:

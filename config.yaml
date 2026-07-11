@@ -7,6 +7,12 @@ command_timeout_seconds: 600
 recon_truncate_chars: 1000
 max_retries: 3
 
+# specs/019-shared-memory-reflection-upgrade: 3x self-consistency majority
+# vote on exploitation-tool results (Advanced_Evasion_Probe, Secret_Scanner,
+# Run_Nikto, Run_FFUF). Set to false if this measurably pushes runs past
+# max_iterations' time budget in practice.
+enable_inter_reflection: true
+
 # RAG (Retrieval-Augmented Generation) settings
 rag:
   enabled: true
@@ -15,7 +21,11 @@ rag:
   chunk_size: 600
   chunk_overlap: 100
   retriever_k: 4
-  similarity_threshold: 0.5
+  # Raised from 0.5 to 0.7 (2026-07-10) - 0.5 rejected every real chunk for
+  # queries that directly matched the knowledge base's own content (closest
+  # real match against nomic-embed-text + FAISS L2 distance scored 0.643),
+  # so RAG was silently contributing zero context on every live run.
+  similarity_threshold: 0.7
   auto_rebuild: true
   knowledge_base_dir: "knowledge_base"
 

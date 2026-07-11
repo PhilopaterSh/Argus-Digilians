@@ -22,3 +22,19 @@ def normalize_domain_for_memory(url: str) -> str:
     """
     host = url.replace("https://", "").replace("http://", "").split("/")[0]
     return host.split(":")[0]
+
+
+# Real content-based proof that an exploitation attempt actually worked, not
+# a guess based on HTTP status alone (a "200" or "500" response proves
+# nothing about *what* content came back - a WAF challenge page or a normal
+# error page can return either). Shared by evasion.py's live attack probes
+# (advanced_vuln_probe) and reflective_verification.py's passive output
+# analysis (post_execute_verify) so a signature only needs adding once
+# (Constitution IX - Single Source of Truth) - previously duplicated
+# independently in both files.
+SENSITIVE_CONTENT_INDICATORS = {
+    "root:x:0:0:": "LFI/Path Traversal Confirmed (/etc/passwd read success)",
+    "DB_PASSWORD": "Secret Disclosure Confirmed (Database configuration leaked)",
+    "appSettings": "Web Configuration Leak Confirmed (web.config read success)",
+    "uid=": "RCE Confirmed (id command executed successfully)",
+}

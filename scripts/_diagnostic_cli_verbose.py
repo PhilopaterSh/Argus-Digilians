@@ -8,14 +8,16 @@ if PROJECT_ROOT not in sys.path:
 from app.tools.tool_registry import WSLBridgeTools
 from app.core.agent.brain_tools import build_argus_tools
 from app.core.agent.brain import ArgusBrain
+from app.core.agent.react_callback import ConsoleTraceCallbackHandler
 from app.core.config import ArgusConfig
 
 config = ArgusConfig.load()
 
-
-class PrintCallback:
-    def on_graph_event(self, status, detail):
-        print(f"\n--- [{status}] ---\n{detail}\n")
+# ConsoleTraceCallbackHandler (2026-07-10) is the single source of truth for
+# CLI trace-printing - was a locally-defined `PrintCallback` class here,
+# duplicating (in a cruder form) what scripts/run_argus_cli.py needed too;
+# moved to app/core/agent/react_callback.py so both import one implementation
+# (Constitution IX).
 
 
 def main():
@@ -29,7 +31,7 @@ def main():
         f"Start with reachability, then map the attack surface, and finally "
         f"provide a deep risk assessment."
     )
-    result = brain.ask(query, callbacks=[PrintCallback()])
+    result = brain.ask(query, callbacks=[ConsoleTraceCallbackHandler()])
     print("\n=== FINAL RESULT ===")
     print(result)
 
