@@ -15,7 +15,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from core.tools import WSLBridgeTools
-from core.agent import ArgusBrain
+from core.agent_ai_driven import ArgusBrain   # AI-driven brain (LLM decides each step)
 from core.safety import SafetyLayer
 from langchain_core.tools import Tool
 
@@ -34,6 +34,9 @@ def build_tools(bridge: WSLBridgeTools) -> list:
              description="Run Nikto web vulnerability scanner on the target."),
         Tool(name="Smart_Web_Search", func=bridge.smart_web_search,
              description="Search the web for CVEs, exploits, and technology information."),
+        Tool(name="Query_Scenario_KB", func=bridge.retrieve_similar_scenarios,
+             description="Semantic RAG lookup over 1,040 labeled test scenarios: what Argus "
+                         "typically catches/misses for a given tech/target description."),
         Tool(name="Query_Memory", func=bridge.get_intelligence_summary,
              description="Retrieve consolidated intelligence from the Blackboard."),
         Tool(name="Query_Knowledge_Graph", func=bridge.query_knowledge_graph,

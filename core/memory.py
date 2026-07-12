@@ -27,7 +27,51 @@ def get_db_path():
 class ArgusMemory:
     def __init__(self, db_path=None):
         self.db_path = db_path or get_db_path()
+        # Validate the DB with a connection that is ALWAYS closed, so that if the
+        # file is malformed we can remove it (an open handle would lock the file
+        # on Windows and block the rebuild).
+        if not self._db_ok():
+            self._reset_corrupt_db()
         self._init_db()
+
+    def _db_ok(self) -> bool:
+        """True if the DB file is a valid SQLite database (or doesn't exist yet).
+        Always closes the probe connection so the file is not left locked."""
+        if not os.path.exists(self.db_path):
+            return True
+        conn = None
+        try:
+            conn = sqlite3.connect(self.db_path)
+            conn.execute("SELECT name FROM sqlite_master LIMIT 1")
+            return True
+        except sqlite3.DatabaseError:
+            return False
+        finally:
+            if conn is not None:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
+
+    def _reset_corrupt_db(self):
+        """Handle a malformed SQLite file: keep the bad file as *.corrupt
+        (for inspection) and clear any side files so a clean DB can be built."""
+        for suffix in ("", "-journal", "-wal", "-shm"):
+            p = self.db_path + suffix
+            try:
+                if not os.path.exists(p):
+                    continue
+                if suffix == "":
+                    try:
+                        os.replace(p, p + ".corrupt")   # back up the bad DB
+                        continue
+                    except OSError:
+                        pass
+                os.remove(p)
+            except OSError:
+                pass
+        print("[!] Corrupt database detected -> rebuilt a fresh argus_intelligence.db "
+              "(old file saved as argus_intelligence.db.corrupt).")
 
     def _init_db(self):
         conn = sqlite3.connect(self.db_path)
@@ -192,7 +236,7 @@ class ArgusMemory:
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         cursor.execute('''
-            SELECT t.domain, f.data_type, f.summary, f.severity
+            SELECT t.domain, f.data_type, f.summary, f.severity, f.raw_data
             FROM targets t
             JOIN findings f ON t.id = f.target_id
             ORDER BY t.priority DESC, f.timestamp DESC
@@ -200,11 +244,17 @@ class ArgusMemory:
         rows = cursor.fetchall()
         conn.close()
         summary = {}
-        for domain, dtype, smry, sev in rows:
+        for domain, dtype, smry, sev, raw in rows:
             if domain not in summary:
                 summary[domain] = {}
             if dtype not in summary[domain]:
-                summary[domain][dtype] = {"summary": smry, "severity": sev}
+                # raw_data is additive (PoC/evidence detail for vulnerability
+                # findings) — existing consumers that only read
+                # "summary"/"severity" are unaffected.
+                entry = {"summary": smry, "severity": sev}
+                if raw and raw != smry:
+                    entry["raw_data"] = raw[:2000]
+                summary[domain][dtype] = entry
         return json.dumps(summary, indent=2)
 
     def get_scan_history(self, limit=50):

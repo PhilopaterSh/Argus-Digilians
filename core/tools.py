@@ -43,6 +43,15 @@ class WSLBridgeTools:
         # Report output directory
         self.reports_dir = Path(__file__).parent.parent / "reports"
         self.reports_dir.mkdir(exist_ok=True)
+        # Per-scan-session cache: enumerate_subdomains() is expensive (crt.sh
+        # retries + DNS brute-force) and was being re-run from scratch every
+        # time Recon_Suite was called (it calls enumerate_subdomains
+        # internally) PLUS whenever the agent called Subdomain_Enumeration
+        # directly - observed burning multiple crt.sh 502/timeout retry
+        # cycles (up to 90s each) for the SAME domain in a single scan.
+        # Scoped to this instance, so it never leaks across separate scans
+        # (a fresh WSLBridgeTools is created per scan session).
+        self._subdomain_cache = {}
 
     def _clean_ansi(self, text: str) -> str:
         ansi_escape = re.compile(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])')
@@ -162,22 +171,68 @@ class WSLBridgeTools:
         import requests as _req, socket as _sock
         import urllib3; urllib3.disable_warnings()
         clean_domain = self._extract_domain(domain)
+
+        # Per-scan cache: Recon_Suite calls this internally, and the agent can
+        # also call Subdomain_Enumeration directly — without this, the SAME
+        # domain could trigger crt.sh's retry loop 3+ times in one scan
+        # (observed burning minutes on a dead/rate-limited crt.sh alone).
+        cached = self._subdomain_cache.get(clean_domain)
+        if cached is not None:
+            print(f"[*] Subdomain enumeration for: {clean_domain} (cached from earlier this scan)")
+            return cached
+
         print(f"[*] Subdomain enumeration for: {clean_domain}")
 
         all_subs = set()
 
-        # ── crt.sh Certificate Transparency ──────────────────────────────────
-        try:
-            r = _req.get(f"https://crt.sh/?q=%.{clean_domain}&output=json",
-                         timeout=15, verify=False)
-            for entry in r.json():
-                names = entry.get("name_value", "")
-                for n in names.splitlines():
-                    n = n.strip().lstrip("*.")
-                    if n.endswith(clean_domain) and n != clean_domain:
-                        all_subs.add(n)
-        except Exception as e:
-            print(f"[!] crt.sh failed: {e}")
+        # ── crt.sh Certificate Transparency (slow/flaky service: retry) ──────
+        # Tightened from 30s x3 to 10s x2 — a rate-limited/down crt.sh (502,
+        # or timeouts) should fail fast so the scan can move on to actually
+        # testing the target instead of burning its decision budget on a dead
+        # external service. The hackertarget fallback below still runs either way.
+        import time as _time
+        CRTSH_TIMEOUT, CRTSH_RETRIES = 10, 2
+        for _attempt in range(CRTSH_RETRIES):
+            try:
+                r = _req.get(f"https://crt.sh/?q=%.{clean_domain}&output=json",
+                             timeout=CRTSH_TIMEOUT, verify=False)
+                # crt.sh often returns an empty body or an HTML error page when
+                # rate-limited — that is NOT JSON, so guard before parsing.
+                body = (r.text or "").strip()
+                if r.status_code != 200 or not body.startswith("["):
+                    print(f"[!] crt.sh attempt {_attempt + 1}/{CRTSH_RETRIES}: non-JSON "
+                          f"(HTTP {r.status_code}) — retrying")
+                    _time.sleep(1)
+                    continue
+                for entry in r.json():
+                    names = entry.get("name_value", "")
+                    for n in names.splitlines():
+                        n = n.strip().lstrip("*.")
+                        if n.endswith(clean_domain) and n != clean_domain:
+                            all_subs.add(n)
+                break
+            except Exception as e:
+                print(f"[!] crt.sh attempt {_attempt + 1}/{CRTSH_RETRIES} failed: {e}")
+                _time.sleep(1)
+
+        # ── Fallback CT source when crt.sh is down (502/503/timeout) ─────────
+        # crt.sh is frequently overloaded; use a second free source so subdomain
+        # discovery does not depend on a single service being up.
+        if not all_subs:
+            try:
+                r2 = _req.get(f"https://api.hackertarget.com/hostsearch/?q={clean_domain}",
+                              timeout=15, verify=False)
+                txt = r2.text or ""
+                if r2.status_code == 200 and "," in txt and "error" not in txt.lower() \
+                        and "api count" not in txt.lower():
+                    for line in txt.splitlines():
+                        host = line.split(",")[0].strip().lstrip("*.").lower()
+                        if host.endswith(clean_domain) and host != clean_domain:
+                            all_subs.add(host)
+                    if all_subs:
+                        print(f"[+] Fallback (hackertarget) found {len(all_subs)} subdomains")
+            except Exception as e:
+                print(f"[!] hackertarget fallback failed: {e}")
 
         # ── Common prefix brute-force (DNS) ──────────────────────────────────
         COMMON = ["www", "mail", "api", "dev", "staging", "admin", "portal",
@@ -191,9 +246,11 @@ class WSLBridgeTools:
                 pass
 
         if not all_subs:
-            return (f"--- SUBDOMAIN ENUMERATION: {clean_domain} ---\n"
-                    f"[+] No subdomains found via crt.sh or DNS brute-force.\n"
-                    f"    The domain may have no delegated subdomains, or crt.sh had no records.")
+            result = (f"--- SUBDOMAIN ENUMERATION: {clean_domain} ---\n"
+                      f"[+] No subdomains found via crt.sh or DNS brute-force.\n"
+                      f"    The domain may have no delegated subdomains, or crt.sh had no records.")
+            self._subdomain_cache[clean_domain] = result
+            return result
 
         # ── Verify which are alive ────────────────────────────────────────────
         alive = []
@@ -211,10 +268,12 @@ class WSLBridgeTools:
             self.memory.upsert_target(sub, parent_domain=clean_domain)
 
         self.memory.upsert_entity("domain", clean_domain)
-        return (f"--- SUBDOMAIN ENUMERATION: {clean_domain} ---\n"
-                f"[+] Total: {len(all_subs)} | Alive: {len(alive)}\n\n"
-                f"TOP VERIFIED SUBDOMAINS:\n" + "\n".join(f"  {l}" for l in alive[:20]) +
-                f"\n\nALL DISCOVERED:\n" + "\n".join(f"  {s}" for s in sorted(all_subs)))
+        result = (f"--- SUBDOMAIN ENUMERATION: {clean_domain} ---\n"
+                  f"[+] Total: {len(all_subs)} | Alive: {len(alive)}\n\n"
+                  f"TOP VERIFIED SUBDOMAINS:\n" + "\n".join(f"  {l}" for l in alive[:20]) +
+                  f"\n\nALL DISCOVERED:\n" + "\n".join(f"  {s}" for s in sorted(all_subs)))
+        self._subdomain_cache[clean_domain] = result
+        return result
 
     # ─── PRIORITY TARGETS ─────────────────────────────────────────────────────
 
@@ -342,8 +401,15 @@ class WSLBridgeTools:
             self.memory.add_finding(target, "wafw00f", "waf", waf_sum, waf_sum)
             self.memory.add_finding(target, "whatweb", "tech", tech_sum, tech_sum)
             self.memory.add_finding(target, "nmap", "ports", ports_sum, ports_sum)
-            if 'CONFIRMED:' in fuzz or 'PROTECTED' in fuzz:
-                self.memory.add_finding(target, "fuzzer", "leak", fuzz, "Sensitive files found!", severity="High")
+            # Only a CONTENT-VERIFIED file is a real leak (High). A 403 ("PROTECTED")
+            # means the path exists but is blocked — that is good hygiene, not a leak,
+            # so record it as Info and never let it inflate the risk score.
+            if 'CONFIRMED:' in fuzz:
+                self.memory.add_finding(target, "fuzzer", "leak", fuzz,
+                                        "Sensitive file exposed (content-verified)", severity="High")
+            elif 'PROTECTED' in fuzz:
+                self.memory.add_finding(target, "fuzzer", "protected", fuzz,
+                                        "Sensitive path exists but returns 403 (protected)", severity="Info")
             if '[!]' in secrets:
                 self.memory.add_finding(target, "analyzer", "secrets", secrets, "Secrets in HTML", severity="High")
 
@@ -771,9 +837,14 @@ class WSLBridgeTools:
                 f"              Snippet : {snippet}"
             )
             confirmed.append((full_url, label, hit, body[:600]))
+            # raw_data carries full PoC detail (URL/payload/matched signature/evidence),
+            # not just the body snippet, so the report/agent layer can build a
+            # reproduction-steps section without re-deriving it from the LLM.
+            poc = (f"URL: {full_url}\nPayload: {label}\nMatched: {hit}\n"
+                   f"Evidence: {snippet}")
             self.memory.add_finding(
                 target, "path_traversal", "vulnerability",
-                body[:300], f"Path Traversal: {label}", severity="Critical"
+                poc, f"Path Traversal: {label}", severity="Critical"
             )
 
         # Phase 0 — auto-discovered parameter injection
@@ -949,7 +1020,12 @@ class WSLBridgeTools:
 
         raw = url.strip()
         if not raw.startswith(('http://', 'https://')):
-            raw = f"http://{raw.lstrip('/')}"
+            # Default to https:// — was defaulting to http://, inconsistent
+            # with check_path_traversal()/check_sqli() (both default https)
+            # and wrong for HTTPS-only targets (e.g. PortSwigger Web Security
+            # Academy labs), where an http:// probe can fail/behave
+            # differently and silently miss a reflected-XSS finding.
+            raw = f"https://{raw.lstrip('/')}"
         clean_url = raw.rstrip('/')
         target = self._extract_domain(url)
         MARKER = "ARGUSxSS7"
@@ -1010,9 +1086,10 @@ class WSLBridgeTools:
                     if len(content) >= MAX_BODY:
                         break
                 resp.close()
-                return resp.status_code, content.decode("utf-8", errors="ignore")
+                ctype = resp.headers.get("Content-Type", "")
+                return resp.status_code, content.decode("utf-8", errors="ignore"), ctype
             except Exception as e:
-                return None, str(e)
+                return None, str(e), ""
 
         def _snippet(body, needle):
             idx = body.find(needle)
@@ -1020,10 +1097,22 @@ class WSLBridgeTools:
                 return ""
             return body[max(0, idx - 60):idx + len(needle) + 60].replace("\n", " ").strip()
 
-        def _classify(body, payload):
+        def _classify(body, payload, content_type=""):
             """Return (severity, reason) when XSS is detected, else None."""
             if not body or not isinstance(body, str):
                 return None
+
+            # A reflected marker only executes as XSS inside an HTML document.
+            # If the server explicitly returns CSS / JSON / plain JS / fonts / images
+            # (e.g. a Google-Fonts style '?family=' endpoint), a reflection there is
+            # NOT HTML XSS — skip it to avoid false positives.
+            ct = (content_type or "").lower()
+            if ct and not any(h in ct for h in ("text/html", "application/xhtml")):
+                if any(x in ct for x in (
+                    "text/css", "application/json", "text/javascript",
+                    "application/javascript", "font", "image/", "text/plain",
+                )):
+                    return None
 
             marker_hit = MARKER in body
             payload_hit = payload in body
@@ -1072,9 +1161,14 @@ class WSLBridgeTools:
                 "payload": payload, "url": test_url, "reason": reason, "snippet": snippet,
                 "severity": severity,
             })
+            # raw_data carries full PoC detail (method/URL/param/payload/evidence),
+            # not just the context snippet, so the report/agent layer can build a
+            # reproduction-steps section without re-deriving it from the LLM.
+            poc = (f"Method: {method}\nURL: {test_url}\nParam: {param}\n"
+                   f"Payload: {payload}\nEvidence: {snippet}")
             self.memory.add_finding(
                 target, "xss_scanner", "vulnerability",
-                snippet, f"Reflected XSS on param '{param}' — {reason}",
+                poc, f"Reflected XSS on param '{param}' — {reason}",
                 severity=severity,
             )
             return True
@@ -1098,7 +1192,7 @@ class WSLBridgeTools:
                 if sig in tested:
                     return "safe", "", test_url
                 tested.add(sig)
-                code, body = _fetch_limited(test_url)
+                code, body, ctype = _fetch_limited(test_url)
                 target_ref = test_url
             else:
                 data = dict(extra_fields or {})
@@ -1107,7 +1201,7 @@ class WSLBridgeTools:
                 if sig in tested:
                     return "safe", "", base_path
                 tested.add(sig)
-                code, body = _fetch_limited(base_path, method="POST", data=data)
+                code, body, ctype = _fetch_limited(base_path, method="POST", data=data)
                 target_ref = base_path
 
             if code is None:
@@ -1118,7 +1212,7 @@ class WSLBridgeTools:
                 all_results.append(f"  [ TIMEOUT ] {method} {param} on {page}")
                 return "timeout", "", target_ref
 
-            verdict = _classify(body, payload)
+            verdict = _classify(body, payload, ctype)
             if verdict:
                 severity, reason = verdict
                 if _record(method, page, param, payload, target_ref, severity, reason, body):
@@ -1180,7 +1274,7 @@ class WSLBridgeTools:
         # ── Phase 2: forms (GET + POST) and links from homepage ───────────────
         all_results.append("\n[ Phase 2 — discovered forms and parameterised links ]")
         try:
-            code, page = _fetch_limited(clean_url)
+            code, page, _ct = _fetch_limited(clean_url)
             if code is None:
                 raise RuntimeError(page)
         except Exception as e:
@@ -1469,9 +1563,14 @@ class WSLBridgeTools:
             if h['url'] not in seen_urls:
                 seen_urls.add(h['url'])
                 unique_confirmed.append(h)
+                # raw_data carries full PoC detail (URL/param/payload/error/evidence),
+                # not just the snippet, so the report/agent layer can build a
+                # reproduction-steps section without re-deriving it from the LLM.
+                poc = (f"URL: {h['url']}\nParam: {h['param']}\nPayload: {h['payload']}\n"
+                       f"Error: {h['error']}\nEvidence: {h['snippet']}")
                 self.memory.add_finding(
                     target, "sqli_scanner", "vulnerability",
-                    h['snippet'], f"SQL Injection on param '{h['param']}' — error: {h['error'][:60]}",
+                    poc, f"SQL Injection on param '{h['param']}' — error: {h['error'][:60]}",
                     severity="Critical"
                 )
                 self.memory.upsert_entity("vulnerability", f"SQLi:{target}:{h['param']}",
@@ -1503,6 +1602,9 @@ class WSLBridgeTools:
         import requests as _req
         import urllib3; urllib3.disable_warnings()
         hdrs = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+        # Defensive: ensure a scheme so requests never raises "No scheme supplied".
+        if not url.startswith(("http://", "https://")):
+            url = "http://" + url.lstrip("/")
         try:
             body = _req.get(url, headers=hdrs, timeout=10,
                             allow_redirects=True, verify=False).text[:50000]
@@ -1532,14 +1634,15 @@ class WSLBridgeTools:
         for name, pattern in PATTERNS.items():
             matches = list(set(re.findall(pattern, body, re.IGNORECASE)))[:5]
             if name == "Email":
-                # Drop emails whose domain is a known service provider
-                matches = [
-                    m for m in matches
-                    if not any(
-                        m.lower().endswith("@" + d) or ("@" in m and m.lower().split("@")[1] in _EMAIL_NOISE_DOMAINS)
-                        for d in _EMAIL_NOISE_DOMAINS
-                    )
-                ]
+                # Drop emails whose domain (or any parent domain) is a known service
+                # provider. Must match SUBDOMAINS too: 'o101443.ingest.sentry.io' is a
+                # Sentry DSN, not a secret — the old '==' check missed it.
+                def _is_noise_email(addr):
+                    if "@" not in addr:
+                        return False
+                    dom = addr.lower().rsplit("@", 1)[1]
+                    return any(dom == d or dom.endswith("." + d) for d in _EMAIL_NOISE_DOMAINS)
+                matches = [m for m in matches if not _is_noise_email(m)]
             if matches:
                 found.append(f"[!] {name}: {', '.join(matches)}")
                 for m in matches:
@@ -1641,9 +1744,12 @@ class WSLBridgeTools:
 
         hits = None
 
-        # ── Tier 1: ddgs ──────────────────────────────────────────────────────
+        # ── Tier 1: ddgs (package renamed from duckduckgo_search) ─────────────
         try:
-            from duckduckgo_search import DDGS
+            try:
+                from ddgs import DDGS               # new package name
+            except ImportError:
+                from duckduckgo_search import DDGS  # legacy fallback
             with DDGS() as ddgs:
                 hits = list(ddgs.text(query, max_results=8))
         except ImportError:
@@ -1687,6 +1793,35 @@ class WSLBridgeTools:
         self.memory.upsert_entity("web_intelligence", query, {"results": results[:500]})
         return f"--- WEB INTELLIGENCE ---\n{results}"
 
+    # ─── RAG: SCENARIO KNOWLEDGE BASE ──────────────────────────────────────────
+
+    def retrieve_similar_scenarios(self, query: str) -> str:
+        """Semantic RAG lookup over 1,040 labeled Argus test scenarios
+        (core/rag_kb.py::retrieve_scenario_context — real FAISS + embeddings,
+        not a keyword match). Give it the target's tech/purpose description
+        (e.g. from Recon_Suite's fingerprint) and it returns the closest known
+        patterns: what Argus's tools typically catch vs. miss for that kind of
+        target, and what a human should additionally test. Grounds the next
+        decision in calibration data instead of a guess."""
+        q = (query or "").strip()
+        if not q:
+            return "[SKIP] No query text provided for scenario KB lookup."
+        from core.rag_kb import retrieve_scenario_context
+        hits = retrieve_scenario_context(q, k=3)
+        if not hits:
+            return ("[INFO] Scenario knowledge base unavailable or no close match. "
+                     "Requires 'pip install faiss-cpu sentence-transformers' and "
+                     "knowledge_base/argus_1000_scenarios.json to be present.")
+        lines = [f"--- SCENARIO KB MATCHES for: {q[:120]} ---"]
+        for h in hits:
+            lines.append(
+                f"[{h.get('category', '?')}] (similarity {h.get('_similarity', '?')})\n"
+                f"  Pattern : {h.get('target', '')}\n"
+                f"  Argus   : {h.get('argus_behavior', '')}\n"
+                f"  Guidance: {h.get('agent_note', '')}"
+            )
+        return "\n\n".join(lines)
+
     # ─── MEMORY / KNOWLEDGE GRAPH ─────────────────────────────────────────────
 
     def get_intelligence_summary(self, _=None) -> str:
@@ -1717,21 +1852,30 @@ class WSLBridgeTools:
         matched = next((folder for key, folder in MAPPING.items() if key in v), None)
         if not matched:
             search_res = self.run(
-                f"find /opt/payloads/PayloadsAllTheThings -maxdepth 1 -type d -iname '*{v}*'"
+                f"find /opt/payloads/PayloadsAllTheThings -maxdepth 1 -type d -iname '*{v}*' 2>/dev/null"
             ).strip()
-            if search_res and "/opt/payloads" in search_res:
-                matched = search_res.split("/")[-1]
+            # Never treat an error / 'not found' string as a directory name — this
+            # previously produced a broken `cat` command (unmatched quote -> bash EOF).
+            first_line = search_res.splitlines()[0].strip() if search_res else ""
+            is_error = (not first_line) or first_line.lower().startswith("error") or any(
+                s in search_res.lower()
+                for s in ("no such file", "not found", "command not found")
+            )
+            candidate = "" if is_error else first_line.rstrip("/").split("/")[-1]
+            # A real PayloadsAllTheThings folder is a plain name (letters/digits/space/_-.).
+            if candidate and re.fullmatch(r"[A-Za-z0-9 _.\-]+", candidate):
+                matched = candidate
             else:
                 return (
                     f"No payloads found for '{vulnerability_type}'. "
-                    "Suggestion: Search PayloadsAllTheThings manually."
+                    "Ensure PayloadsAllTheThings is installed at "
+                    "/opt/payloads/PayloadsAllTheThings inside Kali."
                 )
 
         print(f"[*] Fetching payloads from: {matched}")
-        cmd = (
-            f"cat \"/opt/payloads/PayloadsAllTheThings/{matched}/README.md\" "
-            f"| grep -A 5 '```' | head -n 30"
-        )
+        # shlex.quote the whole path so spaces/special chars can never break the shell.
+        quoted_path = shlex.quote(f"/opt/payloads/PayloadsAllTheThings/{matched}/README.md")
+        cmd = f"cat {quoted_path} | grep -A 5 '```' | head -n 30"
         payload_data = self.run(cmd)
         reflection = f"--- SUGGESTED PAYLOADS/METHODOLOGY FOR {matched} ---\n"
         reflection += (
