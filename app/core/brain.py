@@ -1,7 +1,7 @@
 from langchain_core.output_parsers import PydanticOutputParser
 from app.core.schemas import SecurityReport
 from app.core.llm_factory import build_llm
-from app.core.prompts import get_argus_prompt
+from app.core.prompts import get_argus_adaptive_prompt
 from app.core.rag import RAGEngine, RAGConfig
 from app.core.memory.memory_service import ArgusMemory
 from app.core.agent_factory import build_agent_executor
@@ -14,12 +14,15 @@ from typing import Dict, Any, Optional, List
 # the LLM never chooses which tool fires next, so there is no ReAct
 # format for a weak local model to get wrong. Each tool is called with
 # the raw target string, matching the "Action Input is the raw value
-# only" convention already used elsewhere in this project. Tools that
-# depend on earlier discoveries (Smart_Web_Search needs a detected
-# tech/version, Run_Specialized_Module needs an exact filename) are
-# intentionally left out of this fixed sequence - they still make sense
-# as manual/agentic follow-ups later, once you have a model that can
-# reliably decide when to use them.
+# only" convention already used elsewhere in this project.
+#
+# Phase chaining: a few phases feed their real findings into follow-up
+# tool calls automatically (see run_deterministic_recon) - discovered
+# subdomains get a quick reachability re-check, detected tech gets
+# looked up via Smart_Web_Search, and interesting crawled endpoints get
+# sent to Exploit_Suggester. This is plain Python string-parsing of
+# real tool output, not another LLM decision, so it's exactly as
+# reliable as the rest of this pipeline.
 DETERMINISTIC_PHASES: List[str] = [
     "Check_Reachability",
     "Subdomain_Enumeration",
@@ -30,6 +33,40 @@ DETERMINISTIC_PHASES: List[str] = [
     "Run_Nikto",
     "Run_FFUF",
 ]
+
+# Chaining limits - kept small since each extra call is a real network
+# operation (and each subdomain re-check multiplies runtime).
+MAX_CHAINED_SUBDOMAINS = 2
+MAX_CHAINED_PATHS = 3
+_INTERESTING_PATH_KEYWORDS = (
+    "login", "admin", "register", "search", "upload",
+    "config", "backup", "account", "user",
+)
+_TECH_BLOCK_RE = re.compile(r"Tech:\s*(.+?)(?:\nPorts:|\Z)", re.DOTALL)
+
+# WhatWeb-style "Tech:" lines are noisy (cookies, IP, page title, country)
+# alongside the actually useful tech identifiers. Searching the whole raw
+# line returns nothing because it's not a real query anyone would write -
+# these keys get dropped before building a Smart_Web_Search query.
+_TECH_NOISE_KEYS = {"Cookies", "Country", "IP", "Title"}
+_TECH_TOKEN_RE = re.compile(r"[A-Za-z][\w\-\.]*(?:\[[^\]]*\])?")
+
+# Maps a keyword found in a crawled path to plain vulnerability-class terms,
+# since Exploit_Suggester almost certainly matches against a payload
+# repository by vulnerability class (e.g. folder names like "SQL
+# Injection"), not by literal URLs with query strings - the raw endpoint
+# text isn't a query that repository search would ever match.
+_PATH_KEYWORD_TO_VULN_CLASS = {
+    "login": "authentication bypass SQL injection",
+    "register": "SQL injection input validation",
+    "admin": "directory traversal privilege escalation",
+    "search": "SQL injection XSS",
+    "upload": "file upload vulnerabilities",
+    "config": "information disclosure directory traversal",
+    "backup": "information disclosure",
+    "account": "authentication bypass",
+    "user": "authentication bypass",
+}
 
 SYNTHESIS_PROMPT_TEMPLATE = """You are Argus AI, a senior security researcher.
 Below are the RAW RESULTS of reconnaissance tools that were already executed
@@ -58,13 +95,28 @@ Rules:
   field types, do not print the words "$defs", "properties", or
   "required" anywhere - those are meta-terms describing a format, not
   something that belongs in your answer. Write real sentences as values.
+- IMPORTANT - do not fixate on whichever tool's output happens to appear
+  last above. Read ALL of RAW TOOL OUTPUT as one connected picture, not
+  as a list where the most recent entry matters most. In particular:
+  - "summary" and "output" must reflect the OVERALL target profile - not
+    just whichever single tool ran last (e.g. do not write a report that
+    is really just about Run_FFUF's results if Check_Reachability,
+    Subdomain_Enumeration, and Recon_Suite also produced real findings).
+  - "attack_surface_stats" specifically MUST pull from Check_Reachability
+    (is it up), Subdomain_Enumeration (how many subdomains), and
+    Recon_Suite (open ports, tech stack) - name actual numbers/values
+    from those three tools' output, not just the last tool that ran.
+  - Never title the report after one specific tool (e.g. do not call
+    "output" a "FFUF Discovery Report" or a "Nikto Report" - it is a
+    security report covering everything discovered, so title it
+    accordingly, e.g. "# Security Assessment Report").
 
 Fill in ACTUAL VALUES for each of these six fields (this is not a schema,
 just the field names - replace the < > with your own real analysis):
 
 {{
   "summary": <one paragraph, your own words, about this specific target's security posture>,
-  "attack_surface_stats": <one sentence describing what was actually discovered - ports, subdomains, tech>,
+  "attack_surface_stats": <one sentence covering reachability status, subdomain count, open ports, AND tech stack - pulled from Check_Reachability, Subdomain_Enumeration, and Recon_Suite specifically>,
   "findings": [
     {{
       "target": <the specific host/URL this finding applies to>,
@@ -134,8 +186,7 @@ class ArgusBrain:
             return self._react_agent
 
         try:
-            format_instructions = self.output_parser.get_format_instructions()
-            prompt = get_argus_prompt(format_instructions)
+            prompt = get_argus_adaptive_prompt()
             self._react_agent = build_agent_executor(
                 llm=self.llm,
                 tools=self.tools,
@@ -154,7 +205,7 @@ class ArgusBrain:
             self._simple_chain = build_agent_executor(
                 llm=self.llm,
                 tools=self.tools,
-                prompt=get_argus_prompt(self.output_parser.get_format_instructions()),
+                prompt=get_argus_adaptive_prompt(),
                 verbose=False
             )
             return self._simple_chain
@@ -361,6 +412,105 @@ class ArgusBrain:
 
         return result
 
+    def _parse_subdomains(self, observation: str, exclude_hostname: str) -> List[str]:
+        """Pulls plausible hostnames out of Subdomain_Enumeration's raw
+        (possibly fenced) line-per-subdomain output, excluding the root
+        host we already scanned and de-duping while preserving order."""
+        candidates = []
+        for line in observation.splitlines():
+            line = line.strip().strip("`")
+            if not line or " " in line or "/" in line or "." not in line:
+                continue
+            if line == exclude_hostname:
+                continue
+            candidates.append(line)
+        seen = set()
+        out = []
+        for c in candidates:
+            if c not in seen:
+                seen.add(c)
+                out.append(c)
+        return out
+
+    def _parse_tech(self, observation: str) -> str:
+        """Pulls the raw 'Tech: ...' line out of Recon_Suite's output.
+        This is the noisy WhatWeb-style line (cookies, IP, title and all) -
+        use _clean_tech_string() before using it as a search query."""
+        match = _TECH_BLOCK_RE.search(observation)
+        if not match:
+            return ""
+        return match.group(1).strip()[:500]
+
+    def _clean_tech_string(self, raw_tech: str) -> str:
+        """
+        Strips a WhatWeb-style tech line down to just the useful
+        identifiers. Raw input looks like:
+          "http://x.com/ [200 OK] ASP_NET, Cookies[...], Country[US],
+           HTTPServer[Microsoft-IIS/8.5], IP[1.2.3.4], Title[...], ..."
+        Searching that whole line returns nothing - no one has ever
+        written that as a search query. This keeps only tokens whose key
+        isn't in _TECH_NOISE_KEYS, and prefers the bracket VALUE (e.g.
+        "Microsoft-IIS/8.5") over the raw token when there is one.
+        """
+        if not raw_tech:
+            return ""
+        text = raw_tech
+        if "] " in text:
+            # drop the "http://.../ [200 OK] " prefix if present
+            text = text.split("] ", 1)[1]
+
+        values = []
+        for tok in _TECH_TOKEN_RE.findall(text):
+            if "[" in tok:
+                key, _, rest = tok.partition("[")
+                if key in _TECH_NOISE_KEYS:
+                    continue
+                value = rest.rstrip("]").strip()
+                values.append(value if value else key)
+            elif tok not in _TECH_NOISE_KEYS and not re.fullmatch(r"[A-Z]{1,3}", tok):
+                # Skip short all-caps remnants like a leftover "US" from
+                # "Country[UNITED STATES][US]" - a stray bracket fragment,
+                # not a real technology token.
+                values.append(tok)
+
+        seen = set()
+        deduped = [v for v in values if not (v in seen or seen.add(v))]
+        cleaned = " ".join(deduped)
+        return cleaned[:200] if cleaned else raw_tech[:200]
+
+    def _parse_interesting_paths(self, observation: str) -> List[str]:
+        """Pulls endpoints matching common sensitive-path keywords out of
+        Crawl_Target's 'Top findings:' list."""
+        capture = False
+        paths = []
+        for line in observation.splitlines():
+            line = line.strip()
+            if "top findings" in line.lower():
+                capture = True
+                continue
+            if not capture or not line:
+                continue
+            if any(kw in line.lower() for kw in _INTERESTING_PATH_KEYWORDS):
+                paths.append(line)
+        return paths[:MAX_CHAINED_PATHS]
+
+    def _build_exploit_query(self, paths: List[str]) -> str:
+        """
+        Turns crawled paths into vulnerability-class search terms instead
+        of a sentence containing literal URLs/query-strings, which almost
+        certainly doesn't match however Exploit_Suggester's payload
+        repository search actually works.
+        """
+        terms = set()
+        for path in paths:
+            low = path.lower()
+            for keyword, vuln_terms in _PATH_KEYWORD_TO_VULN_CLASS.items():
+                if keyword in low:
+                    terms.update(vuln_terms.split())
+        if not terms:
+            terms = {"common", "web", "vulnerabilities"}
+        return " ".join(sorted(terms))
+
     def run_deterministic_recon(
         self,
         target: str,
@@ -368,38 +518,78 @@ class ArgusBrain:
     ) -> Dict[str, str]:
         """
         Executes DETERMINISTIC_PHASES in fixed order via direct Python
-        calls - no LLM involved in choosing or sequencing tools. Returns
-        {tool_name: raw_observation} for every phase that ran.
+        calls - no LLM involved in choosing or sequencing tools. Also
+        chains a few real findings into automatic follow-up calls (see
+        module docstring above DETERMINISTIC_PHASES). Returns
+        {label: raw_observation} for every phase (core + chained) that ran.
 
         on_phase: optional callable(phase_index, total_phases, tool_name,
         observation) invoked immediately after each phase finishes, so a
         caller (e.g. the Streamlit GUI) can render live progress instead
-        of waiting for the whole pipeline to finish.
+        of waiting for the whole pipeline to finish. `total_phases` grows
+        as chained follow-ups get scheduled, so it's an honest running
+        count rather than a number fixed up front.
         """
         observations: Dict[str, str] = {}
-        total = len(DETERMINISTIC_PHASES)
-        for i, tool_name in enumerate(DETERMINISTIC_PHASES, start=1):
-            print(f"[BRAIN] Running phase: {tool_name}({target})")
-            observation = self._run_tool_safely(tool_name, target)
-            observations[tool_name] = observation
+        counter = {"i": 0, "total": len(DETERMINISTIC_PHASES)}
 
+        def emit(label: str, obs: str, domain: str = target) -> None:
+            counter["i"] += 1
+            observations[label] = obs
             if self.memory is not None:
                 try:
                     self.memory.add_finding(
-                        domain=target,
-                        tool_name=tool_name,
+                        domain=domain,
+                        tool_name=label,
                         data_type="recon",
-                        raw_data=observation,
-                        summary=observation[:500],
+                        raw_data=obs,
+                        summary=obs[:500],
                     )
                 except Exception as e:
-                    print(f"[BRAIN] Could not persist finding for {tool_name}: {e}")
-
+                    print(f"[BRAIN] Could not persist finding for {label}: {e}")
             if on_phase is not None:
                 try:
-                    on_phase(i, total, tool_name, observation)
+                    on_phase(counter["i"], counter["total"], label, obs)
                 except Exception as e:
                     print(f"[BRAIN] on_phase callback raised (ignored): {e}")
+
+        for tool_name in DETERMINISTIC_PHASES:
+            print(f"[BRAIN] Running phase: {tool_name}({target})")
+            observation = self._run_tool_safely(tool_name, target)
+            emit(tool_name, observation)
+
+            # --- Phase chaining: real findings feed real follow-ups ---
+
+            if tool_name == "Subdomain_Enumeration":
+                subs = self._parse_subdomains(
+                    observation, exclude_hostname=self._to_bare_hostname(target)
+                )
+                chosen = subs[:MAX_CHAINED_SUBDOMAINS]
+                if chosen:
+                    counter["total"] += len(chosen)
+                    for sub in chosen:
+                        print(f"[BRAIN] Chaining: re-checking discovered subdomain '{sub}'")
+                        sub_obs = self._run_tool_safely("Check_Reachability", sub)
+                        emit(f"Check_Reachability[{sub}]", sub_obs, domain=sub)
+
+            elif tool_name == "Recon_Suite":
+                raw_tech = self._parse_tech(observation)
+                tech = self._clean_tech_string(raw_tech)
+                if tech and "Smart_Web_Search" in self.tool_map:
+                    counter["total"] += 1
+                    query = f"known CVEs and exploits for {tech}"
+                    print(f"[BRAIN] Chaining: looking up known vulnerabilities for '{tech}'")
+                    lookup_obs = self._run_tool_safely("Smart_Web_Search", query)
+                    emit("Smart_Web_Search[tech_lookup]", lookup_obs)
+
+            elif tool_name == "Crawl_Target":
+                paths = self._parse_interesting_paths(observation)
+                if paths and "Exploit_Suggester" in self.tool_map:
+                    counter["total"] += 1
+                    query = self._build_exploit_query(paths)
+                    print(f"[BRAIN] Chaining: requesting exploit suggestions for '{query}' ({len(paths)} matching endpoint(s))")
+                    sugg_obs = self._run_tool_safely("Exploit_Suggester", query)
+                    emit("Exploit_Suggester[endpoint_lookup]", sugg_obs)
 
         return observations
 

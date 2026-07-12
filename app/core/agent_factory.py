@@ -15,13 +15,14 @@ DEFAULT_MIN_ACTIONS_BEFORE_FINISH = 3
 # Matches a JSON object or array anywhere in the text
 _JSON_BLOCK_RE = re.compile(r"\{[\s\S]*\}|\[[\s\S]*\]")
 
-# Literal strings lifted straight from the one-shot demo in prompts.py.
-# If a model reproduces these verbatim, it copy-pasted the example
-# instead of doing any real work - always reject regardless of step count.
-_DEMO_ECHO_MARKERS = (
-    "Example high-level executive summary",
-    "Discovered 1 active host with port 80 open",
-    "Everything checks out fine",
+# Literal strings from ARGUS_ADAPTIVE_AGENT_TEMPLATE's own worked example
+# in prompts.py. If a model reproduces its fake target as a real Action
+# Input, that's a copy-paste failure worth rejecting - see class
+# docstring for why this needs its own check on the success path.
+_DEMO_FAKE_TARGETS = (
+    "sample-demo-host.test",
+    "api.sample-demo-host.test",
+    "admin.sample-demo-host.test",
 )
 
 
@@ -34,33 +35,44 @@ class LenientReActOutputParser(ReActSingleInputOutputParser):
     an error->retry->same-mistake loop until max_iterations is hit.
 
     This parser tries the normal strict ReAct parse first. If that fails
-    AND the text contains a JSON object/array, it *may* treat the JSON as
-    an implicit Final Answer - but only if it isn't just a verbatim copy
-    of the prompt's own demo text. Minimum-tool-call enforcement (has the
-    model actually done anything yet) happens separately in brain.py,
-    since intermediate step history isn't visible from inside a parser.
+    AND the text contains a JSON object/array with no "Action:" anywhere,
+    it treats the JSON as an implicit Final Answer instead of raising -
+    the model clearly meant to finish, it just skipped the "Final
+    Answer:" preamble.
+
+    It also guards a sneakier copy-paste failure mode: the adaptive
+    template's worked example includes a real-looking Action step
+    against a fake target (sample-demo-host.test). That's syntactically
+    valid ReAct, so the base parser accepts it without error - meaning a
+    model that copies the example's Action Input instead of using the
+    real target would otherwise sail through silently and waste a whole
+    tool call scanning nothing.
     """
 
     def parse(self, text: str) -> Union[AgentAction, AgentFinish]:
         try:
-            return super().parse(text)
+            result = super().parse(text)
         except OutputParserException:
             match = _JSON_BLOCK_RE.search(text)
             if match and "Action:" not in text:
-                if any(marker in text for marker in _DEMO_ECHO_MARKERS):
-                    raise OutputParserException(
-                        "You copied the example JSON from the instructions "
-                        "verbatim instead of producing a real finding. "
-                        "You must run actual tools (Check_Reachability, "
-                        "Recon_Suite, etc.) and report what THEY returned, "
-                        "not the example text. Continue with Thought: / "
-                        "Action: / Action Input:."
-                    )
                 return AgentFinish(
                     {"output": match.group(0)},
                     text,
                 )
             raise
+
+        if isinstance(result, AgentAction) and any(
+            fake_target in str(result.tool_input) for fake_target in _DEMO_FAKE_TARGETS
+        ):
+            raise OutputParserException(
+                "You used the FAKE example target from the instructions "
+                "(sample-demo-host.test or one of its subdomains) as your "
+                "Action Input instead of the real target you were actually "
+                "given. That example was illustrative only. Re-issue this "
+                "Action with the real target from the Question above."
+            )
+
+        return result
 
 _GENERIC_FORMAT_REMINDER = (
     "Invalid format. You forgot to include an 'Action:' step. "

@@ -31,6 +31,10 @@ st.markdown("""
 
 st.title("🛡️ Argus AI Studio (WSL Bridge)")
 
+# Logic Initialization - created before the sidebar so the memory
+# maintenance button below can reference bridge.memory directly.
+bridge = WSLBridgeTools()
+
 # Sidebar
 with st.sidebar:
     st.header("⚙️ Bridge Configuration")
@@ -44,9 +48,45 @@ with st.sidebar:
     wsl_user = st.text_input("WSL User", os.getenv("WSL_USER", "kali"))
     wsl_pass = st.text_input("WSL Pass", os.getenv("WSL_PASS", "kali"), type="password")
 
-# Logic Initialization
-# Pass dynamic credentials if needed, or rely on ENV
-bridge = WSLBridgeTools()
+    st.markdown("---")
+    st.subheader("🧠 Execution Mode")
+    exec_mode = st.radio(
+        "Choose how Argus decides what to run",
+        ["Deterministic Pipeline", "Agentic (ReAct) - test"],
+        help=(
+            "Deterministic Pipeline: fixed Python phase list + chaining "
+            "rules, no LLM tool-selection, reliable but not adaptive.\n\n"
+            "Agentic (ReAct): the LLM chooses which tool to call at each "
+            "step via ARGUS_ADAPTIVE_AGENT_TEMPLATE. More capable in "
+            "principle, but WhiteRabbitNeo-7B has repeatedly failed to "
+            "follow this format reliably in testing - this mode is here "
+            "so you can verify whether recent tool-level fixes changed that."
+        ),
+    )
+
+    st.markdown("---")
+    st.subheader("🧹 Memory Maintenance")
+    st.caption(
+        "Earlier bugs could store a full instruction sentence as if it "
+        "were a target domain. This only removes entries that look like "
+        "that - real scanned targets are left untouched."
+    )
+    if st.button("Purge polluted memory entries"):
+        try:
+            removed = bridge.memory.purge_invalid_targets()
+            if removed:
+                st.success(f"Removed {removed} polluted entr{'y' if removed == 1 else 'ies'} from memory.")
+            else:
+                st.info("No polluted entries found.")
+        except AttributeError:
+            st.error(
+                "Could not find `bridge.memory` - if WSLBridgeTools exposes "
+                "its ArgusMemory instance under a different attribute name, "
+                "update this button to match."
+            )
+        except Exception as e:
+            st.error(f"Purge failed: {e}")
+
 
 def load_brain(model_name):
     tools = [
@@ -69,6 +109,48 @@ def load_brain(model_name):
 # Main Interface
 target = st.text_input("🎯 Target URL", "https://example.com")
 
+def render_analysis_result(analysis, target, status):
+    """Shared result display for both execution modes - the shape of
+    `analysis["output"]` is the same whether it came from the
+    deterministic pipeline or the agentic path (dict with real fields,
+    dict with "error", or a raw string fallback)."""
+    st.markdown("### 📋 Final Security Report")
+
+    report_dict = analysis.get("output")
+    final_report = ""
+
+    if isinstance(report_dict, dict) and "error" in report_dict:
+        st.error(f"❌ Report synthesis failed: {report_dict.get('error')}")
+        st.warning(report_dict.get("message", ""))
+        with st.expander("Raw tool output (recon still ran successfully)"):
+            st.json(report_dict.get("raw_tool_observations", {}))
+        status.update(label="Analysis Failed", state="error")
+        return None
+
+    elif isinstance(report_dict, dict):
+        final_report = report_dict.get("output") or "(model returned no markdown output field)"
+
+        if report_dict.get("_warning"):
+            st.warning(f"⚠️ {report_dict['_warning']}")
+
+        col1, col2 = st.columns(2)
+        col1.metric("Overall Risk Score", f"{report_dict.get('overall_risk_score', 'N/A')}/10")
+        col2.metric("Findings Count", len(report_dict.get("findings", [])))
+
+        with st.expander("View Structured Data (JSON)"):
+            st.json(report_dict)
+
+        st.markdown(final_report)
+        status.update(label="Analysis Finished!", state="complete")
+
+    else:
+        final_report = str(analysis.get("output", analysis))
+        st.markdown(final_report)
+        status.update(label="Analysis Finished!", state="complete")
+
+    return final_report
+
+
 if st.button("RUN ANALYSIS"):
     if target:
         brain = load_brain(model)
@@ -76,55 +158,38 @@ if st.button("RUN ANALYSIS"):
         with st.status("🕵️ Argus Agent is thinking...", expanded=True) as status:
             try:
                 st.write("Initializing autonomous security reasoning...")
+                final_report = None
 
-                # Live per-phase progress: run_deterministic_recon calls this
-                # right after each tool finishes, so results appear here as
-                # they happen instead of only after the whole pipeline ends.
-                def show_phase_progress(index, total, tool_name, observation):
-                    st.write(f"**[{index}/{total}] {tool_name}**")
-                    preview = observation if len(observation) <= 1500 else observation[:1500] + "\n... (truncated)"
-                    st.code(preview, language="text")
+                if exec_mode == "Deterministic Pipeline":
+                    # Live per-phase progress: run_deterministic_recon calls
+                    # this right after each tool finishes, so results appear
+                    # here as they happen instead of only at the end.
+                    def show_phase_progress(index, total, tool_name, observation):
+                        st.write(f"**[{index}/{total}] {tool_name}**")
+                        preview = observation if len(observation) <= 1500 else observation[:1500] + "\n... (truncated)"
+                        st.code(preview, language="text")
 
-                # The deterministic pipeline runs the fixed recon phases
-                # itself in Python - it just needs the target, not an
-                # elaborate instruction paragraph (there's no agent left
-                # to interpret one).
-                analysis = brain.ask(target, on_phase=show_phase_progress)
-
-                st.markdown("### 📋 Final Security Report")
-
-                report_dict = analysis.get("output")
-                final_report = ""
-
-                if isinstance(report_dict, dict) and "error" in report_dict:
-                    # Synthesis failed outright (LLM error, or it echoed
-                    # the schema instead of writing a real report after
-                    # all retries) - say so plainly instead of dumping
-                    # whatever garbage came back as if it were the report.
-                    st.error(f"❌ Report synthesis failed: {report_dict.get('error')}")
-                    st.warning(report_dict.get("message", ""))
-                    with st.expander("Raw tool output (recon still ran successfully)"):
-                        st.json(report_dict.get("raw_tool_observations", {}))
-                    status.update(label="Analysis Failed", state="error")
-                    final_report = None
-
-                elif isinstance(report_dict, dict):
-                    final_report = report_dict.get("output") or "(model returned no markdown output field)"
-
-                    col1, col2 = st.columns(2)
-                    col1.metric("Overall Risk Score", f"{report_dict.get('overall_risk_score', 'N/A')}/10")
-                    col2.metric("Findings Count", len(report_dict.get("findings", [])))
-
-                    with st.expander("View Structured Data (JSON)"):
-                        st.json(report_dict)
-
-                    st.markdown(final_report)
-                    status.update(label="Analysis Finished!", state="complete")
+                    analysis = brain.ask(target, on_phase=show_phase_progress)
 
                 else:
-                    final_report = str(analysis.get("output", analysis))
-                    st.markdown(final_report)
-                    status.update(label="Analysis Finished!", state="complete")
+                    # Agentic mode: the LLM chooses tools itself, so it
+                    # needs a natural-language instruction, not a bare
+                    # target - there's no fixed phase list to run it
+                    # through. No on_phase callback here since there's no
+                    # deterministic phase loop to hook into; if you want
+                    # to see the agent's live thoughts, that would need a
+                    # LangChain callback wired into ask_agentic() instead.
+                    st.info("Agentic mode: no live per-step progress - the agent runs to completion or failure, then reports.")
+                    instruction = (
+                        f"CONSULT MEMORY FIRST using 'Query_Memory'. Then perform a comprehensive "
+                        f"security analysis for {target}. If findings like SQLi, Path Traversal, or "
+                        f"sensitive files already exist in memory, use 'Exploit_Suggester' and "
+                        f"'Smart_Web_Search' to CHAIN them and reach maximum impact (RCE). Finally, "
+                        f"provide a deep risk assessment including the full attack chain."
+                    )
+                    analysis = brain.ask_agentic(instruction)
+
+                final_report = render_analysis_result(analysis, target, status)
 
                 if final_report:
                     st.download_button(

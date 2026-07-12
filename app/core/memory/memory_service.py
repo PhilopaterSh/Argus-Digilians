@@ -319,6 +319,51 @@ class ArgusMemory:
             return "{}"
 
     # ------------------------------------------------------------------
+    # Purge polluted entries (surgical - not a full wipe)
+    # ------------------------------------------------------------------
+    @staticmethod
+    def _looks_like_garbage_domain(domain: Optional[str]) -> bool:
+        """
+        Real domains never contain whitespace or quotes, and are never
+        anywhere close to 100+ characters long. Entries this shape are
+        leftover pollution from a fixed bug where a full GUI instruction
+        paragraph ("CONSULT MEMORY FIRST using 'Query_Memory'. Then
+        perform a comprehensive security analysis for...") got passed
+        through and stored as if it were the target/domain itself.
+        """
+        if not domain:
+            return True
+        if " " in domain or "'" in domain or '"' in domain:
+            return True
+        if len(domain) > 100:
+            return True
+        return False
+
+    def purge_invalid_targets(self) -> int:
+        """
+        Removes only targets (and their findings) whose domain matches
+        _looks_like_garbage_domain() - unlike clear_memory(), this leaves
+        every legitimately-scanned target's data untouched. Returns the
+        number of garbage targets removed.
+        """
+        removed = 0
+        try:
+            with self._get_conn() as conn:
+                rows = conn.execute("SELECT id, domain FROM targets").fetchall()
+                bad_ids = [
+                    row["id"] for row in rows
+                    if self._looks_like_garbage_domain(row["domain"])
+                ]
+                for target_id in bad_ids:
+                    conn.execute("DELETE FROM findings WHERE target_id = ?", (target_id,))
+                    conn.execute("DELETE FROM targets WHERE id = ?", (target_id,))
+                    removed += 1
+            logger.info("Purged %d polluted target(s) from memory", removed)
+        except Exception as e:
+            logger.error("purge_invalid_targets failed: %s", e)
+        return removed
+
+    # ------------------------------------------------------------------
     # Clear memory
     # ------------------------------------------------------------------
     def clear_memory(self) -> None:
