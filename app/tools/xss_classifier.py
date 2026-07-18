@@ -1,7 +1,7 @@
 """Reflected-XSS severity classification.
 
 Ported from momen:core/tools.py's WSLBridgeTools.check_xss() (the nested
-_classify() closure only — the surrounding live HTTP scanning loop,
+_classify() closure only - the surrounding live HTTP scanning loop,
 endpoint list, and finding-recording logic were not ported; see
 specs/001-merge-branches/tasks.md T012 for that gap).
 """

@@ -1,5 +1,5 @@
 """
-Argus Safety Layer — Blocks destructive payloads, sanitizes inputs (port from momen).
+Argus Safety Layer - Blocks destructive payloads, sanitizes inputs (port from momen).
 All scanning must be controlled, logged, and non-destructive.
 """
 import re
@@ -16,7 +16,7 @@ DESTRUCTIVE_PATTERNS = [
     r'passwd\s+root', r'/etc/shadow',
 ]
 
-# Private/internal IP ranges — blocked in passive mode
+# Private/internal IP ranges - blocked in passive mode
 PRIVATE_RANGES = [
     ipaddress.ip_network('10.0.0.0/8'),
     ipaddress.ip_network('172.16.0.0/12'),

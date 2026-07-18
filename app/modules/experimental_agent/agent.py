@@ -8,16 +8,16 @@ Why deterministic?
 
 Self-healing at every step:
   - Each step is wrapped in _safe_step() which catches all exceptions,
-    logs them, and continues — a broken step never aborts the scan.
+    logs them, and continues - a broken step never aborts the scan.
   - The LLM engine has its own 3-retry + fallback logic.
 
 False-positive reduction:
-  - fuzz_sensitive_files  → Verifier.verify_file() (content-sig + soft-404)
-  - XSS checks            → Verifier.verify_xss() (unique marker, no encoding)
-  - SQL injection         → Verifier.verify_sqli() (14 DB error fingerprints)
-  - Nikto output          → Verifier.filter_nikto() (strip info-only lines)
-  - Secrets               → Verifier.filter_secrets() (min 12-char values)
-  - LLM analysis          → fed ONLY confirmed findings, explicitly told no speculation
+  - fuzz_sensitive_files  -> Verifier.verify_file() (content-sig + soft-404)
+  - XSS checks            -> Verifier.verify_xss() (unique marker, no encoding)
+  - SQL injection         -> Verifier.verify_sqli() (14 DB error fingerprints)
+  - Nikto output          -> Verifier.filter_nikto() (strip info-only lines)
+  - Secrets               -> Verifier.filter_secrets() (min 12-char values)
+  - LLM analysis          -> fed ONLY confirmed findings, explicitly told no speculation
 """
 
 import os
@@ -36,9 +36,9 @@ from app.modules.experimental_agent.agent_payload_decider import AgentPayloadDec
 MODEL    = os.getenv("ARGUS_MODEL", "WhiteRabbitNeo/WhiteRabbitNeo-V3-7B:latest")
 TIMEOUT  = 15   # seconds per HTTP probe
 
-# ── Subdomain wordlist (SecLists: Discovery/DNS/subdomains-top1million-5000.txt) ──
+# -- Subdomain wordlist (SecLists: Discovery/DNS/subdomains-top1million-5000.txt) --
 # Embedded top-300; if local SecLists found, file is loaded at runtime instead.
-# ── Directory enumeration wordlist (SecLists: Discovery/Web-Content/common.txt) ──
+# -- Directory enumeration wordlist (SecLists: Discovery/Web-Content/common.txt) --
 DIRECTORY_WORDLIST = [
     "admin","api","login","logout","dashboard","backup","config","test","dev",
     "staging","data","files","uploads","images","static","assets","css","js",
@@ -124,12 +124,12 @@ class ArgusPipeline:
     def __init__(self, target: str, status_cb=None):
         raw = target.strip()
 
-        # ── Detect scan mode from wildcard position ────────────────────────
-        # *.example.com         → subdomain enumeration
-        # example.com/*         → directory enum at root (1 level)
-        # example.com/*/*       → directory enum 2 levels deep
-        # example.com/api/*     → directory enum inside /api/
-        # No star               → normal single-URL scan
+        # -- Detect scan mode from wildcard position ------------------------
+        # *.example.com         -> subdomain enumeration
+        # example.com/*         -> directory enum at root (1 level)
+        # example.com/*/*       -> directory enum 2 levels deep
+        # example.com/api/*     -> directory enum inside /api/
+        # No star               -> normal single-URL scan
 
         self._wildcard         = False   # subdomain mode
         self._dir_wildcard     = False   # path/directory mode
@@ -138,8 +138,8 @@ class ArgusPipeline:
 
         if raw.startswith("*"):
             # Could be:
-            #   *.example.com          → subdomain only
-            #   *.example.com/*/*      → subdomain + directory enum per subdomain
+            #   *.example.com          -> subdomain only
+            #   *.example.com/*/*      -> subdomain + directory enum per subdomain
             self._wildcard    = True
             # Strip leading *. to get the rest: "example.com" or "example.com/*/*"
             rest = re.sub(r"^\*\.?", "", raw)   # e.g. "example.com" or "example.com/*/*"
@@ -188,7 +188,7 @@ class ArgusPipeline:
         self._live_subdomains: list[str] = []
         self._found_dirs:      list[str] = []   # populated by dir enum
 
-    # ── Helpers ───────────────────────────────────────────────────────────
+    # -- Helpers -----------------------------------------------------------
 
     def _log(self, msg: str, level: str = "info"):
         self._cb(msg, level)
@@ -203,7 +203,7 @@ class ArgusPipeline:
             return result
         except Exception as e:
             detail = traceback.format_exc()
-            self._log(f"[!] {name} failed: {e} — skipping", "warn")
+            self._log(f"[!] {name} failed: {e} - skipping", "warn")
             self.step_log.append((name, "error", str(e)))
             return None
 
@@ -214,7 +214,7 @@ class ArgusPipeline:
         except Exception:
             return None
 
-    # ── Step 0: Subdomain Enumeration (wildcard mode only) ───────────────
+    # -- Step 0: Subdomain Enumeration (wildcard mode only) ---------------
 
     def _load_subdomain_wordlist(self) -> list[str]:
         """
@@ -262,7 +262,7 @@ class ArgusPipeline:
         return found
 
     def _wsl_subfinder(self, domain: str) -> set[str]:
-        """Try to run subfinder via WSL — silent if not installed."""
+        """Try to run subfinder via WSL - silent if not installed."""
         found = set()
         try:
             import subprocess
@@ -284,7 +284,7 @@ class ArgusPipeline:
             if found:
                 self._log(f"[SubEnum] WSL tool found {len(found)} subdomain(s)")
         except Exception:
-            pass  # WSL / tool not available — skip silently
+            pass  # WSL / tool not available - skip silently
         return found
 
     def _httpx_probe(self, hosts: list[str]) -> list[dict]:
@@ -351,14 +351,14 @@ class ArgusPipeline:
                 )
                 return live
 
-            # httpx returned nothing — either not installed or zero results
+            # httpx returned nothing - either not installed or zero results
             if "command not found" in result.stderr or not result.stdout.strip():
                 raise RuntimeError("httpx not found")
 
         except Exception as e:
-            self._log(f"[httpx] Not available ({e}) — falling back to requests", "warn")
+            self._log(f"[httpx] Not available ({e}) - falling back to requests", "warn")
 
-        # ── Fallback: Python requests probe ───────────────────────────────
+        # -- Fallback: Python requests probe -------------------------------
         self._log(f"[httpx-fallback] Probing {len(hosts)} host(s) with requests ...")
         live = []
         for host in hosts:
@@ -386,11 +386,11 @@ class ArgusPipeline:
 
     def _step_subdomain_enum(self):
         """
-        Step 0 — Subdomain Enumeration (runs only when target is *.domain.com)
+        Step 0 - Subdomain Enumeration (runs only when target is *.domain.com)
 
         Sources (in order):
-          1. crt.sh certificate transparency (passive — no brute-force)
-          2. DNS brute-force with SecLists wordlist (active — DNS resolution)
+          1. crt.sh certificate transparency (passive - no brute-force)
+          2. DNS brute-force with SecLists wordlist (active - DNS resolution)
           3. WSL subfinder / amass (if installed in WSL)
 
         Each discovered name is probed for liveness. Live subdomains are
@@ -400,10 +400,10 @@ class ArgusPipeline:
         domain = self._base_domain
         self._log(f"[SubEnum] Starting subdomain enumeration for: {domain}", "step")
 
-        # ── Source 1: crt.sh (passive) ────────────────────────────────────
+        # -- Source 1: crt.sh (passive) ------------------------------------
         candidates: set[str] = self._crtsh_subdomains(domain)
 
-        # ── Source 2: DNS brute-force ─────────────────────────────────────
+        # -- Source 2: DNS brute-force -------------------------------------
         wordlist = self._load_subdomain_wordlist()
         self._log(f"[SubEnum] DNS brute-force with {len(wordlist)} word(s) ...")
         dns_hits = 0
@@ -411,19 +411,19 @@ class ArgusPipeline:
             sub = f"{word}.{domain}"
             try:
                 socket.setdefaulttimeout(2)
-                socket.gethostbyname(sub)   # resolves → exists
+                socket.gethostbyname(sub)   # resolves -> exists
                 candidates.add(sub)
                 dns_hits += 1
             except (socket.gaierror, socket.timeout):
                 pass
         self._log(f"[SubEnum] DNS brute-force: {dns_hits} name(s) resolved")
 
-        # ── Source 3: WSL tools ───────────────────────────────────────────
+        # -- Source 3: WSL tools -------------------------------------------
         candidates |= self._wsl_subfinder(domain)
 
         self._log(f"[SubEnum] Total unique candidates: {len(candidates)}")
 
-        # ── Liveness probe via httpx ──────────────────────────────────────
+        # -- Liveness probe via httpx --------------------------------------
         self._log(f"[SubEnum] Passing {len(candidates)} candidate(s) to httpx ...")
         live_results = self._httpx_probe(sorted(candidates))
 
@@ -447,12 +447,12 @@ class ArgusPipeline:
                 f"httpx confirmed live: {url}\nStatus: {code}\n"
                 f"Title: {title}\nTech: {tech}",
                 f"Live subdomain: {host} [{code}]"
-                + (f" — {title}" if title else ""),
+                + (f" - {title}" if title else ""),
                 severity="Medium",
             )
 
         self._log(
-            f"[SubEnum] {len(self._live_subdomains)} live subdomain(s) found — "
+            f"[SubEnum] {len(self._live_subdomains)} live subdomain(s) found - "
             "scanning each now ...", "step"
         )
 
@@ -464,7 +464,7 @@ class ArgusPipeline:
         they run once over all findings at the end.
         """
         sub_host = re.sub(r"https?://", "", sub_url).split("/")[0]
-        self._log(f"\n{'─'*60}", "step")
+        self._log(f"\n{'-'*60}", "step")
         self._log(f"[Scan] {sub_url}", "step")
 
         # Swap to subdomain context
@@ -485,7 +485,7 @@ class ArgusPipeline:
         self.base   = orig_base
         self.host   = orig_host
 
-    # ── Directory enumeration (path wildcard mode) ───────────────────────
+    # -- Directory enumeration (path wildcard mode) -----------------------
 
     def _load_dir_wordlist(self) -> list[str]:
         """Try local SecLists first, fall back to embedded list."""
@@ -522,7 +522,7 @@ class ArgusPipeline:
         if r.status_code in (404, 410):
             return False
         if r.status_code == 200 and baseline_len is not None:
-            # Soft-404 check: if response is same size as baseline → fake 200
+            # Soft-404 check: if response is same size as baseline -> fake 200
             if abs(len(r.text) - baseline_len) < 150:
                 return False
         return r.status_code < 400 or r.status_code in (401, 403)
@@ -531,7 +531,7 @@ class ArgusPipeline:
         """
         Enumerate one directory level under base_path.
         Builds the full candidate URL list, then passes them ALL to httpx
-        in one bulk call — much faster than probing one-by-one.
+        in one bulk call - much faster than probing one-by-one.
         Returns list of confirmed live URLs.
         """
         dir_base  = getattr(self, "_dir_base", self.target)
@@ -551,7 +551,7 @@ class ArgusPipeline:
         for entry in live_results:
             url  = entry["url"]
             code = entry["status"]
-            # Exclude obvious soft-404s (401/403 are valid — auth-protected = interesting)
+            # Exclude obvious soft-404s (401/403 are valid - auth-protected = interesting)
             self._log(f"  [FOUND] [{code}] {url}", "high")
             found.append(url)
             self.memory.add_finding(
@@ -567,15 +567,15 @@ class ArgusPipeline:
         """
         Path wildcard directory enumeration.
 
-        Parses self._dir_segments — each segment is either:
-          - a literal string  → fixed path component (e.g. 'api')
-          - '*'               → enumerate at this level
+        Parses self._dir_segments - each segment is either:
+          - a literal string  -> fixed path component (e.g. 'api')
+          - '*'               -> enumerate at this level
 
         Examples:
-          ['*']           →  enumerate root  (/admin, /api, ...)
-          ['*', '*']      →  enumerate root, then enumerate each result 1 level deeper
-          ['api', '*']    →  enumerate /api/ only
-          ['*', 'admin']  →  enumerate root, check /FOUND/admin on each
+          ['*']           ->  enumerate root  (/admin, /api, ...)
+          ['*', '*']      ->  enumerate root, then enumerate each result 1 level deeper
+          ['api', '*']    ->  enumerate /api/ only
+          ['*', 'admin']  ->  enumerate root, check /FOUND/admin on each
         """
         wordlist = self._load_dir_wordlist()
         segments = self._dir_segments   # e.g. ['*', '*'] or ['api', '*']
@@ -598,13 +598,13 @@ class ArgusPipeline:
                     found_urls = self._enumerate_level(base_path, wordlist)
                     all_found.extend(found_urls)
                     if rest:
-                        # More segments after this star → continue with each found dir
+                        # More segments after this star -> continue with each found dir
                         for furl in found_urls:
                             # Extract just the path portion
                             fpath = furl.replace(self._dir_base, "")
                             next_paths.append((fpath, list(rest)))
                 else:
-                    # Fixed segment — build path and continue
+                    # Fixed segment - build path and continue
                     new_path = base_path.rstrip("/") + "/" + seg
                     # Check if this fixed path exists
                     full_url = self._dir_base + new_path
@@ -627,7 +627,7 @@ class ArgusPipeline:
 
         self._found_dirs = all_found
         self._log(
-            f"[DirEnum] Complete — {len(all_found)} path(s) confirmed", "step"
+            f"[DirEnum] Complete - {len(all_found)} path(s) confirmed", "step"
         )
 
         # Run XSS + SQLi on each found path (they may have parameters)
@@ -641,7 +641,7 @@ class ArgusPipeline:
             self._safe_step(f"SQLi:{url[-40:]}", self._step_sqli)
             self.target, self.base, self.host = orig_target, orig_base, orig_host
 
-    # ── Step 1: Reachability ──────────────────────────────────────────────
+    # -- Step 1: Reachability ----------------------------------------------
 
     def _step_reachability(self):
         self._log(f"Probing {self.target} ...")
@@ -649,19 +649,19 @@ class ArgusPipeline:
         if r is None:
             self._log(f"[FAIL] {self.target} is not reachable", "error")
             return False
-        self._log(f"[OK] Reachable — HTTP {r.status_code} "
+        self._log(f"[OK] Reachable - HTTP {r.status_code} "
                   f"Server: {r.headers.get('Server','?')}")
         self.memory.add_finding(
             self.host, "reachability", "headers",
             f"HTTP {r.status_code}\n" + "\n".join(
                 f"{k}: {v}" for k, v in list(r.headers.items())[:20]
             ),
-            f"HTTP {r.status_code} — Server: {r.headers.get('Server','?')}",
+            f"HTTP {r.status_code} - Server: {r.headers.get('Server','?')}",
             severity="Info",
         )
         return True
 
-    # ── Step 2: Technology fingerprint ───────────────────────────────────
+    # -- Step 2: Technology fingerprint -----------------------------------
 
     def _step_fingerprint(self):
         r = self._http_get(self.target)
@@ -674,12 +674,12 @@ class ArgusPipeline:
         tech_clues    = []
         waf_clues     = []
 
-        # ── Server / powered-by headers ──────────────────────────────────
+        # -- Server / powered-by headers ----------------------------------
         for h in ("Server", "X-Powered-By", "X-Generator", "X-AspNet-Version"):
             if h in headers:
                 tech_clues.append(f"{h}: {headers[h]}")
 
-        # ── Body: CMS / framework signatures ─────────────────────────────
+        # -- Body: CMS / framework signatures -----------------------------
         body_sigs = {
             "WordPress":         "wp-content",
             "Joomla":            "joomla",
@@ -702,7 +702,7 @@ class ArgusPipeline:
             if sig in body_lower:
                 tech_clues.append(f"CMS/Framework: {name}")
 
-        # ── Header: framework leakage ─────────────────────────────────────
+        # -- Header: framework leakage -------------------------------------
         xpb = headers_lower.get("x-powered-by", "")
         if "express" in xpb:
             tech_clues.append("CMS/Framework: Express.js (via X-Powered-By)")
@@ -711,7 +711,7 @@ class ArgusPipeline:
                 f"Language: PHP (X-Powered-By: {headers.get('X-Powered-By','')})"
             )
 
-        # ── WAF detection: response headers ──────────────────────────────
+        # -- WAF detection: response headers ------------------------------
         waf_header_sigs = {
             "Cloudflare":    "cf-ray",
             "Akamai":        "x-check-cacheable",
@@ -725,7 +725,7 @@ class ArgusPipeline:
             if hdr in headers_lower:
                 waf_clues.append(f"WAF: {waf_name} (header: {hdr})")
 
-        # ── WAF detection: response body patterns ─────────────────────────
+        # -- WAF detection: response body patterns -------------------------
         waf_body_sigs = {
             "ModSecurity":  "mod_security",
             "Cloudflare":   "cloudflare ray id",
@@ -747,19 +747,19 @@ class ArgusPipeline:
             summary, severity="Info",
         )
 
-    # ── Step 2b: Security header audit ───────────────────────────────────
+    # -- Step 2b: Security header audit -----------------------------------
 
     def _step_header_security(self):
         """
         Check for missing HTTP security headers.
         Uses a fresh request so this step is independent of fingerprint.
         Severity mapping:
-          Content-Security-Policy    → Critical (XSS amplifier if absent)
-          X-Frame-Options            → Medium   (clickjacking)
-          Strict-Transport-Security  → Medium   (MITM on HTTPS)
-          X-Content-Type-Options     → Low      (MIME-sniffing)
-          Referrer-Policy            → Low      (info-leak)
-          Permissions-Policy         → Low      (browser API surface)
+          Content-Security-Policy    -> Critical (XSS amplifier if absent)
+          X-Frame-Options            -> Medium   (clickjacking)
+          Strict-Transport-Security  -> Medium   (MITM on HTTPS)
+          X-Content-Type-Options     -> Low      (MIME-sniffing)
+          Referrer-Policy            -> Low      (info-leak)
+          Permissions-Policy         -> Low      (browser API surface)
         """
         r = self._http_get(self.target)
         if r is None:
@@ -770,7 +770,7 @@ class ArgusPipeline:
             ("content-security-policy",   "Content-Security-Policy",  "Critical"),
             ("x-frame-options",           "X-Frame-Options",           "Medium"),
             ("strict-transport-security", "Strict-Transport-Security", "Medium"),
-            # Low-severity headers omitted — excluded from report per scope policy:
+            # Low-severity headers omitted - excluded from report per scope policy:
             # ("x-content-type-options", "X-Content-Type-Options", "Low"),
             # ("referrer-policy",        "Referrer-Policy",        "Low"),
             # ("permissions-policy",     "Permissions-Policy",     "Low"),
@@ -799,7 +799,7 @@ class ArgusPipeline:
                 severity=severity,
             )
 
-    # ── Step 3: Sensitive file discovery (verified) ───────────────────────
+    # -- Step 3: Sensitive file discovery (verified) -----------------------
 
     def _step_fuzz_files(self):
         confirmed = 0
@@ -822,7 +822,7 @@ class ArgusPipeline:
                 )
                 confirmed += 1
             elif status == "PROTECTED":
-                self._log(f"[PROTECTED] {url} (403 — potential bypass target)")
+                self._log(f"[PROTECTED] {url} (403 - potential bypass target)")
                 self.memory.add_finding(
                     self.host, "fuzzer", "path",
                     f"GET {url}\nHTTP 403 Forbidden",
@@ -834,7 +834,7 @@ class ArgusPipeline:
 
         self._log(f"[Fuzz] {confirmed} confirmed file(s) exposed")
 
-    # ── Step 4: Secrets in page source ───────────────────────────────────
+    # -- Step 4: Secrets in page source -----------------------------------
 
     def _step_secrets(self):
         r = self._http_get(self.target)
@@ -853,7 +853,7 @@ class ArgusPipeline:
         else:
             self._log("[Secrets] No secrets found in page source")
 
-    # ── Step 5: SQL injection (verified) ─────────────────────────────────
+    # -- Step 5: SQL injection (verified) ---------------------------------
 
     def _step_sqli(self):
         # Discover parameters from page links
@@ -891,14 +891,14 @@ class ArgusPipeline:
                         self.host, "sqli_scanner", "sqli",
                         f"URL: {res['url']}\nParam: {param}\nPayload: {payload}\n"
                         f"DB Error: {res['error_match']}\nAI_PAYLOAD: {ai_payload}\n\n{res['snippet']}",
-                        f"SQL Injection confirmed — param '{param}', error: {res['error_match']}",
+                        f"SQL Injection confirmed - param '{param}', error: {res['error_match']}",
                         severity="Critical",
                     )
                     confirmed += 1
                     break   # one confirmed payload per param is enough
         self._log(f"[SQLi] {confirmed} confirmed injection point(s)")
 
-    # ── Step 6: XSS detection (verified) ─────────────────────────────────
+    # -- Step 6: XSS detection (verified) ---------------------------------
 
     def _collect_xss_targets(self, r) -> list[tuple[str, str]]:
         """
@@ -930,7 +930,7 @@ class ArgusPipeline:
 
         body = r.text
 
-        # 2. <form> inputs — extract action + all input/textarea names
+        # 2. <form> inputs - extract action + all input/textarea names
         form_actions = re.findall(r'<form[^>]*action=["\']([^"\']*)["\']', body, re.I)
         input_names  = re.findall(r'<input[^>]*name=["\']([^"\']+)["\']', body, re.I)
         input_names += re.findall(r'<textarea[^>]*name=["\']([^"\']+)["\']', body, re.I)
@@ -956,7 +956,7 @@ class ArgusPipeline:
 
     def _step_xss(self):
         r = self._http_get(self.target)
-        # Don't abort if page fails — we still have URL params
+        # Don't abort if page fails - we still have URL params
         test_targets = self._collect_xss_targets(r)
 
         if not test_targets:
@@ -981,7 +981,7 @@ class ArgusPipeline:
                     self.host, "xss_scanner", "xss",
                     f"URL: {res['url']}\nParam: {param}\nMarker: {res['marker']}\n"
                     f"Context: {res.get('context','?')}\nAI_PAYLOAD: {ai_payload}\n\n{res['snippet']}",
-                    f"Reflected XSS confirmed — param '{param}' at {url}",
+                    f"Reflected XSS confirmed - param '{param}' at {url}",
                     severity="High",
                 )
                 confirmed += 1
@@ -989,7 +989,7 @@ class ArgusPipeline:
                 self._log(f"  [-] {param}: {res.get('reason','no reflection')}")
         self._log(f"[XSS] {confirmed} confirmed injection point(s)")
 
-    # ── Helpers for redirect-sensitive requests ───────────────────────────
+    # -- Helpers for redirect-sensitive requests ---------------------------
 
     def _session_get_no_redirect(self, url: str, timeout: int = 12):
         """GET without following redirects; returns Response or None."""
@@ -1002,7 +1002,7 @@ class ArgusPipeline:
         except Exception:
             return None
 
-    # ── Step 6a: SSRF detection ───────────────────────────────────────────
+    # -- Step 6a: SSRF detection -------------------------------------------
 
     def _step_ssrf(self):
         """
@@ -1050,7 +1050,7 @@ class ArgusPipeline:
                 )
                 if hit:
                     self._log(
-                        f"[SSRF] Possible SSRF — param={param}, "
+                        f"[SSRF] Possible SSRF - param={param}, "
                         f"payload={payload[:40]}, indicator={hit}", "high"
                     )
                     ai_payload = self.llm.generate_poc_payload(
@@ -1060,7 +1060,7 @@ class ArgusPipeline:
                         self.host, "ssrf_scanner", "vulnerability",
                         f"GET {test_url}\nIndicator: {hit}\n"
                         f"AI_PAYLOAD: {ai_payload}\n\nSnippet:\n{r.text[:400]}",
-                        f"Possible SSRF via param '{param}' — indicator: {hit}",
+                        f"Possible SSRF via param '{param}' - indicator: {hit}",
                         severity="High",
                     )
                     found = True
@@ -1071,7 +1071,7 @@ class ArgusPipeline:
         if not found:
             self._log("[SSRF] No SSRF indicators detected")
 
-    # ── Step 6b: Open Redirect detection ─────────────────────────────────
+    # -- Step 6b: Open Redirect detection ---------------------------------
 
     def _step_open_redirect(self):
         """
@@ -1107,7 +1107,7 @@ class ArgusPipeline:
                     # Confirm redirect goes outside the target host
                     if location and parsed.netloc.lower() not in location.lower():
                         self._log(
-                            f"[OpenRedirect] Confirmed — param={param}, "
+                            f"[OpenRedirect] Confirmed - param={param}, "
                             f"Location: {location}", "high"
                         )
                         ai_payload = self.llm.generate_poc_payload(
@@ -1119,7 +1119,7 @@ class ArgusPipeline:
                             f"GET {test_url}\nHTTP {r.status_code}\n"
                             f"Location: {location}\n"
                             f"AI_PAYLOAD: {ai_payload}",
-                            f"Open Redirect via param '{param}' → {location[:80]}",
+                            f"Open Redirect via param '{param}' -> {location[:80]}",
                             severity="Medium",
                         )
                         found = True
@@ -1130,7 +1130,7 @@ class ArgusPipeline:
         if not found:
             self._log("[OpenRedirect] No open redirect confirmed")
 
-    # ── Step 6c: XXE detection ────────────────────────────────────────────
+    # -- Step 6c: XXE detection --------------------------------------------
 
     def _step_xxe(self):
         """
@@ -1165,7 +1165,7 @@ class ArgusPipeline:
             )
             if hit:
                 self._log(
-                    f"[XXE] Confirmed XXE — indicator: {hit}", "high"
+                    f"[XXE] Confirmed XXE - indicator: {hit}", "high"
                 )
                 ai_payload = self.llm.generate_poc_payload(
                     "xxe", "body", payload, r.text[:300], self.target
@@ -1176,7 +1176,7 @@ class ArgusPipeline:
                     f"Payload: {payload[:200]}\n"
                     f"Indicator: {hit}\n"
                     f"AI_PAYLOAD: {ai_payload}\n\nSnippet:\n{r.text[:400]}",
-                    f"XXE Injection confirmed — indicator: {hit}",
+                    f"XXE Injection confirmed - indicator: {hit}",
                     severity="Critical",
                 )
                 found = True
@@ -1185,7 +1185,7 @@ class ArgusPipeline:
         if not found:
             self._log("[XXE] No XXE indicators detected")
 
-    # ── Step 7: Nikto (noise-filtered) ───────────────────────────────────
+    # -- Step 7: Nikto (noise-filtered) -----------------------------------
 
     def _step_nikto(self):
         """Run Nikto via WSL; filter noise; store only signal lines."""
@@ -1218,10 +1218,10 @@ class ArgusPipeline:
         except Exception as e:
             self._log(f"[Nikto] Skipped: {e}", "warn")
 
-    # ── Self-healing reasoning loop ───────────────────────────────────────
+    # -- Self-healing reasoning loop ---------------------------------------
 
 
-    # ── Agent payload context builder ─────────────────────────────────────────
+    # -- Agent payload context builder -----------------------------------------
 
     def _build_decider_context(self, step: str) -> dict:
         """
@@ -1340,11 +1340,11 @@ If no retries are needed, respond with: []
             elif step == "file_fuzz":
                 self._safe_step("Adaptive_FileFuzz", self._adaptive_file_fuzz, params)
 
-    # ── Adaptive retry methods ────────────────────────────────────────────
+    # -- Adaptive retry methods --------------------------------------------
 
     def _adaptive_xss(self, params: dict = None):
         """
-        Aggressive XSS retry — targets DOM sinks and additional parameters.
+        Aggressive XSS retry - targets DOM sinks and additional parameters.
         Driven by Think_And_Adapt when initial XSS step found nothing.
         """
         params = params or {}
@@ -1371,7 +1371,7 @@ If no retries are needed, respond with: []
                         f"Context: {result['context']}\n"
                         f"AI_PAYLOAD: {ai_payload}\n\n"
                         f"Snippet:\n{result['snippet']}",
-                        f"XSS (adaptive) — {url} param={param}",
+                        f"XSS (adaptive) - {url} param={param}",
                         severity='High',
                     )
                     confirmed += 1
@@ -1396,7 +1396,7 @@ If no retries are needed, respond with: []
             for payload in blind_payloads:
                 result = self.verifier.verify_sqli(url, "id", payload)
                 if result["confirmed"]:
-                    self._log(f"[AdaptiveSQLi] CONFIRMED blind — {url}", "high")
+                    self._log(f"[AdaptiveSQLi] CONFIRMED blind - {url}", "high")
                     ai_payload = self.llm.generate_poc_payload(
                         'sqli', 'id', payload, result['snippet'], url
                     )
@@ -1406,7 +1406,7 @@ If no retries are needed, respond with: []
                         f"Error: {result['error_match']}\n"
                         f"AI_PAYLOAD: {ai_payload}\n\n"
                         f"Snippet:\n{result['snippet']}",
-                        f"Blind SQLi (adaptive) — {url}",
+                        f"Blind SQLi (adaptive) - {url}",
                         severity='Critical',
                     )
                     confirmed += 1
@@ -1444,14 +1444,14 @@ If no retries are needed, respond with: []
                 confirmed += 1
         self._log(f"[AdaptiveFuzz] {confirmed} additional file(s) confirmed")
 
-    # ── Step 8: LLM threat analysis ───────────────────────────────────────
+    # -- Step 8: LLM threat analysis ---------------------------------------
 
     def _step_llm_analysis(self):
         findings = self.memory.get_detailed_findings(self.host, since=self._scan_start)
         raw_ev   = "\n".join(self.evidence[-80:])   # last 80 lines of evidence
 
         if not findings:
-            self._log("[LLM] No confirmed findings to analyse — skipping")
+            self._log("[LLM] No confirmed findings to analyse - skipping")
             return "No confirmed findings to analyse."
 
         self._log(f"[LLM] Sending {len(findings)} confirmed findings to WhiteRabbitNeo ...")
@@ -1466,23 +1466,23 @@ If no retries are needed, respond with: []
         )
         return analysis
 
-    # ── Main run ──────────────────────────────────────────────────────────
+    # -- Main run ----------------------------------------------------------
 
     def run(self) -> dict:
         from datetime import datetime as _dt
         start = time.time()
-        # Record the moment this scan starts — used to scope findings to this
+        # Record the moment this scan starts - used to scope findings to this
         # session only, filtering out stale entries from previous scans
         self._scan_start = _dt.now().isoformat()
         self.memory.upsert_target(self.host)
 
         if self._wildcard:
-            # ── *.example.com  /  *.example.com/*/* ───────────────────────
+            # -- *.example.com  /  *.example.com/*/* -----------------------
             mode_label = (
                 f"Subdomain + Directory ({'/'.join(self._dir_segments)})"
                 if self._dir_wildcard else "Subdomain"
             )
-            self._log(f"[*] {mode_label} mode — {self._base_domain}", "step")
+            self._log(f"[*] {mode_label} mode - {self._base_domain}", "step")
             self._safe_step("Subdomain_Enum", self._step_subdomain_enum)
 
             if not self._live_subdomains:
@@ -1510,10 +1510,10 @@ If no retries are needed, respond with: []
             self._safe_step("Think_And_Adapt",  self._think_and_adapt)
 
         elif self._dir_wildcard:
-            # ── example.com/*  /  example.com/*/*  → directory enum ────────
+            # -- example.com/*  /  example.com/*/*  -> directory enum --------
             star_count = self._dir_segments.count("*")
             self._log(
-                f"[*] Directory mode — {star_count} level(s) deep, "
+                f"[*] Directory mode - {star_count} level(s) deep, "
                 f"template: /{'/'.join(self._dir_segments)}", "step"
             )
             # Reachability check on base host first
@@ -1534,7 +1534,7 @@ If no retries are needed, respond with: []
             self._safe_step("Think_And_Adapt",  self._think_and_adapt)
 
         else:
-            # ── Normal single-URL scan ─────────────────────────────────────
+            # -- Normal single-URL scan -------------------------------------
             reachable = self._safe_step("Reachability", self._step_reachability)
             if not reachable:
                 return self._build_result("Unreachable",

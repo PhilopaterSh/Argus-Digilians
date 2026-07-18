@@ -1,14 +1,14 @@
 """
-Argus Local Knowledge Base — offline vulnerability intelligence (port from momen).
+Argus Local Knowledge Base - offline vulnerability intelligence (port from momen).
 Maps detected tech stacks to CVEs, attack patterns, and timeout analysis rules.
-No external calls — purely local JSON-style structures. Complements the file-based
+No external calls - purely local JSON-style structures. Complements the file-based
 RAGEngine (rag_engine.py) with zero-dependency static lookups.
 """
 
 import json as _json
 from pathlib import Path as _Path
 
-# ── CVE / vuln catalogue per technology ───────────────────────────────────────
+# -- CVE / vuln catalogue per technology ---------------------------------------
 TECH_VULNS = {
     "IIS 8.5": [
         {
@@ -24,13 +24,13 @@ TECH_VULNS = {
             "id": "CVE-2017-7269",
             "severity": "Critical",
             "desc": "Buffer overflow in IIS WebDAV PROPFIND handler.",
-            "test_hint": "OPTIONS / — check Allow header for PROPFIND, PUT, DELETE",
+            "test_hint": "OPTIONS / - check Allow header for PROPFIND, PUT, DELETE",
         },
         {
             "id": "IIS_TILDE_ENUM",
             "severity": "Medium",
             "desc": "IIS 8.3 short filename disclosure via HTTP tilde enumeration.",
-            "test_hint": "GET /a~1.asp — different status than random path confirms enumeration",
+            "test_hint": "GET /a~1.asp - different status than random path confirms enumeration",
         },
     ],
     "ASP.NET": [
@@ -41,13 +41,13 @@ TECH_VULNS = {
                 "ASP.NET ViewState deserialization RCE when MAC validation disabled "
                 "or machineKey leaked. Tool: ysoserial.net."
             ),
-            "test_hint": "Find __VIEWSTATE in page source; try altering it — 500 = MAC enabled",
+            "test_hint": "Find __VIEWSTATE in page source; try altering it - 500 = MAC enabled",
         },
         {
             "id": "ASP_PADDING_ORACLE",
             "severity": "High",
             "desc": "MS10-070 Padding Oracle on ASP.NET encrypted cookies/ViewState.",
-            "test_hint": "Use padbuster on encrypted cookies — observe 500 vs 200 differences",
+            "test_hint": "Use padbuster on encrypted cookies - observe 500 vs 200 differences",
         },
         {
             "id": "ASP_TRACE_AXD",
@@ -79,7 +79,7 @@ TECH_VULNS = {
             "id": "IIS_VERB_TAMPERING",
             "severity": "Medium",
             "desc": "IIS may allow HTTP verbs (PUT, DELETE, TRACE) unrestricted.",
-            "test_hint": "OPTIONS / — check Allow header",
+            "test_hint": "OPTIONS / - check Allow header",
         },
     ],
 }
@@ -87,11 +87,11 @@ TECH_VULNS = {
 PATTERN_RULES = {
     "all_timeouts_baseline_ok": {
         "confidence": "High",
-        "label": "WAF/IIS Request Filtering — traversal payloads intercepted",
+        "label": "WAF/IIS Request Filtering - traversal payloads intercepted",
         "analysis": (
             "ALL path traversal probes timed out while baseline responded normally (<2s). "
             "This strongly indicates IIS Request Filtering or a WAF dropping connections "
-            "on '../' sequences. The vulnerability may still exist behind the filter — "
+            "on '../' sequences. The vulnerability may still exist behind the filter - "
             "next step: attempt encoding bypasses to circumvent the filter."
         ),
         "bypass_payloads": [
@@ -105,7 +105,7 @@ PATTERN_RULES = {
     },
     "partial_timeouts": {
         "confidence": "Medium",
-        "label": "Inconsistent filtering — some payloads blocked, others passed",
+        "label": "Inconsistent filtering - some payloads blocked, others passed",
         "analysis": (
             "Some traversal probes timed out, others received responses. "
             "Suggests regex-based filtering or rate limiting."
@@ -118,28 +118,28 @@ PATTERN_RULES = {
     "no_timeouts": {
         "confidence": "Low",
         "label": "No filtering detected",
-        "analysis": "Server responded to all traversal probes — no connection-drop filter detected.",
+        "analysis": "Server responded to all traversal probes - no connection-drop filter detected.",
         "bypass_payloads": [],
     },
 }
 
 ATTACK_HINTS = {
     "ASP.NET": [
-        "Inject ' into ALL integer/string parameters — MSSQL errors confirm SQLi",
-        "Check page source for __VIEWSTATE — alter it and look for 500 (MAC validation on)",
+        "Inject ' into ALL integer/string parameters - MSSQL errors confirm SQLi",
+        "Check page source for __VIEWSTATE - alter it and look for 500 (MAC validation on)",
         "Probe: /trace.axd, /elmah.axd, /Elmah.axd for diagnostic info",
         "Fuzz hidden form inputs and RetURL / redirect parameters",
-        "Trigger 500 errors deliberately — ASP.NET default pages leak stack traces",
+        "Trigger 500 errors deliberately - ASP.NET default pages leak stack traces",
     ],
     "IIS": [
-        "OPTIONS / — enumerate HTTP methods (PUT/DELETE = critical finding)",
-        "IIS tilde short name: GET /a~1.asp vs /rand9x.asp — status difference = vulnerable",
+        "OPTIONS / - enumerate HTTP methods (PUT/DELETE = critical finding)",
+        "IIS tilde short name: GET /a~1.asp vs /rand9x.asp - status difference = vulnerable",
         "HTTP.sys CVE-2015-1635: Range: bytes=0-18446744073709551615",
         "Double-encoded traversal: ..%252F..%252F",
         "Check .asa, .cer, .cdx extension handling",
     ],
     "Microsoft": [
-        "X-Powered-By header reveals exact ASP.NET version — map to known CVEs",
+        "X-Powered-By header reveals exact ASP.NET version - map to known CVEs",
         "Test OPTIONS on all discovered endpoints",
     ],
 }
@@ -178,7 +178,7 @@ def analyze_timeout_pattern(timeout_count: int, total_probes: int, baseline_ok: 
     return PATTERN_RULES["no_timeouts"]
 
 
-# ── REAL RAG — semantic retrieval over the 1,040 labeled Argus test scenarios ──
+# -- REAL RAG - semantic retrieval over the 1,040 labeled Argus test scenarios --
 _KB_DIR = _Path(__file__).parent.parent.parent.parent / "knowledge_base"
 _SCENARIOS_PATH = _KB_DIR / "argus_1000_scenarios.json"
 _INDEX_DIR = _KB_DIR / ".scenario_index"

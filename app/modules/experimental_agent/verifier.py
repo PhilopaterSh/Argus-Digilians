@@ -3,10 +3,10 @@ Argus Evidence Verifier
 Every scanner finding passes through this gate before being stored in memory.
 
 Anti-false-positive strategies:
-  FILE FUZZING  — soft-404 baseline + mandatory content-signature match
-  XSS           — unique ARGUS_PROBE marker; confirmed only if reflected unencoded
-  SQL INJECTION — 14 DB error fingerprints; no error = no finding
-  NIKTO         — noise pattern filter; keep only lines with concrete evidence
+  FILE FUZZING  - soft-404 baseline + mandatory content-signature match
+  XSS           - unique ARGUS_PROBE marker; confirmed only if reflected unencoded
+  SQL INJECTION - 14 DB error fingerprints; no error = no finding
+  NIKTO         - noise pattern filter; keep only lines with concrete evidence
 """
 
 import re
@@ -15,7 +15,7 @@ import requests
 import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-# ── Constants ─────────────────────────────────────────────────────────────
+# -- Constants -------------------------------------------------------------
 
 SOFT_404_THRESHOLD = 150   # bytes: if candidate response is this close to the
                            # random-path response it's a soft-404
@@ -93,7 +93,7 @@ _NIKTO_SIGNAL = re.compile(
 
 class Verifier:
     """
-    Stateless verifier — create once per scan, reuse for all checks.
+    Stateless verifier - create once per scan, reuse for all checks.
     All HTTP calls go through self._session (Python requests, not WSL).
     """
 
@@ -106,7 +106,7 @@ class Verifier:
         # Cache soft-404 baselines per origin to avoid duplicate probes
         self._baseline_cache: dict[str, int | None] = {}
 
-    # ── Internal helpers ──────────────────────────────────────────────────
+    # -- Internal helpers --------------------------------------------------
 
     def _get(self, url: str, timeout: int = 12) -> requests.Response | None:
         try:
@@ -125,7 +125,7 @@ class Verifier:
         self._baseline_cache[key] = size
         return size
 
-    # ── Public API ────────────────────────────────────────────────────────
+    # -- Public API --------------------------------------------------------
 
     def verify_file(self, base_url: str, path: str) -> dict:
         """
@@ -175,7 +175,7 @@ class Verifier:
                 return {"status": "CONFIRMED", "url": full_url,
                         "snippet": body[:300].strip()}
             return {"status": "SOFT_404", "url": full_url,
-                    "snippet": "HTML content-type for non-HTML file — likely CMS error page"}
+                    "snippet": "HTML content-type for non-HTML file - likely CMS error page"}
 
         # Fallback: meaningful non-empty response
         if len(body.strip()) > 60:
@@ -209,7 +209,7 @@ class Verifier:
                 }
         return {"confirmed": False, "url": test_url, "error_match": "", "snippet": ""}
 
-    # XSS payloads to try in order — each targets a different reflection context
+    # XSS payloads to try in order - each targets a different reflection context
     XSS_PAYLOADS = [
         "<script>{m}</script>",                      # direct HTML context
         "<img src=x onerror={m}>",                   # attribute event handler

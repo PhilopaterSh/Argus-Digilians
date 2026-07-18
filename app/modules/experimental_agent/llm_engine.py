@@ -3,11 +3,11 @@ Argus LLM Engine
 Manages Ollama lifecycle and self-healing WhiteRabbitNeo inference.
 
 Self-healing rules:
-  1. On startup  → health_check(); auto-pull model if missing.
-  2. On inference → retry up to MAX_RETRIES with exponential back-off.
-  3. On empty response → simplify prompt and retry once.
-  4. On timeout   → halve max_tokens and retry.
-  5. If all retries fail → return a safe fallback string (never crash caller).
+  1. On startup  -> health_check(); auto-pull model if missing.
+  2. On inference -> retry up to MAX_RETRIES with exponential back-off.
+  3. On empty response -> simplify prompt and retry once.
+  4. On timeout   -> halve max_tokens and retry.
+  5. If all retries fail -> return a safe fallback string (never crash caller).
 """
 
 import os
@@ -23,7 +23,7 @@ MAX_RETRIES  = 3
 BASE_DELAY   = 2        # seconds (doubles each retry)
 DEFAULT_TOKENS = 1800
 
-# ── SecLists reference payloads ───────────────────────────────────────────────
+# -- SecLists reference payloads -----------------------------------------------
 # Curated from https://github.com/danielmiessler/seclists
 # Used as in-prompt reference for WhiteRabbitNeo payload generation.
 # If a local SecLists installation is found, payloads are loaded from disk instead.
@@ -129,7 +129,7 @@ SECLISTS_EMBEDDED = {
     ],
 }
 
-# Mapping: data_type → which SECLISTS_EMBEDDED key(s) to include
+# Mapping: data_type -> which SECLISTS_EMBEDDED key(s) to include
 _DTYPE_TO_SECLISTS = {
     'xss':           ['xss'],
     'sqli':          ['sqli', 'sqli_blind'],
@@ -212,7 +212,7 @@ class OllamaEngine:
         self._ready = False
         self._lock  = threading.Lock()
 
-    # ── Health & lifecycle ────────────────────────────────────────────────
+    # -- Health & lifecycle ------------------------------------------------
 
     def health_check(self) -> tuple[bool, str]:
         """Returns (ok, message). Does NOT pull the model."""
@@ -224,7 +224,7 @@ class OllamaEngine:
             short = self.model.split(":")[0].lower()
             if any(short in n.lower() for n in names):
                 self._ready = True
-                return True, f"Ready — {self.model}"
+                return True, f"Ready - {self.model}"
             return False, f"Model not loaded. Available: {names or ['(none)']}"
         except requests.ConnectionError:
             return False, f"Ollama not reachable at {self.host}"
@@ -242,12 +242,12 @@ class OllamaEngine:
         if ok:
             return True, msg
 
-        # Ollama is running but model missing → pull
+        # Ollama is running but model missing -> pull
         if "not reachable" not in msg.lower():
             return self._pull_model()
 
-        # Ollama itself is not running → try to start it
-        print(f"[*] Ollama unreachable — attempting to start service...")
+        # Ollama itself is not running -> try to start it
+        print(f"[*] Ollama unreachable - attempting to start service...")
         started = self._start_ollama()
         if started:
             time.sleep(3)
@@ -270,7 +270,7 @@ class OllamaEngine:
                 return True, f"Pulled {self.model} successfully"
             return False, f"Pull failed: {result.stderr[:300]}"
         except FileNotFoundError:
-            return False, "ollama CLI not found — install Ollama from https://ollama.ai"
+            return False, "ollama CLI not found - install Ollama from https://ollama.ai"
         except subprocess.TimeoutExpired:
             return False, "Model pull timed out (>10 min)"
         except Exception as e:
@@ -287,7 +287,7 @@ class OllamaEngine:
         except Exception:
             return False
 
-    # ── Inference ─────────────────────────────────────────────────────────
+    # -- Inference ---------------------------------------------------------
 
     def generate(
         self,
@@ -298,7 +298,7 @@ class OllamaEngine:
         """
         Run inference with self-healing retry logic.
         Returns (response_text, error_or_None).
-        Caller always gets a string — never an exception.
+        Caller always gets a string - never an exception.
         """
         last_error = "Unknown error"
         current_max = max_tokens
@@ -326,15 +326,15 @@ class OllamaEngine:
                     text = data.get("response", "").strip()
                     if text:
                         return text, None
-                    # Empty response → simplify prompt, try once more
+                    # Empty response -> simplify prompt, try once more
                     if attempt == 1:
                         prompt = self._simplify_prompt(prompt)
-                        last_error = "Empty response — retrying with simplified prompt"
+                        last_error = "Empty response - retrying with simplified prompt"
                         continue
                     last_error = "Model returned empty response"
 
                 elif r.status_code == 404:
-                    # Model not loaded mid-session → re-pull
+                    # Model not loaded mid-session -> re-pull
                     ok, pull_msg = self._pull_model()
                     last_error = f"Model disappeared: {pull_msg}"
 
@@ -342,9 +342,9 @@ class OllamaEngine:
                     last_error = f"HTTP {r.status_code}: {r.text[:200]}"
 
             except requests.Timeout:
-                # Timeout → halve tokens and retry
+                # Timeout -> halve tokens and retry
                 current_max = max(256, current_max // 2)
-                last_error  = f"Timeout on attempt {attempt} — reducing to {current_max} tokens"
+                last_error  = f"Timeout on attempt {attempt} - reducing to {current_max} tokens"
 
             except requests.ConnectionError:
                 last_error = "Lost connection to Ollama"
@@ -380,7 +380,7 @@ class OllamaEngine:
         # Fallback: trim to last 800 chars
         return prompt[-800:]
 
-    # ── Structured threat analysis ────────────────────────────────────────
+    # -- Structured threat analysis ----------------------------------------
 
     def analyze_findings(
         self,
@@ -417,7 +417,7 @@ CONFIRMED FINDINGS FROM AUTOMATED SCANNERS (verified, not speculative):
 RAW SCANNER EVIDENCE (first 2000 chars):
 {raw_evidence[:2000]}
 
-STRICT RULES — you MUST follow these:
+STRICT RULES - you MUST follow these:
 1. ONLY analyse evidence listed above. Do NOT invent additional vulnerabilities.
 2. Do NOT use words like "might", "could", "possibly", "perhaps" without direct evidence.
 3. Every claim must cite which finding number ([1], [2], ...) it is based on.
@@ -502,7 +502,7 @@ Based on your offensive-security training AND the SecLists reference above:
 1. Analyse the evidence context carefully.
 2. Select the payload from the reference list (or craft a variation) that is most
    likely to succeed given the exact reflection/injection context shown.
-3. Output ONLY the final raw payload string — nothing else.
+3. Output ONLY the final raw payload string - nothing else.
 
 Rules:
 - NO explanation, NO markdown, NO surrounding text. Just the payload.
@@ -547,7 +547,7 @@ Reply with ONLY a JSON object, nothing else:
 Rules:
 - is_fp=true means this is a false positive (not a real vulnerability).
 - confidence is how sure you are (0=unsure, 100=certain).
-- A 200 status alone is NOT enough — look for actual sensitive content."""
+- A 200 status alone is NOT enough - look for actual sensitive content."""
 
         response, _ = self.generate(prompt, temperature=0.0, max_tokens=120)
         try:

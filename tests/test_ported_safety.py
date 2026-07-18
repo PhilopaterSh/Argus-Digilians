@@ -1,4 +1,4 @@
-"""Ported tests from momen — SafetyLayer + ArgusMemory entity operations."""
+"""Ported tests from momen - SafetyLayer + ArgusMemory entity operations."""
 import pytest
 import json
 import tempfile
