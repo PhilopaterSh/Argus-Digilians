@@ -329,6 +329,51 @@ class ArgusMemory:
         except Exception as e:
             logger.error("add_finding(%s, %s) failed: %s", domain, tool_name, e)
 
+    def get_detailed_findings(self, domain: str, since: Optional[str] = None) -> list[dict]:
+        """
+        Per-domain findings as plain dicts, optionally filtered to those
+        recorded at or after `since` (an ISO timestamp string).
+
+        Added 2026-07-18 for the opt-in experimental_agent module
+        (app/modules/experimental_agent/), ported from the momen branch,
+        which calls this for session-scoped result filtering.
+
+        Known limitation: momen's own memory schema tracked a `severity`
+        column per finding; this table doesn't, so every dict here has
+        `severity` fixed at "Info" rather than a real value. Adding a
+        severity column is out of scope for an experimental, opt-in-only,
+        never-auto-registered module - revisit if experimental_agent is
+        ever promoted out of that status.
+        """
+        try:
+            with self._get_conn() as conn:
+                query = (
+                    "SELECT f.tool_name, f.data_type, f.raw_data, f.summary, f.timestamp "
+                    "FROM findings f JOIN targets t ON f.target_id = t.id "
+                    "WHERE t.domain = ?"
+                )
+                params: list[Any] = [domain]
+                if since:
+                    query += " AND f.timestamp >= ?"
+                    params.append(since)
+                query += " ORDER BY f.timestamp ASC"
+                rows = conn.execute(query, params).fetchall()
+        except Exception as e:
+            logger.error("get_detailed_findings(%s) failed: %s", domain, e)
+            return []
+
+        return [
+            {
+                "tool_name": row["tool_name"],
+                "data_type": row["data_type"],
+                "raw_data": row["raw_data"],
+                "summary": row["summary"],
+                "timestamp": row["timestamp"],
+                "severity": "Info",
+            }
+            for row in rows
+        ]
+
     # ------------------------------------------------------------------
     # CRUD: Blackboard summary
     # ------------------------------------------------------------------
