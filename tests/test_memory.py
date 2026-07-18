@@ -220,3 +220,53 @@ class TestArgusMemory:
         m = ArgusMemory(db_path=db_path)
         version = m._get_schema_version()
         assert version > 0
+
+    def test_log_and_get_scan_history(self, mem):
+        mem.log_scan_session(
+            "example.com", "active", "2026-07-18T10:00:00", "2026-07-18T10:05:00",
+            findings_count=3, risk_score=7, report_path="reports/example.json",
+        )
+        history = mem.get_scan_history(limit=10)
+        assert len(history) == 1
+        assert history[0]["target"] == "example.com"
+        assert history[0]["risk_score"] == 7
+        assert history[0]["report"] == "reports/example.json"
+
+    def test_get_scan_history_orders_most_recent_first(self, mem):
+        mem.log_scan_session("older.com", "active", "2026-07-01T00:00:00")
+        mem.log_scan_session("newer.com", "active", "2026-07-18T00:00:00")
+        history = mem.get_scan_history(limit=10)
+        assert [h["target"] for h in history] == ["newer.com", "older.com"]
+
+    def test_get_scan_history_empty(self, mem):
+        assert mem.get_scan_history() == []
+
+    def test_get_priority_targets_ranks_by_priority(self, mem):
+        mem.upsert_target("low.example.com", priority=1)
+        mem.upsert_target("high.example.com", priority=10)
+        result = mem.get_priority_targets(limit=5)
+        assert result.index("high.example.com") < result.index("low.example.com")
+
+    def test_get_priority_targets_filters_garbage(self, mem):
+        mem.upsert_target("real-target.example.com", priority=5)
+        mem.upsert_target("error: not found", priority=99)
+        result = mem.get_priority_targets(limit=5)
+        assert "real-target.example.com" in result
+        assert "error: not found" not in result
+
+    def test_get_priority_targets_empty(self, mem):
+        assert mem.get_priority_targets() == "No prioritized targets in memory yet."
+
+    def test_corrupt_db_is_detected_and_rebuilt(self, db_path):
+        with open(db_path, "wb") as f:
+            f.write(b"not a real sqlite database")
+        m = ArgusMemory(db_path=db_path)
+        assert os.path.exists(db_path + ".corrupt")
+        with m._get_conn() as conn:
+            tables = {
+                r[0] for r in conn.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table'"
+                ).fetchall()
+            }
+        assert "targets" in tables and "scan_sessions" in tables
+        os.remove(db_path + ".corrupt")

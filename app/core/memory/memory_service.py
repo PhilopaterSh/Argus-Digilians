@@ -11,7 +11,8 @@ logger = logging.getLogger(__name__)
 
 _DEFAULT_DB_PATH = os.path.join("data", "argus_intelligence.db")
 _ROOT_DB_PATH = "argus_intelligence.db"
-_SCHEMA_VERSION = 2
+_SCHEMA_VERSION = 3
+_PRIORITY_TARGET_BAD_SUBSTRINGS = ("error", "---", "code ", "suggestion:", "not found", "command")
 
 
 class ArgusMemory:
@@ -22,9 +23,55 @@ class ArgusMemory:
             os.makedirs(db_dir, exist_ok=True)
         if self.db_path != ":memory:":
             self._migrate_from_root()
+            if not self._db_ok():
+                self._reset_corrupt_db()
         self._init_db()
         if self.db_path != ":memory:":
             self._verify_integrity()
+
+    # ------------------------------------------------------------------
+    # Corruption detection and recovery
+    # ------------------------------------------------------------------
+    def _db_ok(self) -> bool:
+        """True if the DB file is a valid SQLite database (or doesn't exist yet).
+        Always closes the probe connection so the file is not left locked."""
+        if not os.path.exists(self.db_path):
+            return True
+        conn = None
+        try:
+            conn = sqlite3.connect(self.db_path)
+            conn.execute("SELECT name FROM sqlite_master LIMIT 1")
+            return True
+        except sqlite3.DatabaseError:
+            return False
+        finally:
+            if conn is not None:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
+
+    def _reset_corrupt_db(self) -> None:
+        """Handle a malformed SQLite file: keep the bad file as *.corrupt
+        (for inspection) and clear any side files so a clean DB can be built."""
+        for suffix in ("", "-journal", "-wal", "-shm"):
+            p = self.db_path + suffix
+            try:
+                if not os.path.exists(p):
+                    continue
+                if suffix == "":
+                    try:
+                        os.replace(p, p + ".corrupt")
+                        continue
+                    except OSError:
+                        pass
+                os.remove(p)
+            except OSError:
+                pass
+        logger.warning(
+            "Corrupt database detected -> rebuilt a fresh %s (old file saved as %s.corrupt)",
+            self.db_path, self.db_path,
+        )
 
     # ------------------------------------------------------------------
     # Connection management
@@ -212,6 +259,18 @@ class ArgusMemory:
                         started_at TEXT,
                         completed_at TEXT,
                         error TEXT
+                    )
+                """)
+                conn.execute("""
+                    CREATE TABLE IF NOT EXISTS scan_sessions (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        target TEXT,
+                        scan_mode TEXT,
+                        started_at TEXT,
+                        completed_at TEXT,
+                        findings_count INTEGER DEFAULT 0,
+                        risk_score INTEGER DEFAULT 0,
+                        report_path TEXT
                     )
                 """)
                 current = self._get_schema_version()
@@ -564,6 +623,78 @@ class ArgusMemory:
         except Exception as e:
             logger.error("purge_invalid_targets failed: %s", e)
         return removed
+
+    # ------------------------------------------------------------------
+    # Scan sessions (logging dashboard / history)
+    # ------------------------------------------------------------------
+    def log_scan_session(
+        self, target: str, mode: str, started_at: str, completed_at: Optional[str] = None,
+        findings_count: int = 0, risk_score: int = 0, report_path: Optional[str] = None,
+    ) -> None:
+        try:
+            with self._get_conn() as conn:
+                conn.execute(
+                    """INSERT INTO scan_sessions
+                       (target, scan_mode, started_at, completed_at, findings_count, risk_score, report_path)
+                       VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                    (target, mode, started_at, completed_at, findings_count, risk_score, report_path),
+                )
+        except Exception as e:
+            logger.error("log_scan_session(%s) failed: %s", target, e)
+
+    def get_scan_history(self, limit: int = 50) -> list[dict]:
+        try:
+            with self._get_conn() as conn:
+                rows = conn.execute(
+                    """SELECT target, scan_mode, started_at, completed_at,
+                              findings_count, risk_score, report_path
+                       FROM scan_sessions ORDER BY started_at DESC LIMIT ?""",
+                    (limit,),
+                ).fetchall()
+        except Exception as e:
+            logger.error("get_scan_history failed: %s", e)
+            return []
+        return [
+            {
+                "target": row["target"], "mode": row["scan_mode"],
+                "started": row["started_at"], "completed": row["completed_at"],
+                "findings": row["findings_count"], "risk_score": row["risk_score"],
+                "report": row["report_path"],
+            }
+            for row in rows
+        ]
+
+    # ------------------------------------------------------------------
+    # Target prioritization
+    # ------------------------------------------------------------------
+    def get_priority_targets(self, limit: int = 10) -> str:
+        """
+        Formatted list of the highest-priority already-recorded targets, for
+        direct inclusion in an agent's context - filters out garbage/error
+        strings the same way _looks_like_garbage_domain() does elsewhere.
+        """
+        try:
+            with self._get_conn() as conn:
+                rows = conn.execute(
+                    """SELECT domain FROM targets
+                       ORDER BY priority DESC, last_seen DESC LIMIT ?""",
+                    (limit * 3,),
+                ).fetchall()
+        except Exception as e:
+            logger.error("get_priority_targets failed: %s", e)
+            return "No prioritized targets in memory yet."
+        if not rows:
+            return "No prioritized targets in memory yet."
+        targets = [
+            row["domain"] for row in rows
+            if row["domain"] and "." in row["domain"]
+            and not any(b in row["domain"].lower() for b in _PRIORITY_TARGET_BAD_SUBSTRINGS)
+        ][:limit]
+        if not targets:
+            return "No valid targets in memory yet."
+        return "TOP PRIORITY TARGETS:\n" + "\n".join(
+            f"{i + 1}. {t}" for i, t in enumerate(targets)
+        )
 
     # ------------------------------------------------------------------
     # Clear memory
