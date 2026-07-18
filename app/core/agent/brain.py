@@ -549,8 +549,7 @@ class ArgusBrain:
                 # not a real technology token.
                 values.append(tok)
 
-        seen = set()
-        deduped = [v for v in values if not (v in seen or seen.add(v))]
+        deduped = list(dict.fromkeys(values))
         cleaned = " ".join(deduped)
         return cleaned[:200] if cleaned else raw_tech[:200]
 
@@ -765,7 +764,7 @@ class ArgusBrain:
                 self.llm, self.tools, self.memory,
                 enable_inter_reflection=enable_inter_reflection,
             )
-            initial_state = {
+            initial_state: Dict[str, Any] = {
                 "messages": [HumanMessage(content=query)],
                 "target": target,
                 "phase": "init",
