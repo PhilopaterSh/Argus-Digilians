@@ -45,15 +45,17 @@ def classify_xss_reflection(body: str, payload: str, content_type: str = "") -> 
 
     if marker_hit:
         snippet = _snippet(body, MARKER)
-        encoded_only = (
-            "&lt;script" in body.lower()
-            and "<script" not in body.lower()
-            and "onerror=" not in body.lower()
-        )
-        if encoded_only and MARKER in body:
+        snippet_lower = snippet.lower()
+        # If the reflection's immediate context is HTML-entity-escaped (&lt;/&gt;)
+        # with no raw angle bracket nearby, no tag/attribute the payload didn't
+        # already control was actually created - EXEC_SIGS text (e.g. "onerror=")
+        # appearing as inert escaped text is not exploitable.
+        looks_escaped = "&lt;" in snippet_lower or "&gt;" in snippet_lower
+        has_raw_angle_bracket = "<" in snippet or ">" in snippet
+        if looks_escaped and not has_raw_angle_bracket:
             return None
 
-        if any(sig in snippet.lower() for sig in EXEC_SIGS):
+        if any(sig in snippet_lower for sig in EXEC_SIGS):
             return "High", "marker reflected near executable HTML/JS context"
 
         if re.search(rf'>\s*{re.escape(MARKER)}\s*<', snippet, re.I):

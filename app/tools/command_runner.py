@@ -83,7 +83,7 @@ class CommandRunner:
                 "-u",
                 self.config.user,
                 "bash",
-                "-lc",
+                "-c",
                 full_command,
             ]
             result = subprocess.run(

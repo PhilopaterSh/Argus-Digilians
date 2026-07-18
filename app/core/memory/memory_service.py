@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 _DEFAULT_DB_PATH = os.path.join("data", "argus_intelligence.db")
 _ROOT_DB_PATH = "argus_intelligence.db"
-_SCHEMA_VERSION = 1
+_SCHEMA_VERSION = 2
 
 
 class ArgusMemory:
@@ -154,6 +154,7 @@ class ArgusMemory:
                         raw_data TEXT,
                         summary TEXT,
                         timestamp DATETIME,
+                        severity TEXT DEFAULT 'Info',
                         FOREIGN KEY (target_id) REFERENCES targets(id)
                     )
                 """)
@@ -214,6 +215,10 @@ class ArgusMemory:
                     )
                 """)
                 current = self._get_schema_version()
+                if current < 2:
+                    findings_cols = {row[1] for row in conn.execute("PRAGMA table_info(findings)").fetchall()}
+                    if "severity" not in findings_cols:
+                        conn.execute("ALTER TABLE findings ADD COLUMN severity TEXT DEFAULT 'Info'")
                 if current < _SCHEMA_VERSION:
                     self._set_schema_version(_SCHEMA_VERSION)
                     logger.info("Schema upgraded to v%d", _SCHEMA_VERSION)
@@ -303,7 +308,10 @@ class ArgusMemory:
     # ------------------------------------------------------------------
     # CRUD: Findings
     # ------------------------------------------------------------------
-    def add_finding(self, domain: str, tool_name: str, data_type: str, raw_data: str, summary: str) -> None:
+    def add_finding(
+        self, domain: str, tool_name: str, data_type: str, raw_data: str, summary: str,
+        severity: str = "Info",
+    ) -> None:
         try:
             with self._get_conn() as conn:
                 row = conn.execute("SELECT id FROM targets WHERE domain = ?", (domain,)).fetchone()
@@ -322,9 +330,9 @@ class ArgusMemory:
                     return
                 now = datetime.now().isoformat()
                 conn.execute(
-                    """INSERT INTO findings (target_id, tool_name, data_type, raw_data, summary, timestamp)
-                       VALUES (?, ?, ?, ?, ?, ?)""",
-                    (target_id, tool_name, data_type, raw_data, summary, now),
+                    """INSERT INTO findings (target_id, tool_name, data_type, raw_data, summary, timestamp, severity)
+                       VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                    (target_id, tool_name, data_type, raw_data, summary, now, severity),
                 )
         except Exception as e:
             logger.error("add_finding(%s, %s) failed: %s", domain, tool_name, e)
@@ -337,18 +345,11 @@ class ArgusMemory:
         Added 2026-07-18 for the opt-in experimental_agent module
         (app/modules/experimental_agent/), ported from the momen branch,
         which calls this for session-scoped result filtering.
-
-        Known limitation: momen's own memory schema tracked a `severity`
-        column per finding; this table doesn't, so every dict here has
-        `severity` fixed at "Info" rather than a real value. Adding a
-        severity column is out of scope for an experimental, opt-in-only,
-        never-auto-registered module - revisit if experimental_agent is
-        ever promoted out of that status.
         """
         try:
             with self._get_conn() as conn:
                 query = (
-                    "SELECT f.tool_name, f.data_type, f.raw_data, f.summary, f.timestamp "
+                    "SELECT f.tool_name, f.data_type, f.raw_data, f.summary, f.timestamp, f.severity "
                     "FROM findings f JOIN targets t ON f.target_id = t.id "
                     "WHERE t.domain = ?"
                 )
@@ -369,7 +370,7 @@ class ArgusMemory:
                 "raw_data": row["raw_data"],
                 "summary": row["summary"],
                 "timestamp": row["timestamp"],
-                "severity": "Info",
+                "severity": row["severity"] or "Info",
             }
             for row in rows
         ]

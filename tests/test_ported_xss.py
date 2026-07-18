@@ -33,6 +33,15 @@ def test_html_encoded_safe():
     assert _classify(body, "<script>alert(1)</script>") is None
 
 
+def test_html_encoded_event_handler_marker_safe():
+    # Regression test: an HTML-entity-encoded non-<script> tag (e.g. <img onerror=...>)
+    # near the marker must not be misclassified as executable - the encoding means
+    # no real <img> tag was ever created, so onerror= is inert text, not a live handler.
+    p = '"><img src=x onerror=alert(ARGUSxSS7)>'
+    body = f"&lt;img src=x onerror=alert(ARGUSxSS7)&gt;"
+    assert _classify(body, p) is None
+
+
 def test_marker_between_tags():
     body = f"<div>some text ARGUSxSS7 more text</div>"
     sev, _ = _classify(body, "ARGUSxSS7")
