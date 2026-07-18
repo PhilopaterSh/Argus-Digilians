@@ -6,7 +6,8 @@ specs/012-spec-reconciliation/spec.md (section 7).
 
 Checks (all read-only):
   1. No duplicate numeric feature prefixes under specs/.
-  2. Every feature folder has spec.md, plan.md, tasks.md.
+  2. Every feature folder has the artifact set its own lifecycle status
+     requires (see STATUS_TIER below) - not a blanket six-file template.
   3. No dangling supersession term (Superseded By / Replaced By / Refined By /
      Deprecated) left without a target on the same line.
 
@@ -18,9 +19,20 @@ import sys
 
 SPECS_DIR = os.path.join(os.path.dirname(__file__), "..", "specs")
 FEATURE_RE = re.compile(r"^(\d+)-")
-# Full Spec-Kit artifact set required for every feature
-# (specs/012-spec-reconciliation governance; every feature must be complete).
-REQUIRED = ("spec.md", "research.md", "plan.md", "data-model.md", "quickstart.md", "tasks.md")
+STATUS_RE = re.compile(r"^\*\*Status\*\*:\s*(.+)$", re.MULTILINE)
+APPLICABILITY_RE = re.compile(r"^-\s*(\S+):\s*N/A\s*\u2014\s*\S.*$", re.MULTILINE)
+
+# A feature's own **Status** line (in its spec.md) determines which artifacts
+# are actually meaningful to require - not every feature has reached (or
+# will reach) a stage where a data model or an end-user quickstart exists.
+# CORE artifacts are the auditable record of "what was this and how was it
+# built"; CONDITIONAL artifacts may be genuinely not applicable, in which
+# case spec.md must say so explicitly (see APPLICABILITY_RE) rather than
+# silently omitting them.
+MINIMAL_STATUSES = ("Draft", "Fully Superseded")
+CORE_STATUSES = ("Proposed", "Implemented", "Active")
+CORE = ("spec.md", "research.md", "plan.md", "tasks.md")
+CONDITIONAL = ("data-model.md", "quickstart.md")
 SUPERSEDE_TERMS = ("Superseded By", "Replaced By", "Refined By", "Partially Superseded By")
 
 
@@ -45,12 +57,47 @@ def check_duplicate_numbers(dirs):
     return errors
 
 
+def _read_spec_text(specs_dir, d):
+    spec_path = os.path.join(specs_dir, d, "spec.md")
+    if not os.path.isfile(spec_path):
+        return None
+    with open(spec_path, encoding="utf-8") as f:
+        return f.read()
+
+
+def _status_tier(spec_text, d, errors):
+    if spec_text is None:
+        return CORE  # no spec.md at all - fall through to check_required_artifacts's own report
+    m = STATUS_RE.search(spec_text)
+    if not m:
+        errors.append(f"{d}/spec.md: no '**Status**: ...' header found - cannot determine required artifacts")
+        return CORE
+    status_line = m.group(1)
+    if any(status_line.startswith(s) for s in MINIMAL_STATUSES):
+        return ("spec.md",)
+    if any(status_line.startswith(s) for s in CORE_STATUSES):
+        return CORE
+    errors.append(f"{d}/spec.md: unrecognized status '{status_line.strip()}' - cannot determine required artifacts")
+    return CORE
+
+
 def check_required_artifacts(specs_dir, dirs):
     errors = []
     for d in dirs:
-        for req in REQUIRED:
+        spec_text = _read_spec_text(specs_dir, d)
+        tier = _status_tier(spec_text, d, errors)
+        for req in tier:
             if not os.path.isfile(os.path.join(specs_dir, d, req)):
                 errors.append(f"{d}: missing required artifact {req}")
+        if tier is CORE:
+            declared_na = set(APPLICABILITY_RE.findall(spec_text)) if spec_text else set()
+            for cond in CONDITIONAL:
+                exists = os.path.isfile(os.path.join(specs_dir, d, cond))
+                if not exists and cond not in declared_na:
+                    errors.append(
+                        f"{d}: missing conditional artifact {cond} (add the file, or declare it "
+                        f"N/A with a reason under spec.md's '## Artifact applicability' section)"
+                    )
     return errors
 
 

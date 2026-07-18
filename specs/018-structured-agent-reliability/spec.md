@@ -147,3 +147,11 @@ addendum and `CHANGELOG.md`; tracked as CHK077-082 in `specs/checklist.md`.
 - **SC-005**: `test_ask_retries_once_on_transient_ollama_cuda_crash` and
   `test_ask_does_not_retry_non_infra_errors` prove the retry is scoped to the exact known
   failure signature, not a general safety net.
+
+## Artifact applicability
+
+- data-model.md: see data-model.md - the structured-output contract (`SecurityReport`/`Finding`)
+  this feature introduced enforcing is real, existing schema worth documenting.
+- quickstart.md: N/A — per FR-003, `ArgusBrain.ask()`'s external contract, and therefore every
+  existing operator workflow (`scripts/run_agent.py`, the GUI's Agent tab), is explicitly
+  unchanged by this feature. There is no new workflow to write a quickstart for.

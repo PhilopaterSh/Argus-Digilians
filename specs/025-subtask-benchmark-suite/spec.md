@@ -122,3 +122,10 @@ design choice. Without an equivalent, every other proposed phase in this gap ana
   not required for v1.
 - Cost-per-challenge tracking (the paper's own "$0.20/challenge" style metric) — not meaningful
   for Argus's local-GGUF-inference model, which has no per-token API cost to track.
+
+## Artifact applicability
+
+- data-model.md: N/A — spec-kit-only, not yet implemented (per specs/checklist.md); no
+  persistent schema or data contract exists yet to document.
+- quickstart.md: N/A — spec-kit-only, not yet implemented; no runnable user/operator workflow
+  exists yet to document.

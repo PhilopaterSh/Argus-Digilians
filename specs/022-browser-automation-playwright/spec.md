@@ -124,3 +124,10 @@ primitive (a real browser engine) that nothing in Argus's current toolchain prov
 - Multi-tab/multi-context browser sessions, persistent cookie jars across separate tool calls —
   each invocation is a fresh, isolated browser context, matching the stateless-per-call shape
   every other Argus tool already has.
+
+## Artifact applicability
+
+- data-model.md: N/A — spec-kit-only, not yet implemented (per specs/checklist.md); no
+  persistent schema or data contract exists yet to document.
+- quickstart.md: N/A — spec-kit-only, not yet implemented; no runnable user/operator workflow
+  exists yet to document.

@@ -126,3 +126,10 @@ warning seriously without over-building infrastructure a single-operator local t
   not maximal, control.
 - Automated verification that a target is actually within an authorized scope (e.g., checking
   against a signed rules-of-engagement document) — FR-001 is a self-attestation gate only.
+
+## Artifact applicability
+
+- data-model.md: N/A — spec-kit-only, not yet implemented (per specs/checklist.md); no
+  persistent schema or data contract exists yet to document.
+- quickstart.md: N/A — spec-kit-only, not yet implemented; no runnable user/operator workflow
+  exists yet to document.

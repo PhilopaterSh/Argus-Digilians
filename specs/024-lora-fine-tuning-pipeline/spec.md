@@ -116,3 +116,10 @@ this is a research/experimentation investment, not a guaranteed large capability
   manually-triggered pipeline; building a feedback loop that retrains from production usage is
   a substantially larger, separate proposal with real data-quality and safety implications not
   addressed here.
+
+## Artifact applicability
+
+- data-model.md: N/A — spec-kit-only, not yet implemented (per specs/checklist.md); no
+  persistent schema or data contract exists yet to document.
+- quickstart.md: N/A — spec-kit-only, not yet implemented; no runnable user/operator workflow
+  exists yet to document.

@@ -117,3 +117,10 @@ residual gap is judged worth the added complexity and latency.
   than this spec covers.
 - Full DAG-based path planning with branch pruning (Section 3.3.2) — a plausible FR-003 follow-
   up once the Planner role exists, not required for the initial split.
+
+## Artifact applicability
+
+- data-model.md: N/A — spec-kit-only, not yet implemented (per specs/checklist.md); no
+  persistent schema or data contract exists yet to document.
+- quickstart.md: N/A — spec-kit-only, not yet implemented; no runnable user/operator workflow
+  exists yet to document.

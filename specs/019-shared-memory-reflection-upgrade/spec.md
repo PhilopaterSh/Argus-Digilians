@@ -155,3 +155,10 @@ agents — this phase does **not** require that split).
   role in the paper (Section 3.3.2) and depends on 020 existing first.
 - Cryptographic/formal proofs of SRMM's five properties — Argus's adaptation is a best-effort
   engineering analog, not a verified implementation of the paper's formalism.
+
+## Artifact applicability
+
+- data-model.md: N/A — spec-kit-only, not yet implemented (per specs/checklist.md); no
+  persistent schema or data contract exists yet to document.
+- quickstart.md: N/A — spec-kit-only, not yet implemented; no runnable user/operator workflow
+  exists yet to document.

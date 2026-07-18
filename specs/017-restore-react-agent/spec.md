@@ -102,3 +102,11 @@ still fully supports.
 - `AGENT_TIMEOUT_SECONDS` default (900s) is unchanged; a full free-form ReAct run can in
   principle make far more tool calls than the old fixed 3-phase pipeline, so operators running
   long/thorough analyses may need to raise this via the existing env var override.
+
+## Artifact applicability
+
+- data-model.md: see data-model.md - the persisted result shape change (FR-004/FR-005) is real,
+  existing schema worth documenting.
+- quickstart.md: N/A — per FR-003/NFR-001, this feature explicitly reuses the existing GUI
+  interaction (the "Start Agent" button, the Agent Feed, zero new polling) with zero operator-
+  facing changes. There is no new workflow to write a quickstart for.
