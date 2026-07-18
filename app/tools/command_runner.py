@@ -55,8 +55,27 @@ class CommandRunner:
             return self._run_direct_wsl(command, show_prompt, timeout=timeout)
         return self._run_ssh(command, timeout=timeout)
 
+    @staticmethod
+    def _with_safe_path(command: str) -> str:
+        """
+        Neither `wsl ... bash -c` nor paramiko's exec_command() source any
+        shell rc/profile file, so PATH additions living in ~/.bashrc or
+        ~/.zshrc are invisible to commands run through this class - even
+        though the same command works fine typed directly into an
+        interactive shell. Explicitly guarantee the common tool-install
+        locations (go install, pip --user, etc.) are on PATH instead of
+        depending on dotfiles that never get read here.
+        """
+        path_prefix = (
+            'export PATH="$PATH:$HOME/go/bin:$HOME/.local/bin:'
+            '/usr/local/go/bin:/root/go/bin:/usr/local/bin:/usr/local/sbin"; '
+        )
+        return path_prefix + command
+
     def _run_direct_wsl(self, command: str, show_prompt: bool = False, timeout: int = DEFAULT_COMMAND_TIMEOUT) -> str:
         try:
+            full_command = self._with_safe_path(command)
+
             wsl_cmd = [
                 "wsl",
                 "-d",
@@ -64,8 +83,8 @@ class CommandRunner:
                 "-u",
                 self.config.user,
                 "bash",
-                "-c",
-                command,
+                "-lc",
+                full_command,
             ]
             result = subprocess.run(
                 wsl_cmd,
@@ -128,7 +147,7 @@ class CommandRunner:
                 # exec_command()'s own timeout only bounds the exec request itself;
                 # without settimeout() on the channel, stdout.read()/stderr.read()
                 # below block forever on a hung/slow remote command.
-                _, stdout, stderr = client.exec_command(command, timeout=timeout)
+                _, stdout, stderr = client.exec_command(self._with_safe_path(command), timeout=timeout)
                 stdout.channel.settimeout(timeout)
                 try:
                     output = stdout.read().decode()
