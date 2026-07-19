@@ -52,7 +52,7 @@ def test_build_index_writes_manifest(tmp_path):
     """Verify Build index writes manifest.
     
     Args:
-        tmp_path: pytest fixture (see the module's @pytest.fixture definitions).
+        tmp_path: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
     """
     config = _make_config(tmp_path)
     EmbeddingFactory._provider = "ollama"
@@ -74,7 +74,7 @@ def test_load_index_proceeds_when_manifest_matches(tmp_path):
     """Verify Load index proceeds when manifest matches.
     
     Args:
-        tmp_path: pytest fixture (see the module's @pytest.fixture definitions).
+        tmp_path: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
     """
     config = _make_config(tmp_path)
     rag_manifest.write_manifest(
@@ -98,7 +98,7 @@ def test_load_index_skips_when_provider_falls_back(tmp_path):
     (now dimension-mismatched) stale index.
     
     Args:
-        tmp_path: pytest fixture (see the module's @pytest.fixture definitions).
+        tmp_path: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
     """
     config = _make_config(tmp_path)
     rag_manifest.write_manifest(
@@ -120,7 +120,7 @@ def test_load_index_skips_when_knowledge_base_changed(tmp_path):
     """Verify Load index skips when knowledge base changed.
     
     Args:
-        tmp_path: pytest fixture (see the module's @pytest.fixture definitions).
+        tmp_path: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
     """
     config = _make_config(tmp_path)
     rag_manifest.write_manifest(
@@ -146,7 +146,7 @@ def test_load_index_returns_false_when_no_index_file(tmp_path):
     """Verify Load index returns false when no index file.
     
     Args:
-        tmp_path: pytest fixture (see the module's @pytest.fixture definitions).
+        tmp_path: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
     """
     config = _make_config(tmp_path)
     store = _make_store(config)

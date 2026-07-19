@@ -19,7 +19,7 @@ def test_session_save_and_load_roundtrip(setup_gui_tables):
     """Verify Session save and load roundtrip.
     
     Args:
-        setup_gui_tables: pytest fixture (see the module's @pytest.fixture definitions).
+        setup_gui_tables: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
     """
     from app.GUI.components.session_manager import save_session, load_session, list_sessions, delete_session
 
@@ -53,7 +53,7 @@ def test_multiple_sessions(setup_gui_tables):
     """Verify Multiple sessions.
     
     Args:
-        setup_gui_tables: pytest fixture (see the module's @pytest.fixture definitions).
+        setup_gui_tables: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
     """
     from app.GUI.components.session_manager import save_session, list_sessions, delete_session
 
@@ -75,7 +75,7 @@ def test_session_with_empty_targets(setup_gui_tables):
     """Verify Session with empty targets.
     
     Args:
-        setup_gui_tables: pytest fixture (see the module's @pytest.fixture definitions).
+        setup_gui_tables: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
     """
     from app.GUI.components.session_manager import save_session, load_session, delete_session
 
@@ -90,7 +90,7 @@ def test_session_update(setup_gui_tables):
     """Verify Session update.
     
     Args:
-        setup_gui_tables: pytest fixture (see the module's @pytest.fixture definitions).
+        setup_gui_tables: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
     """
     from app.GUI.components.session_manager import save_session, load_session, update_session, delete_session
 

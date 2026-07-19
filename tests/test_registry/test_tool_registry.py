@@ -102,7 +102,7 @@ def test_register_duplicate_warns(caplog):
     """Verify Register duplicate warns.
     
     Args:
-        caplog: pytest fixture (see the module's @pytest.fixture definitions).
+        caplog: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
     """
     r = ToolRegistry()
     r.register(FakeTool())

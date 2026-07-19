@@ -15,7 +15,7 @@ class TestHealthCheck:
         """Verify Returns dict.
         
         Args:
-            healer: pytest fixture (see the module's @pytest.fixture definitions).
+            healer: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
         """
         result = healer.health_check()
         assert isinstance(result, dict)
@@ -28,8 +28,8 @@ class TestHealthCheck:
         """Verify Wsl ok.
         
         Args:
-            mock_run: pytest fixture (see the module's @pytest.fixture definitions).
-            healer: pytest fixture (see the module's @pytest.fixture definitions).
+            mock_run: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
+            healer: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
         """
         mock_run.return_value = MagicMock(returncode=0, stdout="Default Distro: kali-linux", stderr="")
         result = healer.health_check()
@@ -40,8 +40,8 @@ class TestHealthCheck:
         """Verify Wsl failed.
         
         Args:
-            mock_run: pytest fixture (see the module's @pytest.fixture definitions).
-            healer: pytest fixture (see the module's @pytest.fixture definitions).
+            mock_run: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
+            healer: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
         """
         mock_run.side_effect = FileNotFoundError()
         result = healer.health_check()
@@ -52,8 +52,8 @@ class TestHealthCheck:
         """Verify Ollama ok.
         
         Args:
-            mock_urlopen: pytest fixture (see the module's @pytest.fixture definitions).
-            healer: pytest fixture (see the module's @pytest.fixture definitions).
+            mock_urlopen: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
+            healer: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
         """
         mock_resp = MagicMock()
         mock_resp.status = 200
@@ -65,7 +65,7 @@ class TestHealthCheck:
         """Verify Python ok.
         
         Args:
-            healer: pytest fixture (see the module's @pytest.fixture definitions).
+            healer: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
         """
         result = healer.health_check()
         assert "ok" in result["python"]
@@ -76,7 +76,7 @@ class TestRestartService:
         """Verify Unknown service.
         
         Args:
-            healer: pytest fixture (see the module's @pytest.fixture definitions).
+            healer: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
         """
         result = healer.restart_service("unknown")
         assert "unknown" in result.lower()
@@ -87,9 +87,9 @@ class TestRestartService:
         """Verify Restart ollama.
         
         Args:
-            mock_popen: pytest fixture (see the module's @pytest.fixture definitions).
-            mock_run: pytest fixture (see the module's @pytest.fixture definitions).
-            healer: pytest fixture (see the module's @pytest.fixture definitions).
+            mock_popen: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
+            mock_run: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
+            healer: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
         """
         mock_run.return_value = MagicMock(returncode=0)
         mock_popen.return_value = MagicMock()
@@ -102,9 +102,9 @@ class TestRestartService:
         """Verify Restart ollama not found.
         
         Args:
-            mock_run: pytest fixture (see the module's @pytest.fixture definitions).
-            mock_popen: pytest fixture (see the module's @pytest.fixture definitions).
-            healer: pytest fixture (see the module's @pytest.fixture definitions).
+            mock_run: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
+            mock_popen: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
+            healer: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
         """
         mock_run.side_effect = FileNotFoundError("ollama.exe not found")
         mock_popen.side_effect = FileNotFoundError("ollama.exe not found in PATH")

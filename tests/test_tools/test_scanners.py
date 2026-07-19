@@ -17,7 +17,7 @@ class TestRunNikto:
         """Verify Success on first scheme does not retry.
         
         Args:
-            service: pytest fixture (see the module's @pytest.fixture definitions).
+            service: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
         """
         svc, runner, _ = service
         runner.run.return_value = "+ Server: Apache\n+ /admin/: found"
@@ -34,7 +34,7 @@ class TestRunNikto:
         Nikto itself should try the other scheme before giving up.
         
         Args:
-            service: pytest fixture (see the module's @pytest.fixture definitions).
+            service: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
         """
         svc, runner, _ = service
         runner.run.side_effect = [
@@ -54,7 +54,7 @@ class TestRunNikto:
         """Verify Returns original failure when both schemes fail.
         
         Args:
-            service: pytest fixture (see the module's @pytest.fixture definitions).
+            service: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
         """
         svc, runner, _ = service
         runner.run.side_effect = [
@@ -71,7 +71,7 @@ class TestRunNikto:
         """Verify No fallback without a recognised scheme.
         
         Args:
-            service: pytest fixture (see the module's @pytest.fixture definitions).
+            service: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
         """
         svc, runner, _ = service
         runner.run.return_value = "+ [FAIL] Unable to connect."
@@ -89,7 +89,7 @@ class TestRunNikto:
         extension; the returned message's cited path must have exactly one.
         
         Args:
-            service: pytest fixture (see the module's @pytest.fixture definitions).
+            service: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
         """
         svc, runner, _ = service
         runner.run.return_value = "+ Server: Apache"
@@ -108,7 +108,7 @@ class TestRunFfufDiscovery:
         """Verify Success on first scheme does not retry.
         
         Args:
-            service: pytest fixture (see the module's @pytest.fixture definitions).
+            service: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
         """
         svc, runner, _ = service
         runner.run.return_value = "http://example.com/admin [Status: 200]"
@@ -121,7 +121,7 @@ class TestRunFfufDiscovery:
         """Verify Retries with http when https finds nothing.
         
         Args:
-            service: pytest fixture (see the module's @pytest.fixture definitions).
+            service: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
         """
         svc, runner, _ = service
         runner.run.side_effect = [
@@ -140,7 +140,7 @@ class TestRunFfufDiscovery:
         """Verify Reports no paths when both schemes empty.
         
         Args:
-            service: pytest fixture (see the module's @pytest.fixture definitions).
+            service: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
         """
         svc, runner, _ = service
         runner.run.side_effect = ["", ""]

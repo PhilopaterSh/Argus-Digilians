@@ -9,7 +9,7 @@ class TestSmartWebSearch(unittest.TestCase):
         """Verify Successful search formats results.
         
         Args:
-            mock_ddgs_cls: pytest fixture (see the module's @pytest.fixture definitions).
+            mock_ddgs_cls: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
         """
         mock_ddgs_cls.return_value.__enter__.return_value.text.return_value = [
             {"title": "Result A", "href": "http://a.example", "body": "snippet A"},
@@ -24,7 +24,7 @@ class TestSmartWebSearch(unittest.TestCase):
         """Verify No results returns explicit message.
         
         Args:
-            mock_ddgs_cls: pytest fixture (see the module's @pytest.fixture definitions).
+            mock_ddgs_cls: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
         """
         mock_ddgs_cls.return_value.__enter__.return_value.text.return_value = []
         searcher = SmartWebSearch(memory=None)
@@ -36,7 +36,7 @@ class TestSmartWebSearch(unittest.TestCase):
         """Verify Attempt limit blocks further searches.
         
         Args:
-            mock_ddgs_cls: pytest fixture (see the module's @pytest.fixture definitions).
+            mock_ddgs_cls: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
         """
         mock_ddgs_cls.return_value.__enter__.return_value.text.return_value = []
         searcher = SmartWebSearch(memory=None)
@@ -53,7 +53,7 @@ class TestSmartWebSearch(unittest.TestCase):
         """Verify Failed search still counts as an attempt.
         
         Args:
-            mock_ddgs_cls: pytest fixture (see the module's @pytest.fixture definitions).
+            mock_ddgs_cls: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
         """
         mock_ddgs_cls.return_value.__enter__.return_value.text.side_effect = RuntimeError("network down")
         searcher = SmartWebSearch(memory=None)
@@ -70,7 +70,7 @@ class TestSmartWebSearch(unittest.TestCase):
         """Verify Passes configured timeout to ddgs.
         
         Args:
-            mock_ddgs_cls: pytest fixture (see the module's @pytest.fixture definitions).
+            mock_ddgs_cls: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
         """
         mock_ddgs_cls.return_value.__enter__.return_value.text.return_value = []
         searcher = SmartWebSearch(memory=None)

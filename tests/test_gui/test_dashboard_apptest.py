@@ -21,7 +21,7 @@ def test_dashboard_page_renders_without_exception(page):
     """Verify Dashboard page renders without exception.
     
     Args:
-        page: pytest fixture (see the module's @pytest.fixture definitions).
+        page: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
     """
     at = AppTest.from_file("app/GUI/dashboard.py")
     at.run(timeout=30)

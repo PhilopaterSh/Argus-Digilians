@@ -21,7 +21,7 @@ class TestCheckReachability:
         scan (via Recon_Suite) found it up with open ports.
         
         Args:
-            service: pytest fixture (see the module's @pytest.fixture definitions).
+            service: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
         """
         svc, runner, _ = service
         runner.run.return_value = "4 received"
@@ -34,7 +34,7 @@ class TestCheckReachability:
         """Verify Strips port before pinging.
         
         Args:
-            service: pytest fixture (see the module's @pytest.fixture definitions).
+            service: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
         """
         svc, runner, _ = service
         runner.run.return_value = "4 received"
@@ -47,7 +47,7 @@ class TestCheckReachability:
         """Verify Bare domain unchanged.
         
         Args:
-            service: pytest fixture (see the module's @pytest.fixture definitions).
+            service: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
         """
         svc, runner, _ = service
         runner.run.return_value = "4 received"
@@ -60,7 +60,7 @@ class TestCheckReachability:
         """Verify Reachable upserts original target to memory.
         
         Args:
-            service: pytest fixture (see the module's @pytest.fixture definitions).
+            service: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
         """
         svc, runner, memory = service
         runner.run.return_value = "4 received"
@@ -74,7 +74,7 @@ class TestCheckReachability:
         """Verify Unreachable does not upsert.
         
         Args:
-            service: pytest fixture (see the module's @pytest.fixture definitions).
+            service: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
         """
         svc, runner, memory = service
         runner.run.return_value = "0 received"

@@ -25,7 +25,7 @@ class TestArgusMemory:
         """Verify Init creates tables.
         
         Args:
-            db_path: pytest fixture (see the module's @pytest.fixture definitions).
+            db_path: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
         """
         m = ArgusMemory(db_path=db_path)
         with m._get_conn() as conn:
@@ -45,7 +45,7 @@ class TestArgusMemory:
         """Verify Upsert target new.
         
         Args:
-            mem: pytest fixture (see the module's @pytest.fixture definitions).
+            mem: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
         """
         mem.upsert_target("example.com")
         mem.add_finding("example.com", "test", "check", "ok", "verified")
@@ -56,7 +56,7 @@ class TestArgusMemory:
         """Verify Upsert target update priority.
         
         Args:
-            mem: pytest fixture (see the module's @pytest.fixture definitions).
+            mem: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
         """
         mem.upsert_target("example.com", priority=1)
         mem.upsert_target("example.com", priority=5)
@@ -70,7 +70,7 @@ class TestArgusMemory:
         """Verify Add finding auto upserts target.
         
         Args:
-            mem: pytest fixture (see the module's @pytest.fixture definitions).
+            mem: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
         """
         mem.add_finding("newdomain.com", "nmap", "ports", "80/tcp", "HTTP")
         summary = json.loads(mem.get_blackboard_summary())
@@ -81,7 +81,7 @@ class TestArgusMemory:
         """Verify Add finding multiple types.
         
         Args:
-            mem: pytest fixture (see the module's @pytest.fixture definitions).
+            mem: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
         """
         mem.add_finding("x.com", "nmap", "ports", "80/tcp", "HTTP")
         mem.add_finding("x.com", "whatweb", "tech", "nginx", "Nginx 1.24")
@@ -93,7 +93,7 @@ class TestArgusMemory:
         """Verify Upsert entity new.
         
         Args:
-            mem: pytest fixture (see the module's @pytest.fixture definitions).
+            mem: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
         """
         eid = mem.upsert_entity("ip", "10.0.0.1")
         assert eid > 0
@@ -102,7 +102,7 @@ class TestArgusMemory:
         """Verify Upsert entity duplicate.
         
         Args:
-            mem: pytest fixture (see the module's @pytest.fixture definitions).
+            mem: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
         """
         eid1 = mem.upsert_entity("ip", "10.0.0.1")
         eid2 = mem.upsert_entity("ip", "10.0.0.1", {"region": "us-east"})
@@ -112,7 +112,7 @@ class TestArgusMemory:
         """Verify Upsert entity with metadata.
         
         Args:
-            mem: pytest fixture (see the module's @pytest.fixture definitions).
+            mem: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
         """
         mem.upsert_entity("tech", "nginx", {"version": "1.24", "cve": "CVE-2024-1234"})
         with mem._get_conn() as conn:
@@ -126,7 +126,7 @@ class TestArgusMemory:
         """Verify Add relation.
         
         Args:
-            mem: pytest fixture (see the module's @pytest.fixture definitions).
+            mem: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
         """
         mem.upsert_entity("ip", "10.0.0.1")
         mem.upsert_entity("tech", "nginx")
@@ -138,7 +138,7 @@ class TestArgusMemory:
         """Verify Add relation missing entities.
         
         Args:
-            mem: pytest fixture (see the module's @pytest.fixture definitions).
+            mem: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
         """
         mem.add_relation("ghost-a", "ghost-b", "LINKED_TO")
         assert mem.get_graph_insights() == ""
@@ -155,7 +155,7 @@ class TestArgusMemory:
         """Verify Clear memory.
         
         Args:
-            mem: pytest fixture (see the module's @pytest.fixture definitions).
+            mem: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
         """
         mem.upsert_target("example.com")
         mem.clear_memory()
@@ -165,7 +165,7 @@ class TestArgusMemory:
         """Verify Clear memory then reuse.
         
         Args:
-            mem: pytest fixture (see the module's @pytest.fixture definitions).
+            mem: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
         """
         mem.upsert_target("example.com")
         mem.add_finding("example.com", "test", "check", "ok", "old")
@@ -180,7 +180,7 @@ class TestArgusMemory:
         """Verify Multiple targets blackboard.
         
         Args:
-            mem: pytest fixture (see the module's @pytest.fixture definitions).
+            mem: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
         """
         mem.upsert_target("a.com", priority=1)
         mem.upsert_target("b.com", priority=5)
@@ -195,7 +195,7 @@ class TestArgusMemory:
         """Verify Large insert performance.
         
         Args:
-            db_path: pytest fixture (see the module's @pytest.fixture definitions).
+            db_path: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
         """
         m = ArgusMemory(db_path=db_path)
         for i in range(1000):
@@ -235,7 +235,7 @@ class TestArgusMemory:
         k=3 per (domain, tool_name) group, not the last 9 overall.
         
         Args:
-            mem: pytest fixture (see the module's @pytest.fixture definitions).
+            mem: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
         """
         mem.upsert_target("x.com")
         for source in ("nmap", "whatweb", "nikto"):
@@ -255,7 +255,7 @@ class TestArgusMemory:
         """Verify Summarize for planning formats with source prefix.
         
         Args:
-            mem: pytest fixture (see the module's @pytest.fixture definitions).
+            mem: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
         """
         mem.upsert_target("y.com")
         mem.add_finding("y.com", "nikto", "vuln", "raw", "found XSS")
@@ -266,7 +266,7 @@ class TestArgusMemory:
         """Verify Summarize for planning respects max chars.
         
         Args:
-            mem: pytest fixture (see the module's @pytest.fixture definitions).
+            mem: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
         """
         mem.upsert_target("z.com")
         for i in range(50):
@@ -280,7 +280,7 @@ class TestArgusMemory:
         et al.) must be completely unchanged.
         
         Args:
-            mem: pytest fixture (see the module's @pytest.fixture definitions).
+            mem: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
         """
         mem.add_finding("x.com", "nmap", "ports", "80/tcp", "HTTP")
         mem.add_finding("x.com", "whatweb", "tech", "nginx", "Nginx 1.24")
@@ -292,7 +292,7 @@ class TestArgusMemory:
         """Verify Upsert target null parent.
         
         Args:
-            mem: pytest fixture (see the module's @pytest.fixture definitions).
+            mem: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
         """
         mem.upsert_target("root.com")
         mem.upsert_target("sub.root.com", parent_domain="root.com")
@@ -307,7 +307,7 @@ class TestArgusMemory:
         """Verify Entity returns negative on failure.
         
         Args:
-            mem: pytest fixture (see the module's @pytest.fixture definitions).
+            mem: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
         """
         eid = mem.upsert_entity("", None)
         assert eid == -1
@@ -316,7 +316,7 @@ class TestArgusMemory:
         """Verify Unicode finding.
         
         Args:
-            mem: pytest fixture (see the module's @pytest.fixture definitions).
+            mem: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
         """
         mem.add_finding("\u043f\u0440\u0438\u043c\u0435\u0440.\u0440\u0444", "tool", "test", "raw", "unicode \u0442\u0435\u0441\u0442")
         summary = json.loads(mem.get_blackboard_summary())
@@ -326,7 +326,7 @@ class TestArgusMemory:
         """Verify Schema version.
         
         Args:
-            db_path: pytest fixture (see the module's @pytest.fixture definitions).
+            db_path: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
         """
         m = ArgusMemory(db_path=db_path)
         version = m._get_schema_version()
@@ -336,7 +336,7 @@ class TestArgusMemory:
         """Verify Log and get scan history.
         
         Args:
-            mem: pytest fixture (see the module's @pytest.fixture definitions).
+            mem: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
         """
         mem.log_scan_session(
             "example.com", "active", "2026-07-18T10:00:00", "2026-07-18T10:05:00",
@@ -352,7 +352,7 @@ class TestArgusMemory:
         """Verify Get scan history orders most recent first.
         
         Args:
-            mem: pytest fixture (see the module's @pytest.fixture definitions).
+            mem: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
         """
         mem.log_scan_session("older.com", "active", "2026-07-01T00:00:00")
         mem.log_scan_session("newer.com", "active", "2026-07-18T00:00:00")
@@ -367,7 +367,7 @@ class TestArgusMemory:
         """Verify Get priority targets ranks by priority.
         
         Args:
-            mem: pytest fixture (see the module's @pytest.fixture definitions).
+            mem: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
         """
         mem.upsert_target("low.example.com", priority=1)
         mem.upsert_target("high.example.com", priority=10)
@@ -378,7 +378,7 @@ class TestArgusMemory:
         """Verify Get priority targets filters garbage.
         
         Args:
-            mem: pytest fixture (see the module's @pytest.fixture definitions).
+            mem: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
         """
         mem.upsert_target("real-target.example.com", priority=5)
         mem.upsert_target("error: not found", priority=99)
@@ -394,7 +394,7 @@ class TestArgusMemory:
         """Verify Corrupt db is detected and rebuilt.
         
         Args:
-            db_path: pytest fixture (see the module's @pytest.fixture definitions).
+            db_path: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
         """
         with open(db_path, "wb") as f:
             f.write(b"not a real sqlite database")

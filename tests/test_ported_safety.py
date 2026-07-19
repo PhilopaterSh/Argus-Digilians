@@ -118,7 +118,7 @@ class TestMemoryPorted:
         """Verify Upsert entity returns id.
         
         Args:
-            mem: pytest fixture (see the module's @pytest.fixture definitions).
+            mem: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
         """
         eid = mem.upsert_entity("ip", "1.2.3.4", {"asn": "AS12345"})
         assert isinstance(eid, int)
@@ -128,7 +128,7 @@ class TestMemoryPorted:
         """Verify Add relation.
         
         Args:
-            mem: pytest fixture (see the module's @pytest.fixture definitions).
+            mem: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
         """
         mem.upsert_entity("domain", "test.example.com")
         mem.upsert_entity("ip", "1.2.3.4")
@@ -141,7 +141,7 @@ class TestMemoryPorted:
         """Verify Target priority persists.
         
         Args:
-            mem: pytest fixture (see the module's @pytest.fixture definitions).
+            mem: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
         """
         mem.upsert_target("alpha.com", priority=5)
         mem.upsert_target("beta.com", priority=1)
@@ -156,7 +156,7 @@ class TestMemoryPorted:
         """Verify Upsert target then finding.
         
         Args:
-            mem: pytest fixture (see the module's @pytest.fixture definitions).
+            mem: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
         """
         mem.upsert_target("test.example.com", parent_domain="example.com", priority=5)
         mem.add_finding("test.example.com", "XSS", "xss", "<script>", "Reflected XSS found")

@@ -22,7 +22,7 @@ def test_module_imports(module_path):
     """Verify Module imports.
     
     Args:
-        module_path: pytest fixture (see the module's @pytest.fixture definitions).
+        module_path: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
     """
     mod = importlib.import_module(module_path)
     assert mod is not None

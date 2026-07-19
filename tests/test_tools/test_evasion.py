@@ -33,7 +33,7 @@ class TestAdvancedVulnProbe:
         """Verify Bounds every curl call with a timeout.
         
         Args:
-            _mock_sleep: pytest fixture (see the module's @pytest.fixture definitions).
+            _mock_sleep: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
         """
         runner = _make_runner({})
         memory = MagicMock()
@@ -52,7 +52,7 @@ class TestAdvancedVulnProbe:
         """Verify Reports clean when no indicators found.
         
         Args:
-            _mock_sleep: pytest fixture (see the module's @pytest.fixture definitions).
+            _mock_sleep: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
         """
         runner = _make_runner({}, default="<html>Not Found</html>")
         memory = MagicMock()
@@ -72,7 +72,7 @@ class TestAdvancedVulnProbe:
         test for) was never checked.
         
         Args:
-            _mock_sleep: pytest fixture (see the module's @pytest.fixture definitions).
+            _mock_sleep: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
         """
         runner = _make_runner({
             "etc/passwd": "root:x:0:0:root:/root:/bin/bash\ndaemon:x:1:1:...",
@@ -95,7 +95,7 @@ class TestAdvancedVulnProbe:
         """Verify Tries linux traversal payloads not only windows.
         
         Args:
-            _mock_sleep: pytest fixture (see the module's @pytest.fixture definitions).
+            _mock_sleep: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
         """
         runner = _make_runner({})
         memory = MagicMock()
@@ -112,7 +112,7 @@ class TestAdvancedVulnProbe:
         """Verify Detects sqli via 500 status.
         
         Args:
-            _mock_sleep: pytest fixture (see the module's @pytest.fixture definitions).
+            _mock_sleep: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
         """
         runner = _make_runner({
             "1%20OR%201=1": "\n500",
@@ -136,7 +136,7 @@ class TestAdvancedVulnProbe:
         check only ever looked at the HTTP status code.
         
         Args:
-            _mock_sleep: pytest fixture (see the module's @pytest.fixture definitions).
+            _mock_sleep: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
         """
         runner = _make_runner({
             "1%20OR%201=1": "You have an error in your SQL syntax; check the manual\n200",
@@ -158,7 +158,7 @@ class TestAdvancedVulnProbe:
         too.
         
         Args:
-            _mock_sleep: pytest fixture (see the module's @pytest.fixture definitions).
+            _mock_sleep: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
         """
         runner = _make_runner({
             "shuf -n 4": "custom/traversal/payload\n",

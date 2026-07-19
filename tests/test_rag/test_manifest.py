@@ -35,7 +35,7 @@ def test_write_then_read_round_trip(tmp_path):
     """Verify Write then read round trip.
     
     Args:
-        tmp_path: pytest fixture (see the module's @pytest.fixture definitions).
+        tmp_path: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
     """
     store = str(tmp_path / "store")
     kb = _make_kb(tmp_path)
@@ -59,7 +59,7 @@ def test_read_corrupt_returns_none(tmp_path):
     """Verify Read corrupt returns none.
     
     Args:
-        tmp_path: pytest fixture (see the module's @pytest.fixture definitions).
+        tmp_path: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
     """
     store = tmp_path / "store"
     store.mkdir()
@@ -71,7 +71,7 @@ def test_needs_rebuild_when_no_manifest(tmp_path):
     """Verify Needs rebuild when no manifest.
     
     Args:
-        tmp_path: pytest fixture (see the module's @pytest.fixture definitions).
+        tmp_path: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
     """
     kb = _make_kb(tmp_path)
     assert m.needs_rebuild(str(tmp_path / "store"), "nomic-embed-text", kb) is True
@@ -81,7 +81,7 @@ def test_no_rebuild_when_unchanged(tmp_path):
     """Verify No rebuild when unchanged.
     
     Args:
-        tmp_path: pytest fixture (see the module's @pytest.fixture definitions).
+        tmp_path: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
     """
     store = str(tmp_path / "store")
     kb = _make_kb(tmp_path)
@@ -93,7 +93,7 @@ def test_rebuild_when_embedder_changes(tmp_path):
     """Verify Rebuild when embedder changes.
     
     Args:
-        tmp_path: pytest fixture (see the module's @pytest.fixture definitions).
+        tmp_path: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
     """
     store = str(tmp_path / "store")
     kb = _make_kb(tmp_path)
@@ -106,7 +106,7 @@ def test_rebuild_when_kb_content_changes(tmp_path):
     """Verify Rebuild when kb content changes.
     
     Args:
-        tmp_path: pytest fixture (see the module's @pytest.fixture definitions).
+        tmp_path: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
     """
     store = str(tmp_path / "store")
     kb = _make_kb(tmp_path, text="alpha")
@@ -121,7 +121,7 @@ def test_kb_hash_is_stable_across_calls(tmp_path):
     """Verify Kb hash is stable across calls.
     
     Args:
-        tmp_path: pytest fixture (see the module's @pytest.fixture definitions).
+        tmp_path: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
     """
     kb = _make_kb(tmp_path)
     assert m.compute_kb_hash(kb) == m.compute_kb_hash(kb)
@@ -131,7 +131,7 @@ def test_missing_kb_hashes_to_sentinel(tmp_path):
     """Verify Missing kb hashes to sentinel.
     
     Args:
-        tmp_path: pytest fixture (see the module's @pytest.fixture definitions).
+        tmp_path: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
     """
     h = m.compute_kb_hash(str(tmp_path / "absent"))
     assert isinstance(h, str) and len(h) == 64
@@ -141,7 +141,7 @@ def test_manifest_json_is_ascii(tmp_path):
     """Verify Manifest json is ascii.
     
     Args:
-        tmp_path: pytest fixture (see the module's @pytest.fixture definitions).
+        tmp_path: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
     """
     store = str(tmp_path / "store")
     kb = _make_kb(tmp_path)

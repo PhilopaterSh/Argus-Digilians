@@ -72,7 +72,7 @@ def test_retry_budget_is_config_driven_not_hardcoded(monkeypatch):
     """A custom max_retries must be honored, proving the bound isn't hardcoded.
     
     Args:
-        monkeypatch: pytest fixture (see the module's @pytest.fixture definitions).
+        monkeypatch: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
     """
     from app.core.config import ArgusConfig
 

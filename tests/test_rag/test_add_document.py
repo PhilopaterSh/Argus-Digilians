@@ -55,7 +55,7 @@ def test_add_document_ingests_a_real_markdown_file_without_crashing(tmp_path):
     """Verify Add document ingests a real markdown file without crashing.
     
     Args:
-        tmp_path: pytest fixture (see the module's @pytest.fixture definitions).
+        tmp_path: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
     """
     doc_path = tmp_path / "sample.md"
     doc_path.write_text("# Heading\n\nSome real content for the RAG smoke test.\n", encoding="utf-8")
@@ -81,7 +81,7 @@ def test_add_document_handles_a_file_that_splits_into_multiple_documents(tmp_pat
     the original bug (a single `doc` was never a bare Document).
     
     Args:
-        tmp_path: pytest fixture (see the module's @pytest.fixture definitions).
+        tmp_path: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
     """
     csv_path = tmp_path / "sample.csv"
     csv_path.write_text("name,note\nrow1,first note\nrow2,second note\n", encoding="utf-8")
@@ -98,7 +98,7 @@ def test_add_document_returns_false_for_unsupported_extension(tmp_path):
     """Verify Add document returns false for unsupported extension.
     
     Args:
-        tmp_path: pytest fixture (see the module's @pytest.fixture definitions).
+        tmp_path: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
     """
     bad_path = tmp_path / "sample.exe"
     bad_path.write_bytes(b"not a real document")
@@ -114,7 +114,7 @@ def test_add_document_returns_false_for_missing_file(tmp_path):
     """Verify Add document returns false for missing file.
     
     Args:
-        tmp_path: pytest fixture (see the module's @pytest.fixture definitions).
+        tmp_path: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
     """
     engine = _make_engine(tmp_path)
     result = engine.add_document(str(tmp_path / "does_not_exist.md"))

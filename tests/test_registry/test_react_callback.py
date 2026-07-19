@@ -30,7 +30,7 @@ def test_on_agent_action_appends_running_event_with_thought_and_input(state_file
     """Verify On agent action appends running event with thought and input.
     
     Args:
-        state_file: pytest fixture (see the module's @pytest.fixture definitions).
+        state_file: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
     """
     handler = LiveFeedCallbackHandler(state_file, "run-1", "example.com", "production")
     action = AgentAction(tool="Run_Nikto", tool_input="http://example.com", log="Thought: scan it.\nAction: Run_Nikto")
@@ -52,7 +52,7 @@ def test_on_tool_end_appends_completed_observation_event(state_file):
     """Verify On tool end appends completed observation event.
     
     Args:
-        state_file: pytest fixture (see the module's @pytest.fixture definitions).
+        state_file: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
     """
     handler = LiveFeedCallbackHandler(state_file, "run-1", "example.com", "production")
 
@@ -67,7 +67,7 @@ def test_on_tool_error_appends_failed_event_not_a_fabricated_success(state_file)
     """Verify On tool error appends failed event not a fabricated success.
     
     Args:
-        state_file: pytest fixture (see the module's @pytest.fixture definitions).
+        state_file: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
     """
     handler = LiveFeedCallbackHandler(state_file, "run-1", "example.com", "production")
 
@@ -82,7 +82,7 @@ def test_on_agent_finish_appends_completed_event(state_file):
     """Verify On agent finish appends completed event.
     
     Args:
-        state_file: pytest fixture (see the module's @pytest.fixture definitions).
+        state_file: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
     """
     handler = LiveFeedCallbackHandler(state_file, "run-1", "example.com", "production")
     finish = AgentFinish(return_values={"output": "done"}, log="Final Answer: done")
@@ -98,7 +98,7 @@ def test_multiple_steps_accumulate_in_order(state_file):
     """Verify Multiple steps accumulate in order.
     
     Args:
-        state_file: pytest fixture (see the module's @pytest.fixture definitions).
+        state_file: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
     """
     handler = LiveFeedCallbackHandler(state_file, "run-1", "example.com", "production")
     handler.on_agent_action(AgentAction(tool="A", tool_input="x", log="Thought: a"), run_id=uuid.uuid4())
@@ -115,7 +115,7 @@ def test_long_detail_is_truncated(state_file):
     """Verify Long detail is truncated.
     
     Args:
-        state_file: pytest fixture (see the module's @pytest.fixture definitions).
+        state_file: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
     """
     handler = LiveFeedCallbackHandler(state_file, "run-1", "example.com", "production")
 
@@ -131,7 +131,7 @@ def test_on_graph_event_appends_event_with_given_status(state_file):
     the AgentExecutor-specific hooks above.
     
     Args:
-        state_file: pytest fixture (see the module's @pytest.fixture definitions).
+        state_file: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
     """
     handler = LiveFeedCallbackHandler(state_file, "run-1", "example.com", "production")
 
@@ -155,7 +155,7 @@ class TestConsoleTraceCallbackHandler:
         """Verify Reasoning step prints numbered step header.
         
         Args:
-            capsys: pytest fixture (see the module's @pytest.fixture definitions).
+            capsys: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
         """
         handler = ConsoleTraceCallbackHandler()
         handler.on_graph_event("running", "Thought: check reachability.\nAction: Check_Reachability")
@@ -168,7 +168,7 @@ class TestConsoleTraceCallbackHandler:
         """Verify Step counter increments across reasoning steps only.
         
         Args:
-            capsys: pytest fixture (see the module's @pytest.fixture definitions).
+            capsys: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
         """
         handler = ConsoleTraceCallbackHandler()
         handler.on_graph_event("running", "Thought: first.\nAction: A")
@@ -184,7 +184,7 @@ class TestConsoleTraceCallbackHandler:
         """Verify Observation prints as tool result not a numbered step.
         
         Args:
-            capsys: pytest fixture (see the module's @pytest.fixture definitions).
+            capsys: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
         """
         handler = ConsoleTraceCallbackHandler()
         handler.on_graph_event("completed", "Observation: Nikto found 3 issues")
@@ -198,7 +198,7 @@ class TestConsoleTraceCallbackHandler:
         """Verify Reflection prints as reflection not a numbered step.
         
         Args:
-            capsys: pytest fixture (see the module's @pytest.fixture definitions).
+            capsys: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
         """
         handler = ConsoleTraceCallbackHandler()
         handler.on_graph_event("reflecting", "Reflection: majority-vote assessment of Run_Nikto result = SUCCESS.")

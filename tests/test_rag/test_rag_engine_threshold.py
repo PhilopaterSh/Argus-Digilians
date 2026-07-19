@@ -55,7 +55,7 @@ def test_query_filters_by_similarity_threshold(tmp_path):
     """Verify Query filters by similarity threshold.
     
     Args:
-        tmp_path: pytest fixture (see the module's @pytest.fixture definitions).
+        tmp_path: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
     """
     good = Document(page_content="relevant chunk", metadata={"source": "a.md"})
     bad = Document(page_content="irrelevant chunk", metadata={"source": "b.md"})
@@ -72,7 +72,7 @@ def test_query_returns_no_results_message_when_nothing_passes_threshold(tmp_path
     """Verify Query returns no results message when nothing passes threshold.
     
     Args:
-        tmp_path: pytest fixture (see the module's @pytest.fixture definitions).
+        tmp_path: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
     """
     bad = Document(page_content="irrelevant", metadata={})
     engine = _make_engine(tmp_path, [(bad, 0.9)])
@@ -87,7 +87,7 @@ def test_format_combined_context_merges_rag_and_blackboard(tmp_path):
     """Verify Format combined context merges rag and blackboard.
     
     Args:
-        tmp_path: pytest fixture (see the module's @pytest.fixture definitions).
+        tmp_path: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
     """
     doc = Document(page_content="rag chunk", metadata={"source": "a.md"})
     engine = _make_engine(tmp_path, [(doc, 0.1)])
@@ -104,7 +104,7 @@ def test_format_combined_context_blackboard_only_when_no_rag_matches(tmp_path):
     """Verify Format combined context blackboard only when no rag matches.
     
     Args:
-        tmp_path: pytest fixture (see the module's @pytest.fixture definitions).
+        tmp_path: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
     """
     bad = Document(page_content="irrelevant", metadata={})
     engine = _make_engine(tmp_path, [(bad, 0.9)])

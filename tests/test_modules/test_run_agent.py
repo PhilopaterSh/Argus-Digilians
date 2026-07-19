@@ -83,7 +83,7 @@ class TestRunIdPassthrough:
         """Verify Main uses the provided run id verbatim.
         
         Args:
-            tmp_path: pytest fixture (see the module's @pytest.fixture definitions).
+            tmp_path: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
         """
         state_file = tmp_path / "agent_test.json"
         with patch.object(run_agent_module, "run_brain_analysis", _fake_run_brain_analysis), \
@@ -102,7 +102,7 @@ class TestRunIdPassthrough:
         """Verify Main falls back to a generated run id when not provided.
         
         Args:
-            tmp_path: pytest fixture (see the module's @pytest.fixture definitions).
+            tmp_path: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
         """
         state_file = tmp_path / "agent_test.json"
         with patch.object(run_agent_module, "run_brain_analysis", _fake_run_brain_analysis), \

@@ -16,7 +16,7 @@ class TestPreExecuteVerify:
         """Verify Empty command.
         
         Args:
-            verifier: pytest fixture (see the module's @pytest.fixture definitions).
+            verifier: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
         """
         result = verifier.pre_execute_verify("")
         assert "empty" in result.lower()
@@ -25,7 +25,7 @@ class TestPreExecuteVerify:
         """Verify Whitespace command.
         
         Args:
-            verifier: pytest fixture (see the module's @pytest.fixture definitions).
+            verifier: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
         """
         result = verifier.pre_execute_verify("   ")
         assert "empty" in result.lower()
@@ -34,7 +34,7 @@ class TestPreExecuteVerify:
         """Verify Blacklist rm rf.
         
         Args:
-            verifier: pytest fixture (see the module's @pytest.fixture definitions).
+            verifier: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
         """
         result = verifier.pre_execute_verify("; rm -rf /")
         assert "blocked" in result.lower()
@@ -43,7 +43,7 @@ class TestPreExecuteVerify:
         """Verify Blacklist double pipe rm.
         
         Args:
-            verifier: pytest fixture (see the module's @pytest.fixture definitions).
+            verifier: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
         """
         result = verifier.pre_execute_verify("|| rm -rf")
         assert "blocked" in result.lower()
@@ -52,7 +52,7 @@ class TestPreExecuteVerify:
         """Verify Nmap without target.
         
         Args:
-            verifier: pytest fixture (see the module's @pytest.fixture definitions).
+            verifier: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
         """
         result = verifier.pre_execute_verify("nmap")
         assert "missing" in result.lower()
@@ -61,7 +61,7 @@ class TestPreExecuteVerify:
         """Verify Nmap with target.
         
         Args:
-            verifier: pytest fixture (see the module's @pytest.fixture definitions).
+            verifier: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
         """
         result = verifier.pre_execute_verify("nmap -sV example.com")
         assert "success" in result.lower()
@@ -70,7 +70,7 @@ class TestPreExecuteVerify:
         """Verify Curl without url.
         
         Args:
-            verifier: pytest fixture (see the module's @pytest.fixture definitions).
+            verifier: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
         """
         result = verifier.pre_execute_verify("curl something")
         assert "missing" in result.lower()
@@ -79,7 +79,7 @@ class TestPreExecuteVerify:
         """Verify Curl with url.
         
         Args:
-            verifier: pytest fixture (see the module's @pytest.fixture definitions).
+            verifier: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
         """
         result = verifier.pre_execute_verify("curl http://example.com")
         assert "success" in result.lower()
@@ -88,7 +88,7 @@ class TestPreExecuteVerify:
         """Verify Valid command.
         
         Args:
-            verifier: pytest fixture (see the module's @pytest.fixture definitions).
+            verifier: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
         """
         result = verifier.pre_execute_verify("whoami")
         assert "success" in result.lower()
@@ -97,7 +97,7 @@ class TestPreExecuteVerify:
         """Verify Infinite loop detection.
         
         Args:
-            verifier: pytest fixture (see the module's @pytest.fixture definitions).
+            verifier: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
         """
         cmd = "nmap -sV test.com"
         r1 = verifier.pre_execute_verify(cmd)
@@ -112,7 +112,7 @@ class TestPreExecuteVerify:
         """Verify Different commands no loop.
         
         Args:
-            verifier: pytest fixture (see the module's @pytest.fixture definitions).
+            verifier: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
         """
         verifier.pre_execute_verify("cmd1")
         verifier.pre_execute_verify("cmd2")
@@ -125,7 +125,7 @@ class TestPostExecuteVerify:
         """Verify Empty output.
         
         Args:
-            verifier: pytest fixture (see the module's @pytest.fixture definitions).
+            verifier: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
         """
         result = verifier.post_execute_verify("http://x.com", "cmd", "")
         assert "empty" in result.lower()
@@ -134,7 +134,7 @@ class TestPostExecuteVerify:
         """Verify Waf detection.
         
         Args:
-            verifier: pytest fixture (see the module's @pytest.fixture definitions).
+            verifier: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
         """
         result = verifier.post_execute_verify("http://x.com", "cmd", "cloudflare error 403 forbidden")
         assert "waf" in result.lower() or "blocked" in result.lower()
@@ -143,7 +143,7 @@ class TestPostExecuteVerify:
         """Verify False positive redirect.
         
         Args:
-            verifier: pytest fixture (see the module's @pytest.fixture definitions).
+            verifier: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
         """
         result = verifier.post_execute_verify(
             "http://x.com", "curl -v", "HTTP/1.1 302\nlocation: / "
@@ -154,7 +154,7 @@ class TestPostExecuteVerify:
         """Verify Content length zero.
         
         Args:
-            verifier: pytest fixture (see the module's @pytest.fixture definitions).
+            verifier: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
         """
         result = verifier.post_execute_verify(
             "http://x.com", "curl", "HTTP/1.1 200\nContent-Length: 0"
@@ -165,7 +165,7 @@ class TestPostExecuteVerify:
         """Verify Sensitive data found.
         
         Args:
-            verifier: pytest fixture (see the module's @pytest.fixture definitions).
+            verifier: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
         """
         result = verifier.post_execute_verify(
             "http://x.com", "cat /etc/passwd", "root:x:0:0:"
@@ -177,7 +177,7 @@ class TestPostExecuteVerify:
         """Verify No issues.
         
         Args:
-            verifier: pytest fixture (see the module's @pytest.fixture definitions).
+            verifier: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
         """
         result = verifier.post_execute_verify(
             "http://x.com", "ls", "file1\nfile2"
@@ -190,7 +190,7 @@ class TestTaskDifficultyAssessment:
         """Verify Empty targets.
         
         Args:
-            verifier: pytest fixture (see the module's @pytest.fixture definitions).
+            verifier: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
         """
         result = verifier.task_difficulty_assessment("")
         assert "error" in result.lower()
@@ -199,7 +199,7 @@ class TestTaskDifficultyAssessment:
         """Verify Single target.
         
         Args:
-            verifier: pytest fixture (see the module's @pytest.fixture definitions).
+            verifier: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
         """
         result = verifier.task_difficulty_assessment("example.com")
         assert "TDA" in result
@@ -209,7 +209,7 @@ class TestTaskDifficultyAssessment:
         """Verify Multiple targets.
         
         Args:
-            verifier: pytest fixture (see the module's @pytest.fixture definitions).
+            verifier: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
         """
         result = verifier.task_difficulty_assessment("a.com, b.com")
         assert "a.com" in result
