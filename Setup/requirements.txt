@@ -7,8 +7,9 @@ langchain-core
 langchain-text-splitters
 langgraph>=0.2.0
 streamlit
-# Added duckduckgo_search for web search capability
-duckduckgo_search
+# ddgs is the current package name (duckduckgo_search was renamed upstream);
+# app/tools/web_search.py falls back to duckduckgo_search only for compatibility.
+ddgs
 faiss-cpu
 sentence-transformers
 pypdf
