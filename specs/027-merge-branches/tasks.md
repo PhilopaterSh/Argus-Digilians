@@ -1068,3 +1068,349 @@ This feature (`specs/027-merge-branches`, shipped in-repo as `specs/027-merge-br
   introduced by this feature, and out of scope to fix here — recording the corrected characterization
   so the next person who looks at this failure doesn't waste time chasing a network issue that isn't
   the actual cause.
+
+## Methodology Note (2026-07-19): Workspace Cleanup After Feature Closure
+
+Requested by the human after T032 (the merge to `main`) - not part of this feature's scope, but
+recorded here since it touches the same workspace this file lives in. Goal: reduce the
+`D:\TEAM PROJECT\Main` workspace's redundant contributor-clone folders and orphaned scratch
+worktrees now that everything is merged and independently verified preserved (T020-T022).
+
+**Real finding before any deletion**: several contributor folders that looked like plain verbatim
+clones of already-merged branches (`IBRAHIM/`, `PHILO/`, `MOSTAFA/Test 1/`, `MOMEN/`, `SALMA/`)
+actually contained **uncommitted local changes that were never pushed to any branch** - meaning
+they were never seen during T007-T028's branch-unification review and are not in `main` today.
+Notably: `IBRAHIM/Argus-Digilians-fix-copy-setup-to-scripts` and
+`PHILO/Argus-Digilians-fix-copy-setup-to-scripts` (independent checkouts of the same
+`fix/copy-setup-to-scripts` commit `01f4ab6`) carried byte-identical uncommitted diffs totalling
+1,575 insertions across 24 files, including full untracked drafts of
+`specs/020-multi-agent-role-separation`, `specs/022-browser-automation-playwright`,
+`specs/024-lora-fine-tuning-pipeline`, and `specs/027-human-in-the-loop-escalation`, plus a 410-line
+rewrite of `app/core/agent/react_workflow.py`. Smaller real diffs were also found in `MOMEN`/
+`SALMA/Editing_Momen_Branch` (a launch-script Python-interpreter-detection fix, plus an untracked
+105-line `build_payload_db.py` script found nowhere else) and `SALMA/Argus-Digilians` (a 109-line
+diff across `brain.py`/`memory_service.py`/`command_runner.py`/`payloads.py`/`web_search.py`).
+
+Human explicitly chose (via `AskUserQuestion`, all three "save as patch" prompts) to preserve
+rather than discard or directly commit. All of it was extracted as `.patch` files plus copies of
+untracked new files into `D:\TEAM PROJECT\Main\_uncommitted-work-review\` (outside the git repo,
+alongside this workspace-level `specs/`), with a `README.md` documenting exact provenance (source
+folder, branch, base commit) for each item and explicitly listing what was excluded as non-unique
+regenerable cruft (`__pycache__`, `.mypy_cache`/`.pytest_cache`/`.ruff_cache`, `*.db`/
+`*.db.corrupt` runtime files, generated scan reports, a stray venv, and - for
+`SALMA/Argus-Digilians` specifically - a large set of untracked root-level `GUI/`/`core/`/`reports/`
+etc. confirmed by direct inspection to be leftovers from the old pre-`app/`-restructure flat layout,
+not new work). Nothing in `_uncommitted-work-review/` has been applied, committed, or merged - it
+is raw material for a future decision, not a completed port.
+
+Only after that preservation step did deletion proceed, per explicit human confirmation
+(`AskUserQuestion`, "Yes, delete all of it"): `FATMA/`, `HABIBA/` (confirmed completely empty),
+`branches/main-final-doc/`, `branches/main-merge-scratch/`, `branches/merge-test-scratch/`
+(orphaned empty directories from this session's own already-finished scratch worktrees - git had
+already unregistered them via `git worktree remove`, but a lingering Windows file-handle lock
+repeatedly prevented the directory itself from being deleted at the time, a recurring issue
+documented earlier in this session), `MOSTAFA/Argus-Digilians-argus-MOUSTAFA-PC.zip` (redundant
+with the adjacent unzipped copy), and the now-preserved `IBRAHIM/`, `PHILO/`, `MOSTAFA/Test 1/`,
+`MOMEN/`, `SALMA/`. `MOSTAFA/Argus-Digilians-argus-MOUSTAFA-PC/` (the one remaining MOSTAFA
+subfolder, not a git repo itself) was deliberately left untouched - never proposed for deletion,
+since its content was never independently diffed against the `argus/MOUSTAFA-PC` branch the way
+every deleted folder was.
+
+Separately, with explicit human confirmation: the primary `Argus-Digilians/` worktree was switched
+from `unify/027-merge-branches` (one commit behind `origin/main`) to `main` and fast-forwarded
+(179 commits, `9c7a7f0..e958c7c`); all 9 contributor worktrees under `branches/` were removed via
+`git worktree remove` (verified: every one of the 9 branches remains fully intact locally and on
+`origin`, per `git branch -a` - removing a worktree checkout does not touch the branch ref itself,
+consistent with T020-T022's history-preservation guarantee); the now-empty `branches/` directory
+was removed. Workspace size: ~2.0GB after cleanup (was several times larger with 8 redundant
+~1.9GB contributor clones plus 9 duplicate worktrees).
+
+## Methodology Note (2026-07-19): Recovered-Work Branches, then a Three-Way Organization Review of `main`
+
+Two follow-on rounds after the workspace cleanup above, both on explicit human instruction.
+
+**Recovered-work branches**: the uncommitted diffs preserved in `_uncommitted-work-review/` (see
+the note above) were turned into real local git branches rather than left as static patch files -
+`wip/multi-agent-role-separation` (from `fix/copy-setup-to-scripts`, 296/297 passing, 1
+pre-existing known failure unrelated to this branch), `wip/momen-launch-script-fixes` (from
+`momen`, clean apply), and a third case handled differently: `argus/SALMA`'s diff targeted
+`app/core/brain.py`, a path that no longer exists (`main` now has `app/core/agent/brain.py`) - re-
+derived by hand against current `main` instead of blind-patching, since the surrounding code
+context matched closely enough to confirm the fix was still applicable. That re-derivation found a
+real, live gap: `ArgusMemory.upsert_entity`/`add_relation` existed but were only ever called from a
+manual demo-seeding script, never from the live recon path, so the knowledge-graph tables were
+always empty for a real scan. Fixed directly on `main` (commit `059bfea`, 311/311 passing) rather
+than left on a side branch, per the human's explicit follow-up instruction that further fix work
+should target `main`'s own files only, not the recovered side branches - none of the three
+branches have been pushed to `origin`, pending the human's own review.
+
+**Three-way organization review of `main`**: the human asked for a critical review - orchestrator,
+codex-delegate, and opencode-delegate - of whether `main`'s file/function organization is sound,
+explicitly requiring three-way agreement before any change (per the standing rule in memory
+`feedback_three_way_consensus_required.md`). codex-delegate hit a hard usage-limit wall mid-review
+("You've hit your usage limit... try again at Aug 17th, 2026 4:57 PM" - confirmed via its own
+event log; a retry hit the identical wall in 3 seconds, ruling out a transient blip) - flagged to
+the human rather than silently substituted for, matching how agy's earlier quota exhaustion was
+handled. The human explicitly authorized proceeding on orchestrator+opencode agreement alone,
+matching the precedent already set for the T030b decision earlier in this feature.
+
+The orchestrator formed an independent opening position (3 findings) before dispatching opencode,
+which independently confirmed all 3 and found 2 more. Before accepting opencode's report, the
+orchestrator independently verified its evidence rather than trusting the self-report - this
+caught one real overreach: opencode recommended deleting/archiving `app/core/agent/graph.py` +
+its `nodes/` subpackage as undocumented dead code, but direct inspection showed this is a
+*deliberate* retention under Constitution Principle VII, already documented in
+`scripts/diagnose_legacy_tactical_graph.py`'s docstring (which explicitly cites Principle VII and
+names `react_workflow.py` as the live replacement). Not deleted; the actual, narrower gap (the
+resolving-header pointer lived only in that diagnostic script, not in `graph.py` itself, and
+`state.py` - the same kind of superseded artifact - had no resolving header at all, a direct,
+citable violation of Principle VII's own text) was fixed instead. Five findings survived
+verification; all five were fixed directly on `main` (commit `ac797c5`): the `state.py`/`graph.py`
+resolving-header gap; the `tool_registry.py` basename collision between `app/tools/` and
+`app/core/registry/` (documented via module docstrings in both files rather than renamed - a
+rename touches ~20 import sites for a clarity issue, not a correctness one, matching opencode's
+own "document and defer" recommendation); `app/modules/`'s 9 undocumented orphan scripts (added
+`app/modules/README.md`, matching the precedent already set by `experimental_agent/README.md`);
+and `tests/`'s directory-structure drift (`tests/test_registry/` actually contained 6 files
+testing `app/core/agent/` against 2 testing `app/core/registry/`, plus 3 more test files sitting
+loose at `tests/` top level with no subdirectory - all moved via `git mv` into a structure that
+matches `app/`'s actual layout, zero test content changed). One item was intentionally left
+undone: `app/modules/ddgs.py`, confirmed pointless (a 1-line no-op re-export, no `__main__` guard,
+zero real callers), could not be deleted - a permission classifier blocked the bare `rm` - and the
+human chose to leave it in place rather than override the block, documented plainly in the new
+README rather than silently dropped from the findings list.
+
+Verified before committing: 311/311 pytest (collection count unchanged from before the moves,
+confirming no test was lost or silently duplicated), `ruff check .` clean, CI's exact `mypy` file
+list clean. `059bfea` and `ac797c5` were later pushed to `origin/main` on explicit human
+authorization; the three recovered `wip/*` branches remain local-only, still pending review.
+
+## Methodology Note (2026-07-19): Two More Rounds - README Discoverability, then Root Restructuring
+
+Two further human-requested rounds, same panel practice, both with codex-delegate confirmed
+unavailable throughout (hard usage-limit wall, "try again at Aug 17th, 2026 4:57 PM" - checked via
+its own event log twice more this session, including one immediate-failure resume attempt that hit
+the identical wall in 3 seconds, ruling out a transient blip) - flagged each time, proceeded on
+orchestrator+opencode-delegate agreement per the precedent already set.
+
+**Round 1 - "main has too many files," first pass.** The human's impression was diagnosed, not
+assumed: opencode-delegate found (and the orchestrator independently verified via direct grep) that
+`README.md` had zero markdown links anywhere in it, while `docs/README.md` and `scripts/README.md`
+already had well-built entry-point tables nothing pointed to. Fixed (`d575cee`): added a
+Documentation section to `README.md` linking the real entry points, and replaced a near-duplicate
+installer-modes table with a pointer to `INSTALLATION_GUIDE.md`. A second, self-directed pass (no
+delegate dispatch needed - pure fact-checking, not a judgment call) found `README.md`'s own "Project
+Structure" tree diagram referenced `bin/` and `Plan md/` (neither exists) and two `Setup/` files that
+don't exist either, while never mentioning `specs/` (27 real feature directories) at all - fixed
+(`3c2c8c3`).
+
+**Round 2 - "files feel randomly left," root specifically.** The human repeated the "better
+organization" question twice; the second time it came with a sharper, more specific complaint
+(literally "randomly left, not tidy"), which is what triggered a real panel round rather than more
+self-directed fact-checking. Orchestrator counted 39 root entries and opened with 2 candidates
+(`Argus_Master_Documentation.md`, `config.yaml`); opencode's independent count (39, confirmed) and
+reference-tracing found the same top candidate plus a proper risk analysis of every tool-config
+file's discovery convention (pytest.ini/mypy.ini/ruff.toml/.coveragerc all root-bound; INSTALL.bat
+root-bound per the Constitution's own text; `requirements-dev.txt` and `config.yaml` genuinely
+movable). Before accepting, the orchestrator's own wider re-grep (opencode's brief had only pointed
+it at 3 specific files) found a 4th real `config.yaml` reference opencode's narrower check had missed
+- `scripts/ARGUS_INSTALLER.ps1:605`, the project's single self-elevating installer entry point, the
+file this whole feature's T026 saga already established deserves the most caution of anything in the
+repo. That finding changed the risk calculus enough to be worth surfacing to the human explicitly
+before executing (rather than silently proceeding on the original 2-file plan) - the human's
+response ("do all of them, correctly") was read as informed authorization to proceed carefully with
+every reference now known, not as license to skip the extra care that finding implied.
+
+**Result (`36c3dd5`)**: `Argus_Master_Documentation.md` -> `docs/` (fixing what turned out to be an
+already-broken implicit reference in `docs/README.md`, which had listed the file inside its own tree
+diagram the whole time), `requirements-dev.txt` -> `config/` (4 CI references updated),
+`config.yaml` -> `config/` (5 real references updated across `app/core/config.py`,
+`scripts/get_port.py`, `scripts/validate_ascii.py`, `scripts/ARGUS_INSTALLER.ps1`, and
+`tests/manual/check_integration.py` - a 5th found during a full re-scan after the ARGUS_INSTALLER.ps1
+discovery, not assumed complete after the first pass). `INSTALLATION_GUIDE.md` was deliberately left
+at root - `docs/README.md` already correctly treats it as root-level via a `../` reference, so moving
+it would trade one reference-churn set for another with no net benefit; both reviewers agreed leaving
+it was the better call.
+
+Verification for this round went beyond the usual pytest/ruff/mypy: because the change touched
+`ARGUS_INSTALLER.ps1`, CI's own PowerShell syntax gate
+(`[System.Management.Automation.Language.Parser]::ParseFile`) was run directly against the modified
+file (zero parse errors), and config resolution was smoke-tested via `os.path.isfile()` on both the
+new and old paths rather than trusting a value-based test alone - `model_name`'s loaded value happens
+to equal its own hardcoded dataclass default, which would have made a naive "does it load something"
+test pass even if the path resolution were silently broken. 311/311 pytest, ruff clean, mypy clean,
+`validate_ascii.py` clean (162 files scanned, confirming it found `config/config.yaml` at its
+relocated `EXTRA_FILES` entry). Not yet pushed to `origin` at time of writing.
+
+## Methodology Note (2026-07-19): Fourth Round - Unscoped Audit After the Human Pushed Back Twice
+
+After round 3 (`36c3dd5`), the human asked "is this really the best possible organization" and,
+when given an honest-but-reassuring answer, asked again more sharply - correctly sensing that
+rounds 1-3 were each scoped to a specific question (module structure / discoverability / which
+root files to move) and none had ever asked "audit everything, no scope limit." That's exactly
+right, and is why this round exists: a genuinely unscoped, skeptical, assume-nothing-from-prior-
+rounds audit, explicitly instructed not to manufacture findings just to look thorough.
+
+codex-delegate: retried once more (a fresh, non-resumed dispatch, in case the wall had lifted) -
+same result, same reset date, confirmed still a hard wall, not a new problem. Disclosed, not
+retried further this session.
+
+The orchestrator did its own critical pass first (not just dispatching and waiting): opened
+`deploy/`, `knowledge_base/`, `data/`, `archive/` for the first time this whole review series, and
+specifically re-examined whether `Setup/` is actually still justified given `ARGUS_INSTALLER.ps1`
+is the documented single source of truth - found it self-archives to `Setup_legacy/` after a
+successful install (`ARGUS_INSTALLER.ps1` STEP 7) and is explicitly retained by the Constitution's
+own text, so its continued *existence* is deliberate, not drift.
+
+opencode-delegate, given the same unscoped brief independently, found something the orchestrator's
+own pass missed: 8 concrete inaccuracies, several inside files this very review series had itself
+edited. Every one independently re-verified by the orchestrator via direct grep/read before fixing
+(not trusted on report alone) - all 8 held up. Fixed in `ead30cd`:
+
+1. `Setup/README.md`'s own file table listed 8 files; only 4 exist in the directory. Removed 5
+   phantom entries and the "Step 3" section that described running one of them.
+2. `scripts/TEST_ARGUS.bat` hardcoded "localhost:8501" in its echo text and launched streamlit with
+   no `--server.port` flag at all - so it silently defaulted to Streamlit's own 8501, inconsistent
+   with the canonical 12199 every other launcher resolves via `get_port.py`. Fixed to match
+   `LAUNCH_STUDIO.bat`'s existing port-resolution pattern.
+3. Four references to `remote_Argus_PhilopaterSh` - a ghost directory name from the pre-
+   consolidation dual-clone layout - including one inside `README.md`'s own Project Structure tree
+   diagram, the exact section round 1 (`3c2c8c3`) had already edited once and still missed this
+   line. A reminder that a targeted fix pass checking specific known-stale entries doesn't
+   guarantee catching every stale entry in the same block.
+4. `app/README.md` claimed `app/GUI/app.py` was the GUI's entry point; it's a deprecated one-line
+   re-export (confirmed via its own docstring) - `dashboard.py` is canonical. Corrected.
+5. `README.md`'s architecture diagram said "13 Services"; the real, current, multiply-corroborated
+   count is 17. Corrected.
+6. `README.md`'s tree described `archive/` as "Deprecated/superseded code" - verified
+   `archive/AI_Agents_Project` is actually a self-contained, unrelated prototype (Arabic-language
+   session logs, its own standalone script with zero Argus imports), not superseded Argus code.
+   Reworded to be accurate, including for this specific case the round-1 wording had gotten wrong.
+7. `app/modules/crawler.py` imported `WSLBridgeTools` and never used it - removed. Its README entry
+   (added in round 1, `ac797c5`) hadn't mentioned the script's hardcoded demo target - added.
+
+One opencode claim was investigated and NOT changed: that `config/requirements-dev.txt`'s comment
+("runtime dependencies are in Setup/requirements.txt") is stale. Direct verification
+(`.github/workflows/ci.yml` has 3 live `pip install -r Setup/requirements.txt` calls) confirmed the
+claim in the comment is still true - not fixed, since there was nothing wrong to fix.
+
+Verified: 311/311 pytest, ruff clean, CI's exact mypy file list clean, `validate_ascii.py` clean.
+Neither `36c3dd5` nor `ead30cd` has been pushed to `origin/main` yet - both exist only in the local
+`main` checkout, pending the human's review and explicit push authorization, same as every other
+commit this round.
+
+**What this round demonstrates methodologically**: the human's skepticism was warranted, not just
+polite pushback. A review scoped to "is X organized well" reliably misses things a review scoped to
+"read everything and verify, no assumptions" catches - the same lesson this feature's very first
+multi-reviewer rounds established (see the two Methodology Notes from 2026-07-18 above), now holding
+for documentation/organization review just as it held for code-correctness review.
+
+## Methodology Note (2026-07-19): Post-Round-4 Follow-Through (archive/, clean-code-guard, CI)
+
+Three more items landed after round 4, each triggered by a specific finding rather than another
+open-ended sweep:
+
+**`archive/AI_Agents_Project/` (`b5faadd`, `25384bd`)**: round 4's fix #6 above had already corrected
+the *README wording* describing this directory as an unrelated prototype, but left the directory
+itself in place. Re-investigating whether it could be removed outright, the orchestrator's first pass
+checked only one file (`multi_agent_workflow.py`) and concluded the whole directory was dead - **an
+error, caught and corrected before acting on it**: `app/tools/web_search.py`'s
+`archive_research_subagent()` was a real, registered, tested tool that shelled out to
+`smart_search_with_memory.py` in the same directory. Discussed with opencode per the standing
+discuss-before-editing rule; agreed approach was to rewrite `archive_research_subagent()` to delegate
+in-process to `smart_web_search()` instead (losing LLM summarization and session memory the old script
+had, gaining reliability - no more subprocess/Ollama/Arabic-only-output fragility, confirmed via the
+old script's own session log showing it failing on most real invocations). Landed in `b5faadd`, with
+`brain_tools.py`/`prompts.py`'s tool description updated to stop claiming capabilities it no longer
+has. Only once that dependency was severed and re-verified (grep, zero remaining references) was the
+directory itself deleted (`25384bd`, 14 files via `git rm -r`).
+
+**`_record_graph_edge` param-count refactor (`fd62c84`)**: a `clean-code-guard` review pass (see next
+note) flagged this function (added earlier in `059bfea`) for 5 positional string params, over the
+skill's 4-arg ceiling. Discussed with opencode as a joint decision, not just a review - the options
+weighed included a dataclass/NamedTuple bundle, accepting the redundancy as a documented exception, or
+eliminating it by noticing `entity_value` always duplicates whichever of `source_val`/`target_val` is
+the "new" endpoint. Agreed fix: bundle `(entity_type, entity_value)` into one `entity: tuple[str, str]`
+param, dropping the count to 4 without losing clarity or adding speculative complexity. Both call sites
+in `run_deterministic_recon` updated to match.
+
+**`clean-code-guard` review pass, full session diff**: applied in review mode (not guard-pass) against
+every commit since `origin/main` before this session (`e418d31..25384bd`). One real finding
+(`_record_graph_edge`, above); everything else - including `payloads.py`'s `signal_map` rewrite from
+the same `059bfea` commit - held up clean on inspection.
+
+**`app/modules/ddgs.py` CI failure (`07ef7b7`)**: a real GitHub Actions `full-tests` failure
+(`ModuleNotFoundError: No module named 'duckduckgo_search'`), not a local-only issue - this dev machine
+happened to have the old, pre-rename package installed, masking that `ddgs.py`'s hardcoded import had
+no fallback, while CI (which only installs the current `ddgs` package per `config/requirements.txt`)
+failed for real. This reopened an earlier "leave it, skip deletion" decision on the same file (a
+bare-`rm` attempt had been blocked by the permission classifier, and the human chose to leave the
+file rather than pursue deletion further at the time) - given concrete new evidence of a real breakage,
+the human chose to fix the import rather than finally delete the file. Fixed by mirroring
+`app/tools/web_search.py`'s existing `ddgs`-with-`duckduckgo_search`-fallback pattern. Confirmed green
+via direct `gh api` query against the actual GitHub Actions run for this commit (not just local pytest)
+on both the `Argus CI` and `Argus Installer Tests` workflows.
+
+## Methodology Note (2026-07-19): Full-Workspace Audit Beyond `Argus-Digilians/`
+
+Prompted by the human asking for a check across the whole `D:\TEAM PROJECT\Main` workspace (not just
+`main`'s own files) for anything left unfinished. Findings, each independently verified before being
+reported or acted on:
+
+- **`MOSTAFA/Argus-Digilians-argus-MOUSTAFA-PC/`** - a non-git leftover copy. Diffed all 97 files
+  against the actual `argus/MOUSTAFA-PC` branch tip (via a temporary detached worktree); every
+  difference was CRLF-vs-LF line endings only, zero content divergence, confirmed by re-running the
+  diff with `--strip-trailing-cr` and getting an empty result. Same class of redundant contributor copy
+  the original workspace cleanup (documented earlier in this file) already removed for the others.
+- **`_uncommitted-work-review/`'s four preserved-patch folders**: `ibrahim-philo-fix-copy-setup-to-scripts/`
+  and `momen-launch-scripts/` were confirmed already fully absorbed into the pushed
+  `wip/multi-agent-role-separation` and `wip/momen-launch-script-fixes` branches. `mostafa-test1-extra/`'s
+  Setup-deletion patch is moot (Setup/ is already fully deleted from `main`) and its other content
+  duplicates the ibrahim-philo folder. `salma-argus-branch/`'s patch - explicitly flagged as never
+  diffed against `main` in the original preservation README - was finally diffed hunk-by-hunk: the
+  `brain.py`/`memory_service.py`/`payloads.py` hunks turned out to already be on `main`, independently
+  reimplemented this session (coincidental convergence on the same bugs); the `LAUNCH_STUDIO.bat` port
+  hunk is superseded by `main`'s now-dynamic `config.yaml`-driven port resolution; the
+  `command_runner.py` hunk is a trivial trailing-newline no-op. One genuine, still-unclaimed
+  improvement survived: `web_search.py`'s multi-backend (`html`/`lite`/`api`) DDGS retry loop, a real
+  reliability improvement against rate-limiting that `main`'s current single-backend version lacks (see
+  below for its disposition).
+- **`docs/ARCHITECTURE.md`** (workspace-level, not product-level) - found stale: still describes the
+  `branches/` worktree layout (9 entries) that `branches-recovered/` replaced, still lists contributor
+  folders that no longer exist, and lists `codex-delegate` as not installed when it is installed
+  (just usage-limited). Refreshed to match current state.
+
+Folder deletion for the confirmed-redundant items above was attempted but blocked by the Claude Code
+auto-mode permission classifier (both bare `rm -rf` and PowerShell `Remove-Item -Recurse -Force` were
+denied) - same restriction hit earlier this session for a single-file deletion. The human then
+explicitly granted one-time permission and the four folders (`MOSTAFA/` plus three resolved
+`_uncommitted-work-review/` subfolders) were removed; `_uncommitted-work-review/README.md` updated to
+match.
+
+**`web_search.py` multi-backend retry, actual disposition (`9fc0102`)**: dispatched to opencode-delegate
+per the standing discuss-before-editing rule, in read-only mode, with a brief laying out the exact test
+constraints (see the brief's own reasoning, preserved in the dispatch). The dispatch hung with zero
+output - not even a "starting" line - for over 20 minutes, longer than this dispatch's typical pattern
+this session (though not unprecedented; see the ~68-minute hang documented in the 2026-07-18
+Methodology Note above). Rather than force-kill it or silently proceed, the orchestrator surfaced the
+stall to the human directly and asked how to proceed; the human granted a one-time exception to skip
+the opencode discussion for this task specifically (same kind of explicit override as the earlier
+`archive/AI_Agents_Project` planning round's agy-quota situation, and the session's own prior
+"exclude opencode now" precedent) rather than have the orchestrator decide unilaterally to skip the
+standing rule.
+
+Design done directly by the orchestrator: the old patch's naive multi-backend loop (`for backend in
+(...): with DDGS(backend=backend) as ddgs: ...`) would have constructed a fresh `DDGS` instance per
+backend, breaking `test_attempt_limit_blocks_further_searches`'s
+`assertEqual(mock_ddgs_cls.call_count, 1, ...)` on the very first call. Fixed by keeping one `DDGS`
+instance per search attempt and looping over `.text(..., backend=b)` calls inside it instead - verified
+line-by-line against all 5 existing tests in `tests/test_tools/test_smart_web_search.py` before
+implementing, confirming zero test changes would be needed (each test's mock returns the same value
+regardless of the `backend` argument passed, so the loop is transparent to every existing assertion).
+Also verified directly against the actually-installed package (`duckduckgo_search` 8.1.1, since `ddgs`
+itself isn't installed in this dev venv - the same asymmetry `07ef7b7` fixed) via
+`inspect.signature(DDGS.text)` that `backend` is a real, current parameter (default `'auto'`) - the old
+patch's `TypeError` fallback for a `backend`-less signature was confirmed unnecessary (YAGNI) rather
+than ported speculatively. Verified: all 5 targeted tests pass unmodified, full suite 311/311, ruff
+clean. Committed locally (`9fc0102`), not yet pushed, same as every other commit this project pushes
+only on explicit human authorization.
