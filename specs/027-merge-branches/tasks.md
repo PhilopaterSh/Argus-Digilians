@@ -1621,3 +1621,45 @@ format rather than guessed.
 
 `wip/multi-agent-role-separation` left untouched on `origin`, per this feature's
 history-preservation practice - fully reviewed now, nothing left deferred on it.
+
+## Methodology Note (2026-07-19): Full CI-Gate Dry Run Before Deciding on Push (`de373a1`)
+
+The human asked, before deciding whether to push, for a genuine end-to-end check of everything
+done this session - not another round of the same spot-checks (pytest/ruff/mypy) already run
+individually throughout. The orchestrator read `.github/workflows/ci.yml` directly rather than
+assume the previously-used subset was complete, and ran every one of its 8 jobs' exact commands
+locally (the 9th, `ai-eval`, needs a live Ollama endpoint not available here and is explicitly
+non-blocking in CI anyway):
+
+1. `validate_specs.py` - PASS
+2. `validate_ascii.py` - PASS
+3. `ruff check .` - PASS
+4. `mypy` (CI's exact 10-file list) - PASS
+5. `check_docstrings.py --diff origin/main` (BLOCKING, diff-scoped) - **found 29 real violations**
+6. `check_duplication.py --diff origin/main app scripts Setup` - PASS (silently tolerates the
+   now-nonexistent `Setup` path)
+7. `python -m compileall -q app scripts tests` - PASS
+8. `pytest -m unit --cov` - 10/10 passed (the already-known narrow marker coverage - unchanged,
+   not addressed here, out of scope for a gate dry run)
+9. `pytest -m "not eval and not slow" --cov` - 335/335 passed
+10. PowerShell syntax gate (`[System.Management.Automation.Language.Parser]::ParseFile` over every
+    `.ps1`) - PASS (only `ARGUS_INSTALLER.ps1` matched; untouched this session, confirmed clean
+    anyway)
+
+**Item 5 was a real, actionable finding, not a false alarm**: every file touched or ported this
+session - `app/modules/build_payload_db.py`, `app/tools/web_search.py`, the merged/ported test
+files, and `react_workflow.py` - had new or incomplete (missing `Args:`/`Returns:`) docstrings on
+functions the diff-scoped gate would check. This is the same class of "passes locally, fails on
+real CI" gap the `ddgs.py` incident (earlier this session) demonstrated - the difference this time
+is it was caught *before* push by actually running the gate, not discovered after a real CI failure.
+Fixed all 29, re-ran the gate, which then surfaced 12 more (the 3-way merge had touched lines
+inside several pre-existing `react_workflow.py` functions - `_try_planner_decision`,
+`_parse_react_output`, `_build_custom_workflow`, `_run_specialist_step` - triggering the gate's
+diff-scoped re-check of their full docstrings, not just the touched lines; plus the new multi-role
+node functions genuinely needed their own). Fixed those too. Final state: 0 violations, all 10
+gate-equivalents clean, re-verified fresh one more time after the fix commit.
+
+**Why this matters methodologically**: "I ran the tests and they pass" was true at every earlier
+point this session too - it just wasn't the *complete* set of what actually gates a real push.
+Reading the CI definition directly, rather than trusting an accumulated mental model of "the
+gates," is what surfaced the gap.
