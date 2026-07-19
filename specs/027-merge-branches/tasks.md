@@ -1486,3 +1486,68 @@ own commit message:
 
 The branch itself was left untouched on `origin` (not deleted), consistent with this feature's
 history-preservation practice for every other branch.
+
+**`wip/multi-agent-role-separation` (`ee76210`, 28 files) - much larger and riskier than the
+first branch.** Not stale scripts: a real, already-tested `specs/020` (multi-agent role
+separation) implementation touching `app/core/agent/{brain,brain_tools,react_workflow,
+react_state,react_prompts}.py` and `config.py`/`config.yaml` (410-line `react_workflow.py`
+change alone), feature-flagged off by default (`enable_multi_agent_roles: false`) with measured,
+disclosed-as-borderline results (2.00x LLM call-count overhead vs. single-loop, landing exactly
+at the spec's own pre-agreed 2x rollback threshold - not promoted to default); a Constitution
+v1.3.0->v1.4.0 amendment (Principle XI, "Documented Research Provenance"); and 3 more doc-only
+spec drafts (`022`, `024`, and a new `027-human-in-the-loop-escalation`). Surfaced this to the
+human explicitly rather than treating it as a same-size continuation of the first branch - the
+human scoped this round to **documentation only**, deferring the core agent code to a separate,
+more careful round even though it is flagged off by default.
+
+Findings and actions (commit `004f326`):
+- Constitution's Principle XI amendment, `specs/020`'s research addendum (pure findings, no
+  implementation-status claim), `specs/022`'s full doc set (status correctly stays "Proposed, not
+  yet implemented"), `specs/024`'s research addendum, and `docs/ARGUS_FRAMEWORK_ARCHITECTURE_v2.md`'s
+  ADR-21 + new "10. Research References" bibliography - all merged, verified to make no false
+  claim about code not present in `main`.
+- `specs/checklist.md`'s "Phase 020" entry, `CHANGELOG.md`'s specs/020 entry, `specs/020`'s own
+  `spec.md`/`tasks.md` status rewrites, `docs/ARGUS_FRAMEWORK_ARCHITECTURE_v2.md`'s ADR-20, and
+  the architecture-audit-report's status-table row all **excluded** - each one describes
+  `specs/020` as implemented (specific function names, "296 passed," etc.), which would be false
+  on `main` without the actual code. Two dangling cross-references to the excluded ADR-20 (inside
+  ADR-21's own text, and a "Updated 2026-07-13: added ADR-20..." footnote) were reworded rather
+  than left pointing at a nonexistent entry.
+- The wip branch's own `specs/027-human-in-the-loop-escalation` collided with this project's own
+  already-shipped `specs/027-merge-branches` - renumbered to `028` (next available), all 4 files'
+  internal self-references fixed, added the required "Artifact applicability" N/A declarations
+  and a `specs/checklist.md` backlog row so `scripts/validate_specs.py`'s status-aware gate passes.
+- **Caught and reverted one real mistake mid-task**: an initial blind `git show wip:<path> > path`
+  copy of `specs/022`'s 4 files would have silently destroyed a genuine, independent main-side
+  commit (`5ac808b`, the spec-doc-validation CI-gate fix's own "Artifact applicability" section)
+  that landed after this wip branch's merge-base - `git merge-tree`'s earlier clean-conflict check
+  was necessary but not sufficient evidence of safety; checking `git log <base>..main -- <path>`
+  per file before copying is what actually caught it. Redone as a proper 3-way merge
+  (`git merge-file`) for the two affected files (`specs/022/spec.md`, `.specify/memory/
+  constitution.md`) instead of blind overwrite.
+- A Git-Bash-on-Windows quirk (`branch:path` colon syntax gets mangled by MSYS path conversion
+  when the path starts with a dot) silently emptied `constitution.md` via a failed `git show`
+  mid-pipe on the first attempt - caught immediately by checking the file's line count before
+  proceeding further, reverted via `git checkout --`, redone with `MSYS_NO_PATHCONV=1`.
+- One literal Arabic quote in the wip branch's own Constitution amendment text (directly quoting
+  the human's original request) was converted to an English paraphrase before merging, per this
+  project's own English-Only Documentation principle (VI) - the meaning is unchanged, only the
+  literal quoted language.
+- `scripts/validate_ascii.py` and `scripts/validate_specs.py` turned out to have an unresolved
+  tension worth recording: the spec-doc-validation gate's own N/A-declaration regex
+  (`APPLICABILITY_RE`) specifically requires a literal em-dash character between "N/A" and its
+  reason, while `validate_ascii.py` would reject that same em-dash if it scanned `.md` files - it
+  doesn't (confirmed by reading the script: only `app/`, `scripts/`, `tests/` + `config/config.yaml`,
+  restricted to code/config extensions, no `.md`). Discovered when an initial ASCII-normalization
+  pass (converting em-dashes to hyphens project-wide, for consistency) broke `validate_specs.py`'s
+  detection of the new spec's N/A declarations - fixed by restoring the specific em-dash the gate's
+  regex requires, once the actual cause was traced rather than guessed.
+- Verified: 312/312 pytest, ruff clean, `validate_ascii.py` clean (163 files), `validate_specs.py`
+  clean (28 feature folders, up from 27).
+
+**Deferred, not forgotten**: the actual `specs/020` core-agent code (5 `app/core/agent/*.py`
+files + config) remains unreviewed and unmerged on `wip/multi-agent-role-separation`, left
+untouched on `origin` per this feature's history-preservation practice. A future round reviewing
+it should also decide `specs/020`'s own `spec.md`/`tasks.md` status text and `specs/checklist.md`'s
+Phase 020 entry together with the code, so documentation and implementation land atomically
+rather than repeating this round's exclusion/inclusion split.
