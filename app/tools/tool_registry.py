@@ -1,3 +1,12 @@
+"""Tool-wiring facade: imports every concrete tool service and registers
+instances into a `ToolRegistry`.
+
+Note the sibling `app/core/registry/tool_registry.py` - same basename,
+different module: that file defines the generic `ToolRegistry` class
+(imported below); this file is `WSLBridgeTools`, the facade that owns and
+populates one. If disambiguating by basename alone, check the full import
+path.
+"""
 import logging
 from typing import Any
 

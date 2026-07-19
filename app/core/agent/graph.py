@@ -1,3 +1,14 @@
+"""Superseded LangGraph node graph (spec 010: Recon -> Scanner -> Exploit <->
+Reflective -> Post-Exploit).
+
+Not the live agent path - `ArgusBrain` drives `react_workflow.py`'s
+`build_workflow()` instead (specs 017/018/019). Retained, not deleted, per
+Constitution Principle VII (superseded artifacts carry a resolving header
+pointing at the canonical replacement). Manually smoke-testable via
+`scripts/diagnose_legacy_tactical_graph.py`; not exercised by the pytest
+suite except `tests/test_modules/test_tactical_graph_termination.py`, and
+does not need to be kept in sync with the live agent's behavior.
+"""
 import logging
 
 from langgraph.graph import END, StateGraph

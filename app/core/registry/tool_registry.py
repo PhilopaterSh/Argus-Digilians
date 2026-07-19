@@ -1,3 +1,11 @@
+"""Generic tool registry data structure.
+
+Note the sibling `app/tools/tool_registry.py` - same basename, different
+module: this file defines the `ToolRegistry` class itself; that one is
+`WSLBridgeTools`, a facade that imports every concrete tool service and
+registers instances into a `ToolRegistry` it owns. If disambiguating by
+basename alone, check the full import path.
+"""
 import logging
 from typing import Optional
 
