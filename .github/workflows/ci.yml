@@ -114,7 +114,7 @@ jobs:
           pip install -r Setup/requirements.txt
           pip install -r requirements-dev.txt
       - name: AI-evaluation (recall@k / faithfulness; agent-loop termination)
-        run: pytest -m eval || python tests/ai_benchmark.py
+        run: pytest -m eval || python tests/manual/ai_benchmark.py
 
   # Stage 3: PowerShell syntax gate (Constitution: parser must pass with zero errors).
   # BLOCKING. The installer -DryRun (Stage 6, full) needs a Windows host with WSL and
