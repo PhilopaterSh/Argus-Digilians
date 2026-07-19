@@ -133,17 +133,24 @@ remote_Argus_PhilopaterSh/
 
 ## Installation Modes
 
-The master installer (`scripts\ARGUS_INSTALLER.ps1`) supports these modes:
+The master installer (`scripts\ARGUS_INSTALLER.ps1`) supports `-DryRun`, `-Offline`,
+`-Interactive`, and `-SkipHealthCheck` (also reachable via `INSTALL.bat dryrun`/`offline`/etc.) -
+see [INSTALLATION_GUIDE.md](INSTALLATION_GUIDE.md) for the full mode reference and parameters.
 
-| Mode | Flag | Description |
-|------|------|-------------|
-| Default (full) | *(none)* | Full install with auto-elevation |
-| Dry Run | `-DryRun` | Simulate without system changes |
-| Offline | `-Offline` | Skip all network downloads |
-| Interactive | `-Interactive` | Confirm before each step |
-| Skip Health | `-SkipHealthCheck` | Skip final health check |
+---
 
-You can pass modes via `INSTALL.bat` too: `INSTALL.bat dryrun`, `INSTALL.bat offline`.
+## Documentation
+
+This README is a quick start, not the full picture. For anything beyond it:
+
+| Need | Start here |
+|------|------------|
+| Full documentation index, canonical/governance docs, audience-specific reading paths | [docs/README.md](docs/README.md) |
+| Detailed installation reference (all modes, prerequisites, troubleshooting) | [INSTALLATION_GUIDE.md](INSTALLATION_GUIDE.md) |
+| "Which script do I run?" - every script in `scripts/`, what it's for | [scripts/README.md](scripts/README.md) |
+| Feature/spec implementation status across all phases | [specs/checklist.md](specs/checklist.md) |
+| Manual/offline setup reference (what the installer automates, step by step) | [Argus_Master_Documentation.md](Argus_Master_Documentation.md) |
+| Contributing (fork/branch/test/PR workflow) | [CONTRIBUTING.md](CONTRIBUTING.md) |
 
 ---
 
