@@ -1663,3 +1663,80 @@ gate-equivalents clean, re-verified fresh one more time after the fix commit.
 point this session too - it just wasn't the *complete* set of what actually gates a real push.
 Reading the CI definition directly, rather than trusting an accumulated mental model of "the
 gates," is what surfaced the gap.
+
+## Methodology Note (2026-07-19): A Real Live Run Against a Target Found a Real Bug No Test Caught (`c9f833d`)
+
+Static gates (pytest, ruff, mypy, docstrings, specs, ASCII) are necessary but not sufficient - none
+of them exercise the actual live agent loop against a real target. The human asked for exactly that
+before finally deciding on push: a real functional test, both a correct (reachable) and incorrect
+(unreachable) target, checking for genuine correctness and no conflicts - not another static gate
+pass.
+
+**Environment brought up fresh for this**: Ollama was already running with the production model
+loaded; the WSL/Kali SSH bridge was down (`kali-linux` distro "Stopped") and was started the same
+way `LAUNCH_STUDIO.bat` does (`wsl -d kali-linux -u root bash -c "mkdir -p /run/sshd &&
+/usr/sbin/sshd"`), then verified reachable on port 22 before proceeding.
+
+**Negative test** (a deliberately nonexistent domain): clean 3-step run - correctly detected via a
+real DNS failure, refused to fabricate findings, produced an honest "cannot be completed" report
+with a correctly-Critical risk score. No issues.
+
+**Positive test, round 1** (`testphp.vulnweb.com`, this project's own established test-target
+family - referenced elsewhere in `app/modules/crawler.py`'s comments): reported unreachable.
+Independently verified via a direct `curl` from inside the Kali WSL environment (bypassing Argus
+entirely) - genuinely unreachable from this sandbox's network (100% ping loss, HTTP/HTTPS timeout
+too), confirmed not an Argus defect. General internet access from Kali was confirmed still working
+(`google.com`/`example.com` both responded) - the block is specific to certain known-scanning-target
+domains (`testphp.vulnweb.com`, `httpbin.org` also timed out), a sandbox network-egress
+characteristic, not a code bug.
+
+**Positive test, round 2** (`example.com`, confirmed reachable): reachability correctly detected.
+`Subdomain_Enumeration` (`subfinder` + `assetfinder`) returned ~2900 lines - real passive-DNS/
+certificate-transparency noise, a known characteristic of `example.com` specifically (used as a
+placeholder domain everywhere on the internet), not a tool defect. **But the model visibly derailed**:
+it hallucinated an unrelated "domain package CWE-400 DoS" vulnerability with no connection to the
+actual scan, and the final report's `overall_risk_score: 10` (Critical) contradicted its own "No
+vulnerabilities found" summary.
+
+**Root cause, traced and confirmed**: `execute_node`/`_run_specialist_step`'s Observation message -
+what the LLM actually reads via `HumanMessage(content=f"Observation: {result}")` - used the raw,
+unbounded tool result. A separate `tool_result` STATE field was already correctly truncated to 2000
+chars, but that bound was never applied to what the model actually sees. An oversized observation
+(tens of thousands of characters) overwhelmed the model's usable context and caused it to reason
+about something unrelated to the real data.
+
+**Fixed** (`c9f833d`): added `_bounded_observation()` to `react_workflow.py` - a shared helper
+(matching this file's existing pattern for cross-graph helpers like `_check_early_termination`)
+truncating to `OBSERVATION_MAX_CHARS` (2000, matching `tool_result`'s existing bound, not a new
+value invented for this fix) with a trailing "[truncated, N more characters omitted]" notice, so
+the model knows data was cut rather than reasoning over a partial list as if it were complete.
+Applied at both real Observation-construction sites (single-loop `execute_node`, multi-role
+`_run_specialist_step`) - every other `"Observation:"` string in the file is a fixed-format control
+message, not raw tool output, and didn't need bounding. 3 new unit tests added. This edit's own
+line-shift re-triggered the diff-scoped docstring gate on 4 more pre-existing functions
+(`_try_structured_action`, `_build_prebuilt_workflow`, `route_after_execute`, `post_hook`) - same
+pattern as the earlier specs/020 merge commit, fixed the same way.
+
+**Verified the fix actually resolves the observed failure, not just that gates pass**: re-ran the
+identical `example.com` scenario. `Subdomain_Enumeration` again returned ~2900 lines; the
+Observation now correctly shows the truncation notice; the model's next reasoning step was sane
+("large number of subdomains... complex infrastructure") - no hallucination. The rest of the run
+was clean end-to-end: `Recon_Suite` executed real tools successfully (Cloudflare detected, a real
+nmap scan, DNS enum); the duplicate-call guard correctly allowed 2 identical `Exploit_Suggester`
+calls before blocking the 3rd (specs/019's documented "blocks after two identical calls" design,
+confirmed working as intended, not a bug); the model correctly pivoted to `Smart_Web_Search` per
+the guard's own suggestion; DDG returned "No results found" (the same DuckDuckGo network-blocking
+limitation on this sandbox found earlier this session, not a new issue). Final report is now
+internally consistent: `overall_risk_score: 1` (Low) correctly matches its own honest,
+appropriately-hedged summary.
+
+**One pre-existing, non-blocking nuance observed, not fixed**: `_extract_vulnerability_hints`'s
+title-pattern match fired on a generic page title ("Example Domain") and nudged the model toward
+exploit tools despite that title carrying no real vulnerability signal. The model handled it
+sensibly regardless (tried the suggested tool, got an honest "nothing found," moved on) - flagged
+for awareness, not treated as a defect requiring action.
+
+**Why this matters methodologically**: every static gate in the prior note passed cleanly on the
+code that contained this bug - `check_docstrings.py`, `validate_specs.py`, mypy, ruff, and 336/336
+pytest all say nothing about whether the agent actually reasons correctly against a real target.
+This bug was only reachable by actually running the thing end-to-end, exactly as a real user would.
