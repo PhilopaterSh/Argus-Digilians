@@ -14,12 +14,39 @@ wsl_output.txt
 
 # Databases
 *.db
-!argus_intelligence.db  # Keep the skeleton DB if essential, or ignore all if user prefers
+# Keep the skeleton DB
+!data/argus_intelligence.db
 
 # Logs
 ARGUS_INSTALLATION.log
 streamlit.err.log
 streamlit.out.log
+# Ignore generated logs
+logs/*.log
+# Agent run state files
+# NOTE: this rule (and the two above with trailing "# comment" text) were
+# previously written as `pattern  # comment` on one line - git does NOT strip
+# inline trailing comments from .gitignore patterns, so all three were dead
+# rules matching nothing. This is how the agent_runs/*.json files and the
+# artifacts/*.zip ended up committed despite "looking" gitignored. Fixed
+# 2026-07-06 by moving comments to their own line.
+logs/agent_runs/*.json
+
+# Generated build/GUI snapshots - never track these
+artifacts/*.zip
+
+# Project Specific
+reports/
+Discovery_*.txt
+Setup/Archive/
+reports/
+
+# Executables (moved to bin/)
+bin/Argus_Secure_Sync.exe
+
+# Virtual Environments (only root location allowed)
+Argus_venv/
+scripts/Argus_venv/
 
 # IDEs
 .vscode/
@@ -30,8 +57,33 @@ streamlit.out.log
 [Tt]humbs.db
 *.bak
 .DS_Store
+Thumbs.db
+*.lnk
 
-# Project Specific
-Reports/
-Discovery_*.txt
-Setup/Archive/
+# Archives
+archive/
+*.zip
+*.tar.gz
+*.rar
+
+# Runtime Generated Files
+*.pyc
+.streamlit/
+.cache/
+streamlit_runtime/
+app/core/rag/store/
+
+# Test / tooling caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Node (opencode tooling)
+node_modules/
+.opencode/node_modules/
+
+# Nested self-duplicate of the repository (must not be committed; see
+# docs/ARCHITECTURE_AUDIT_REPORT.md "Cleanup Manifest" item C1 - remove this directory)
+/Argus-Digilians-fix-copy-setup-to-scripts/

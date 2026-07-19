@@ -1,0 +1,71 @@
+# Argus Containerized Reconnaissance Lab
+# Feature: specs/014-containerized-lab (reconstructed + modernized from the historical
+# origin/argus/SALMA:Agent_Containers/docker-compose.yml).
+#
+# Optional, disposable test environment: a local Ollama "brain", a reproducible
+# vulnerable target (OWASP Juice Shop), and the Argus agent running the current app/.
+# NOT part of the WSL production path.
+#
+#   docker compose -f deploy/docker-lab/docker-compose.yml up -d
+#   docker compose -f deploy/docker-lab/docker-compose.yml down
+
+services:
+  # The brain: Ollama (serves LLM + embeddings)
+  ollama-service:
+    image: ollama/ollama:0.3.14   # pinned for reproducibility (was :latest)
+    container_name: ollama-brain
+    volumes:
+      - ollama_storage:/root/.ollama
+    ports:
+      - "11434:11434"
+    networks:
+      - lab-net
+    healthcheck:
+      test: ["CMD", "sh", "-c", "ollama list >/dev/null 2>&1 || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+
+  # The target: OWASP Juice Shop (reproducible vulnerable web app)
+  juice-shop:
+    image: bkimminich/juice-shop:v17.1.1   # pinned (was :latest)
+    container_name: juice-shop
+    ports:
+      - "3000:3000"
+    networks:
+      - lab-net
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+
+  # The hands: the Argus agent (current app/ codebase)
+  cyber-agent:
+    build:
+      context: ../..
+      dockerfile: deploy/docker-lab/Dockerfile
+    container_name: my-agent
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    depends_on:
+      ollama-service:
+        condition: service_healthy
+      juice-shop:
+        condition: service_healthy
+    networks:
+      - lab-net
+    environment:
+      - OLLAMA_HOST=http://ollama-service:11434
+      - ARGUS_MODEL=WhiteRabbitNeo/WhiteRabbitNeo-V3-7B:latest
+      - TARGET_URL=http://juice-shop:3000
+    # Keep the container alive for interactive recon runs (docker exec ...).
+    command: ["tail", "-f", "/dev/null"]
+
+networks:
+  lab-net:
+    driver: bridge
+
+volumes:
+  ollama_storage:

@@ -2,6 +2,8 @@ import re
 import json
 from datetime import datetime
 
+from app.tools.utils import normalize_domain_for_memory
+
 class ReconService:
     """Handles subdomain enumeration, prioritization, and broad reconnaissance suites."""
 
@@ -59,35 +61,77 @@ class ReconService:
 
         return f"```\n{res}\n```"
 
+    @staticmethod
+    def _nmap_needs_fallback(nmap_output):
+        """True if the primary -sV scan didn't produce a usable port list.
+
+        Covers both failure modes seen behind a WAF/CDN (e.g. Cloudflare):
+        the command_runner-level timeout/error (slow per-port -sV service
+        probing through a filtering proxy), and nmap completing "cleanly"
+        but reporting the host down because its default ICMP/TCP
+        host-discovery ping got dropped, which -Pn below skips entirely.
+        """
+        if not nmap_output:
+            return True
+        lowered = nmap_output.lower()
+        if lowered.startswith("error:") or lowered.startswith("error ("):
+            return True
+        if "host seems down" in lowered or "0 hosts up" in lowered:
+            return True
+        return "/tcp" not in nmap_output
+
     def recon_suite(self, url, selected_targets=None):
         """Runs expanded recon with smart target prioritization and parallel execution."""
-        clean_target = url.replace("https://", "").replace("http://", "").rstrip('/')
+        clean_target = normalize_domain_for_memory(url)
         print(f"[*] Starting Full Recon Suite for: {clean_target}")
 
         results = {}
-        
+
+        # Bounded per-command so one slow/unresponsive tool can't consume the
+        # entire outer agent-run budget (scripts/run_agent.py's
+        # AGENT_TIMEOUT_SECONDS) and silently strand the graph on this node.
         # 1. Tech Stack (whatweb)
         print(f"[*] Identifying Tech Stack for {clean_target}...")
-        results['tech'] = self.runner.run(f"whatweb {url} --aggression 3")
+        results['tech'] = self.runner.run(f"whatweb {url} --aggression 3", timeout=90)
 
         # 2. Port Scan (nmap - lightweight)
         print(f"[*] Scanning Ports for {clean_target}...")
-        results['ports'] = self.runner.run(f"nmap -sV -T4 --top-ports 100 {clean_target}")
+        results['ports'] = self.runner.run(f"nmap -sV -T4 --top-ports 100 {clean_target}", timeout=180)
+
+        if self._nmap_needs_fallback(results['ports']):
+            # A full -sV top-100 scan is slow (per-port service
+            # fingerprinting) and behind a WAF/CDN like Cloudflare it
+            # routinely times out or nmap's default host-discovery ping
+            # gets dropped, reporting the host "down" even though it's
+            # clearly serving traffic (whatweb above just proved that).
+            # Retry with a much lighter, faster degraded scan: -Pn skips
+            # host discovery entirely and dropping -sV avoids the slow
+            # per-port probing, so it has a real chance of getting a
+            # genuine nmap-confirmed answer instead of just giving up.
+            print(f"[!] Primary nmap scan failed/inconclusive for {clean_target}: {results['ports'][:150]}")
+            print("[*] Retrying with a lighter -Pn degraded scan (skips host-discovery ping)...")
+            fallback_output = self.runner.run(f"nmap -Pn -T4 --top-ports 20 {clean_target}", timeout=60)
+            results['ports_scan_degraded'] = True
+            if not self._nmap_needs_fallback(fallback_output):
+                results['ports'] = fallback_output
+            else:
+                print(f"[!] Degraded nmap scan also inconclusive for {clean_target}: {fallback_output[:150]}")
+                results['ports'] = fallback_output
 
         # 3. DNS Recon
         print(f"[*] DNS Enumeration for {clean_target}...")
-        results['dns'] = self.runner.run(f"dig ANY {clean_target} +short")
+        results['dns'] = self.runner.run(f"dig ANY {clean_target} +short", timeout=20)
 
         self.last_recon_results = results
-        
+
         # Save results to memory
         self.memory.add_finding(clean_target, "recon_suite", "full_scan", "completed", json.dumps(results))
-        
+
         if self.report_writer:
             self.report_writer.save_json_report(clean_target, results)
 
-        report = f"--- 🛰️ FULL RECON REPORT: {clean_target} ---\n"
+        report = f"--- [SAT] FULL RECON REPORT: {clean_target} ---\n"
         report += f"Tech: {results['tech'][:200]}...\n"
         report += f"Ports: {results['ports'][:500]}...\n"
-        
+
         return f"```\n{report}\n```"

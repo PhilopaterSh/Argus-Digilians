@@ -1,5 +1,11 @@
 # Argus Security Framework: Master Installation and Technical Guide
 
+> **Note:** For day-to-day installation, use `INSTALL.bat` / `scripts/ARGUS_INSTALLER.ps1`
+> as described in `INSTALLATION_GUIDE.md` - it automates everything below in one command.
+> This document predates that unified installer and describes the same setup manually,
+> step by step; keep it as a technical reference for what the installer does under the
+> hood, or for manual/offline provisioning, not as the first thing to follow.
+
 This document provides the definitive, comprehensive guide for the Argus Security Framework, consolidating all infrastructure, AI environment, and security tooling documentation into a single reference.
 
 ---
@@ -36,6 +42,25 @@ irm https://ollama.com/install.ps1 | iex
 ### 2.2 Model Selection and Deployment
 The framework uses specialized models. Default: `WhiteRabbitNeo/WhiteRabbitNeo-V3-7B`.
 - **WhiteRabbitNeo:** Fine-tuned for offensive security and penetration testing.
+
+#### 2.2.1 Manual GGUF Sourcing (if Ollama's automated pull fails)
+*Ported from `argus/DESKTOP-BVV10T0` during branch unification, 2026-07-18 — verify these
+HuggingFace repo paths are still current before relying on them; not re-verified live at
+port time.*
+
+| Size | Use case | HuggingFace repo |
+|---|---|---|
+| 7B (V3, latest) | Default, fastest | `bartowski/WhiteRabbitNeo_WhiteRabbitNeo-V3-7B-GGUF` |
+| 70B | High reasoning, needs more VRAM | `bartowski/Llama-3.1-WhiteRabbitNeo-2-70B-GGUF` |
+| 13B | Classic/legacy | `TheBloke/WhiteRabbitNeo-13B-GGUF` |
+
+#### 2.2.2 LM Studio (optional alternative to Ollama)
+Not currently used or tested elsewhere in this codebase — an alternative model-serving path,
+not a recommendation over Ollama. Confirm the team actually wants this documented as a
+supported provider before treating it as more than an option:
+1. Load the GGUF model in LM Studio.
+2. Start LM Studio's local server on port `1234`.
+3. Point framework configuration at `http://localhost:1234/v1`.
 ---
 
 ## 3. Python Environment and AI Core
@@ -74,6 +99,23 @@ Essential tools required inside Kali:
 sudo apt update
 sudo apt install -y python3-pip python3-venv golang nodejs npm build-essential libpcap-dev pipx jq unzip ncat openssh-server
 ```
+
+### 4.3 WSL Management Command Cheat-Sheet
+*Ported from `argus/DESKTOP-BVV10T0` during branch unification, 2026-07-18.*
+```powershell
+wsl --shutdown              # Shut down all WSL instances
+wsl --terminate kali-linux  # Terminate just the Kali distribution
+wsl --setdefault kali-linux # Set Kali as the default distro
+wsl -l -v                   # List distros with state/version
+```
+
+### 4.4 GUI Access via Win-KeX
+If a graphical interface into Kali is needed instead of the Streamlit dashboard:
+```bash
+kex --win -s   # windowed mode
+kex --sl -s    # seamless mode
+```
+Or launch directly from a Windows Command Prompt: `wsl -d kali-linux kex --win -s`
 
 ---
 

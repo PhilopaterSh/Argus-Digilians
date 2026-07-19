@@ -1,0 +1,18 @@
+# Coverage configuration (specs/012-spec-reconciliation section 6).
+[run]
+source = app
+branch = True
+omit =
+    */Argus_venv/*
+    */node_modules/*
+    */archive/*
+    */tests/*
+    */__pycache__/*
+
+[report]
+show_missing = True
+skip_empty = True
+exclude_lines =
+    pragma: no cover
+    if __name__ == .__main__.:
+    raise NotImplementedError

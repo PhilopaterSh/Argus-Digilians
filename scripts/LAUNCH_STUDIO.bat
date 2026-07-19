@@ -5,9 +5,15 @@ title Argus Security Framework - Studio Launcher
 color 0A
 
 echo ========================================================
-echo        ?? ARGUS SECURITY STUDIO - LAUNCHER
+echo        ARGUS SECURITY STUDIO - LAUNCHER
 echo ========================================================
 echo.
+
+:: --- Resolve project root (scripts/ is one level down) ---
+set "PROJECT_ROOT=%~dp0.."
+pushd "%PROJECT_ROOT%"
+set "PROJECT_ROOT=%CD%"
+popd
 
 :: --- Argument Support ---
 set "ARG_CHOICE=%~1"
@@ -15,6 +21,16 @@ set "ARG_CHOICE=%~1"
 :: 1. Check & Start Ollama
 echo [*] Checking AI Engine (Ollama)...
 set "OLLAMA_MODE=GPU"
+
+:: KV cache quantization (specs/018-structured-agent-reliability): only takes
+:: effect if set BEFORE Ollama's own process starts (a server-level setting,
+:: not a per-request option) - must be set here, before either "start ollama
+:: app.exe" call below. Cuts KV-cache VRAM ~half (q8_0, negligible quality
+:: loss) vs the F16 default, which is what let a larger context size
+:: (needed for RAG+Blackboard fusion) crash the GPU process outright on a
+:: VRAM-constrained card instead of just failing to allocate cleanly.
+set "OLLAMA_FLASH_ATTENTION=1"
+set "OLLAMA_KV_CACHE_TYPE=q8_0"
 
 if /I "%ARG_CHOICE%"=="C" goto :force_cpu
 if /I "%ARG_CHOICE%"=="R" goto :clean_restart
@@ -67,24 +83,30 @@ if %errorlevel% neq 0 (
     echo [OK] SSH Bridge is Active.
 )
 
-:: 3. Launching Studio
-echo [*] Activating Environment and Launching Web Interface...
-if not exist "Argus_venv\Scripts\activate.bat" (
-    echo [ERROR] Virtual Environment missing! Run INSTALL_EVERYTHING.bat first.
-    pause & exit /b
+:: 3. Verify virtual environment
+echo [*] Checking virtual environment...
+if not exist "%PROJECT_ROOT%\Argus_venv\Scripts\activate.bat" (
+    echo [ERROR] Virtual Environment missing at %PROJECT_ROOT%\Argus_venv!
+    echo [ERROR] Run INSTALL.bat from the project root first.
+    pause & exit /b 1
 )
 
-echo [*] Launching Streamlit Server...
-echo [INFO] Silencing library noise for faster startup...
-echo [INFO] The browser will open automatically. Please wait 10 seconds.
-
-:: Set Environment Variables to silence noise
-set "PYTHONPATH=%~dp0;%~dp0Argus_venv\Lib\site-packages;%PYTHONPATH%"
+:: 4. Set environment
+set "PYTHONPATH=%PROJECT_ROOT%;%PROJECT_ROOT%\Argus_venv\Lib\site-packages;%PYTHONPATH%"
 set "TRANSFORMERS_VERBOSITY=error"
 set "STREAM_LOG_LEVEL=error"
 set "PYTHONWARNINGS=ignore"
 
-start http://localhost:12199
-Argus_venv\Scripts\python.exe -m streamlit run GUI\app.py --server.port 12199 --server.headless true --server.enableCORS false --server.enableXsrfProtection false
+:: 5. Launch dashboard
+cd /d "%PROJECT_ROOT%"
+
+:: Read port from config.yaml (single source of truth)
+for /f "delims=" %%i in ('Argus_venv\Scripts\python.exe scripts\get_port.py') do set "STREAMLIT_PORT=%%i"
+
+echo [*] Activating environment and launching Dashboard...
+echo [INFO] The browser will open automatically. Please wait 10 seconds.
+
+start http://localhost:%STREAMLIT_PORT%
+Argus_venv\Scripts\python.exe -m streamlit run app/GUI/dashboard.py --server.port %STREAMLIT_PORT% --server.headless true --server.enableCORS false --server.enableXsrfProtection false
 
 pause

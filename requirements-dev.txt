@@ -1,0 +1,6 @@
+# Development / CI dependencies (specs/012-spec-reconciliation section 7).
+# Runtime dependencies are in Setup/requirements.txt.
+ruff
+mypy
+pytest
+pytest-cov

@@ -76,7 +76,7 @@ The installer runs an embedded health check automatically at the end of every
 install. To verify the system manually at any time:
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File scripts\INSTALL_EVERYTHING.ps1 -SkipHealthCheck:$false
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\ARGUS_INSTALLER.ps1 -SkipHealthCheck:$false
 ```
 
 The health check verifies: Argus_venv, Ollama, Kali (WSL), and SSH bridge (port 22).
@@ -89,7 +89,7 @@ The health check verifies: Argus_venv, Ollama, Kali (WSL), and SSH bridge (port 
 remote_Argus_PhilopaterSh/
 +-- INSTALL.bat                     # Single-click master installer (launcher)
 +-- scripts/
-|   +-- INSTALL_EVERYTHING.ps1      # Unified self-elevating installer
+|   +-- ARGUS_INSTALLER.ps1         # Unified self-elevating installer (single source of truth)
 |   +-- LAUNCH_STUDIO.bat            # Streamlit web UI launcher
 |   +-- LAUNCH_CLI.bat               # CLI agent launcher
 |   +-- run_argus_cli.py             # CLI entry point
@@ -133,7 +133,7 @@ remote_Argus_PhilopaterSh/
 
 ## Installation Modes
 
-The master installer (`scripts\INSTALL_EVERYTHING.ps1`) supports these modes:
+The master installer (`scripts\ARGUS_INSTALLER.ps1`) supports these modes:
 
 | Mode | Flag | Description |
 |------|------|-------------|

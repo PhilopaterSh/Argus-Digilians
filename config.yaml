@@ -1,0 +1,49 @@
+log_level: INFO
+max_web_search_attempts: 3
+web_search_timeout_seconds: 10
+early_stopping_method: stop
+model_name: "hf.co/bartowski/WhiteRabbitNeo_WhiteRabbitNeo-V3-7B-GGUF:Q5_K_M"
+command_timeout_seconds: 600
+recon_truncate_chars: 1000
+max_retries: 3
+
+# specs/019-shared-memory-reflection-upgrade: 3x self-consistency majority
+# vote on exploitation-tool results (Advanced_Evasion_Probe, Secret_Scanner,
+# Run_Nikto, Run_FFUF). Set to false if this measurably pushes runs past
+# max_iterations' time budget in practice.
+enable_inter_reflection: true
+
+# RAG (Retrieval-Augmented Generation) settings
+rag:
+  enabled: true
+  embedding_model: "nomic-embed-text"
+  embedding_device: "cpu"
+  chunk_size: 600
+  chunk_overlap: 100
+  retriever_k: 4
+  # Raised from 0.5 to 0.7 (2026-07-10) - 0.5 rejected every real chunk for
+  # queries that directly matched the knowledge base's own content (closest
+  # real match against nomic-embed-text + FAISS L2 distance scored 0.643),
+  # so RAG was silently contributing zero context on every live run.
+  similarity_threshold: 0.7
+  auto_rebuild: true
+  knowledge_base_dir: "knowledge_base"
+
+# Streamlit / GUI settings (editable, non-sensitive)
+streamlit:
+  host: localhost
+  port: 12199  # canonical port per 012-spec-reconciliation sec 2.6 / ADR-16 (was 8199)
+  headless: true
+  enableCORS: false
+  enableXsrfProtection: false
+
+paths:
+  venv_python: "..\\Argus_venv\\Scripts\\python.exe"
+  gui_entry: "..\\app\\GUI\\dashboard.py"
+
+logging:
+  transformers_verbosity: error
+  stream_log_level: error
+  python_warnings: ignore
+
+# Note: Keep secrets in a .env file at repo root. LAUNCH_STUDIO.bat reads .env for runtime overrides.

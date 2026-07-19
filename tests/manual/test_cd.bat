@@ -1,0 +1,5 @@
+@echo off
+cd /d %~dp0
+echo CURRENT DIR:
+echo %CD%
+if not exist Argus_venv\Scripts\activate.bat echo NOT FOUND

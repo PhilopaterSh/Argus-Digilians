@@ -1,11 +1,12 @@
-from core.agent import ArgusBrain
-from core.tools import WSLBridgeTools
+from app.core.agent.brain import ArgusBrain
+from app.core.config import ArgusConfig
+from app.tools.tool_registry import WSLBridgeTools
 from langchain_core.tools import Tool
 import os
 
 def run_autonomous_reasoning():
     bridge = WSLBridgeTools()
-    model = "WhiteRabbitNeo/WhiteRabbitNeo-V3-7B:latest"
+    model = ArgusConfig.load().model_name
     
     tools = [
         Tool(name="Check_Reachability", func=bridge.check_reachability, description="Verify if the target domain is reachable."),
@@ -33,7 +34,7 @@ def run_autonomous_reasoning():
     print("\n[!] ARGUS AUTONOMOUS REASONING START")
     result = brain.ask(query)
     print("\n" + "="*60)
-    print("🛡️ ARGUS AUTONOMOUS FINAL REPORT")
+    print("[SHIELD] ARGUS AUTONOMOUS FINAL REPORT")
     print("="*60)
     
     if isinstance(result, dict) and "output" in result:

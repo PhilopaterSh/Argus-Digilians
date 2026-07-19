@@ -6,7 +6,7 @@ echo Testing for Admin Privileges...
 net session >nul 2>&1
 if errorlevel 1 (
     echo [!] This script MUST be run as Administrator.
-    echo [!] Open PowerShell as Administrator and run INSTALL_EVERYTHING.ps1 again.
+    echo [!] Open PowerShell as Administrator and run ARGUS_INSTALLER.ps1 again.
     exit /b 1
 )
 

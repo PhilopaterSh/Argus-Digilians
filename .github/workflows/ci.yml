@@ -1,0 +1,144 @@
+name: Argus CI
+
+# Implements specs/012-spec-reconciliation section 7 (CI/CD plan).
+# Deterministic, dependency-free stages are BLOCKING. Stages that need the full
+# runtime or external services (Ollama, WSL/Kali) are non-blocking here because
+# that infrastructure is not available on hosted runners; they are documented so
+# they can be enabled on a self-hosted runner. Complements installer.yml (Pester).
+
+on:
+  push:
+    branches: [ "main", "master", "fix/*", "feat/*" ]
+  pull_request:
+    branches: [ "main", "master" ]
+
+permissions:
+  contents: read
+
+jobs:
+  # Stage 7 + 8: spec-validation and doc-validation (ASCII/English-only). BLOCKING.
+  spec-doc-validation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Spec structure and consistency validation
+        run: python scripts/validate_specs.py
+      - name: ASCII / English-only validation (Constitution VI)
+        run: python scripts/validate_ascii.py
+
+  # Stage 1 + 2: lint (ruff) and type-check (mypy on typed modules). BLOCKING.
+  # Also runs the Constitution IX (no-duplication) and docstring-compliance gates,
+  # both diff-scoped: they block NEW violations without retroactively failing on
+  # the existing, separately-tracked backlog (specs/checklist.md CHK052/058-063).
+  lint-type:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # required for `git diff <base>...HEAD` in the diff-scoped gates below
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dev tools
+        run: pip install -r requirements-dev.txt
+      - name: Ruff lint (syntax + undefined names)
+        run: ruff check .
+      - name: Mypy (typed modules)
+        run: mypy app/core/rag/manifest.py app/core/rag/vector_store.py app/core/rag/embeddings.py app/core/llm_factory.py app/core/agent/brain.py app/core/agent/agent_factory.py app/core/agent/react_workflow.py scripts/validate_specs.py scripts/validate_ascii.py scripts/get_port.py
+      - name: Docstring compliance - new/changed code only (specs/016)
+        run: python scripts/check_docstrings.py --diff "origin/${{ github.base_ref || 'main' }}" app scripts tests
+      - name: No-duplication gate - new/changed code only (Constitution IX)
+        run: python scripts/check_duplication.py --diff "origin/${{ github.base_ref || 'main' }}" app scripts Setup
+
+  # Stage 6 (partial): build validation via byte-compilation. BLOCKING.
+  build-validation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Compile all first-party Python (parse-only, no imports)
+        run: python -m compileall -q app scripts tests
+
+  # Stage 4: unit tests. BLOCKING. Runs only the marked, dependency-free unit tier.
+  unit-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install runtime + dev dependencies
+        run: |
+          pip install -r Setup/requirements.txt
+          pip install -r requirements-dev.txt
+      - name: Run unit tests
+        run: pytest -m unit --cov --cov-report=term-missing
+
+  # Stage 4 (full) : integration/e2e suite. NON-BLOCKING - needs runtime deps and,
+  # for integration/e2e, a running Ollama + WSL/Kali (not present on hosted runners).
+  full-tests:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install runtime + dev dependencies
+        run: |
+          pip install -r Setup/requirements.txt
+          pip install -r requirements-dev.txt
+      - name: Run full test suite (informational)
+        run: pytest -m "not eval and not slow" --cov --cov-report=term-missing
+
+  # Stage 5: AI-evaluation. NON-BLOCKING - requires a reachable Ollama endpoint.
+  # Enable on a self-hosted runner that has Ollama; provide the endpoint as a secret.
+  ai-eval:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    env:
+      OLLAMA_HOST: ${{ secrets.OLLAMA_HOST }}   # e.g. http://localhost:11434 on a self-hosted runner
+      ARGUS_MODEL: ${{ secrets.ARGUS_MODEL }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install runtime + dev dependencies
+        run: |
+          pip install -r Setup/requirements.txt
+          pip install -r requirements-dev.txt
+      - name: AI-evaluation (recall@k / faithfulness; agent-loop termination)
+        run: pytest -m eval || python tests/manual/ai_benchmark.py
+
+  # Stage 3: PowerShell syntax gate (Constitution: parser must pass with zero errors).
+  # BLOCKING. The installer -DryRun (Stage 6, full) needs a Windows host with WSL and
+  # is exercised by installer.yml / a self-hosted runner, not here.
+  powershell-syntax-gate:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Parse all PowerShell scripts (zero-error gate)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $failed = $false
+          Get-ChildItem -Recurse -Include *.ps1 -Path scripts, app |
+            Where-Object { $_.FullName -notmatch "Argus_venv|node_modules|archive" } |
+            ForEach-Object {
+              $errors = $null
+              [System.Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$null, [ref]$errors) | Out-Null
+              if ($errors -and $errors.Count -gt 0) {
+                Write-Host "PARSE ERRORS in $($_.FullName):"
+                $errors | ForEach-Object { Write-Host "  $_" }
+                $failed = $true
+              } else {
+                Write-Host "OK: $($_.FullName)"
+              }
+            }
+          if ($failed) { Write-Error "PowerShell syntax gate failed."; exit 1 }
