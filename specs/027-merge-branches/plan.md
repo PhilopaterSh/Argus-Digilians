@@ -1,8 +1,8 @@
 # Implementation Plan: Unify All Branches Into One Version
 
-**Branch**: `001-merge-branches` | **Date**: 2026-07-17 | **Spec**: [spec.md](./spec.md)
+**Branch**: `027-merge-branches` | **Date**: 2026-07-17 | **Spec**: [spec.md](./spec.md)
 
-**Input**: Feature specification from `specs/001-merge-branches/spec.md`, grounded by
+**Input**: Feature specification from `specs/027-merge-branches/spec.md`, grounded by
 [research.md](./research.md) (cross-verified across 3 independent analyses — Claude, agy, opencode)
 
 ## Summary
@@ -134,7 +134,7 @@ made a different judgment call, it's reconciled here rather than in three separa
 ### Documentation (this feature)
 
 ```text
-specs/001-merge-branches/
+specs/027-merge-branches/
 ├── spec.md                    # Feature specification
 ├── plan.md                    # This file — the canonical, panel-reconciled plan
 ├── research.md                # Phase 0 output — cross-verified 3x (Claude, agy, opencode)

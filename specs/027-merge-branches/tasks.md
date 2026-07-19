@@ -1,6 +1,6 @@
 # Tasks: Unify All Branches Into One Version
 
-**Input**: Design documents from `specs/001-merge-branches/` (spec.md, research.md — cross-verified
+**Input**: Design documents from `specs/027-merge-branches/` (spec.md, research.md — cross-verified
 3x, plan.md — synthesized from 3 independent plans + a resolved discussion round, data-model.md,
 quickstart.md)
 
@@ -31,7 +31,7 @@ are the `git worktree` checkouts of the other branches, documented in `docs/ARCH
 - [ ] T002 Tag the current tip of every one of the 9 contributor branches (e.g.
   `git tag pre-merge/momen momen`) as an extra recovery point beyond the branch ref itself
 - [ ] T003 [P] Create the integration working branch from `fix/copy-setup-to-scripts`'s tip
-  (e.g. `git checkout -b unify/001-merge-branches fix/copy-setup-to-scripts`)
+  (e.g. `git checkout -b unify/027-merge-branches fix/copy-setup-to-scripts`)
 - [ ] T004 [P] Adopt `fix/copy-setup-to-scripts`'s test/lint tooling as the project standard: copy
   `pytest.ini`, `requirements-dev.txt`, `ruff.toml`, `mypy.ini` are already present on this base —
   confirm `Argus_venv\Scripts\python.exe -m pytest --collect-only` runs clean before touching anything
@@ -467,7 +467,7 @@ Constitution Check).
   transient error this time. Human explicitly authorized proceeding on orchestrator + codex agreement
   alone for this plan, with the agy gap disclosed here rather than silently worked around, per the new
   rule.
-- [x] T031 Open a PR (or merge `unify/001-merge-branches` into `main`) only after T029 and T030 both
+- [x] T031 Open a PR (or merge `unify/027-merge-branches` into `main`) only after T029 and T030 both
   pass; this is the first point at which the unified branch is proposed to replace `main`. **Correction
   2026-07-18**: use `gh` CLI instead of the `github` MCP (see T030b's correction - same root cause).
   Reference this feature's spec/plan/tasks and link the T030b tracking issue. **Status update
@@ -489,7 +489,7 @@ Constitution Check).
 
   **Result (2026-07-18)**: opened after explicit human authorization —
   https://github.com/PhilopaterSh/Argus-Digilians/pull/2 (branch pushed via
-  `git push -u origin unify/001-merge-branches` first, no prior remote copy existed). **Note on the
+  `git push -u origin unify/027-merge-branches` first, no prior remote copy existed). **Note on the
   sequencing decision above**: the original orchestrator+codex agreement was to wait for T026 to
   *actually complete* before opening anything — that didn't happen. Instead, T026 was closed as
   deferred/waived (no Sandbox/VM available on this machine, confirmed not just untried) and the human
@@ -587,7 +587,7 @@ unavailable — quota exhausted mid-session, see project memory `agy_delegate_qu
 ## Methodology Note (2026-07-18): Final Critical Review Before T031
 
 Before proposing the unified branch to replace `main` (T031), the orchestrator dispatched an
-independent code-correctness review of the full diff (`fix/copy-setup-to-scripts..unify/001-merge-branches`,
+independent code-correctness review of the full diff (`fix/copy-setup-to-scripts..unify/027-merge-branches`,
 17 files, ~4,966 insertions) to agy and codex-delegate in parallel (read-only mode where the CLI
 supports it), on top of the orchestrator's own direct verification of every finding — continuing this
 feature's established three-way (here, effectively three-of-four, see below) review practice one more
@@ -671,7 +671,7 @@ authorized both the revert and the deletion of the stray directory first. Becaus
 proven read-only mode against a tree codex was concurrently reading, codex's own diff report picked up
 agy's stray changes too, even though codex itself (running `--read-only`) never touched anything —
 illustrating why concurrent delegates should not share a live working tree when even one of them lacks
-an enforced read-only mode. codex separately could not access `specs/001-merge-branches/` at all (it
+an enforced read-only mode. codex separately could not access `specs/027-merge-branches/` at all (it
 lives one directory above `Argus-Digilians/`, outside codex's `--cd`-scoped sandbox) and said so plainly
 rather than inventing plausible-sounding content for the parts it couldn't verify (the T024 hashes, the
 three bug descriptions) - flagged as a genuine positive: it distinguished between what it could and
@@ -863,6 +863,111 @@ every delegate dispatch all along, applied here to the orchestrator's own genera
 as anything a delegate produces, not an exemption because the orchestrator wrote the script itself.
 Commit `2036d72`. Remaining 421 violations tracked in `specs/checklist-docstring-backfill.md`
 (FR-007's per-module CHK-series pattern), not silently dropped.
+
+## Methodology Note (2026-07-19): Session Retrospective - What a Critical Second Look Found
+
+GitHub Actions stopped triggering entirely after commit `3361d89` - no new run appeared for the
+next 4 pushes despite the remote confirmably having each commit (`git ls-remote`). Investigated:
+Actions are enabled on the repo, no queued/in_progress runs exist, no obvious API-visible error -
+most likely a private-repo Actions-minutes quota exhaustion (this session triggered dozens of runs
+today), but confirming that requires the human's own GitHub billing access, not available from
+here. **Human is investigating directly; this session cannot resolve it.**
+
+While blocked on that, the human asked for a genuine critical retrospective of the whole session -
+not a confirmatory pass. Dispatched to codex (opencode also dispatched, hung with no output for a
+long period - consistent with its unreliable pattern all session; not blocked on). codex's review
+was NOT confirmatory and found three real, actionable issues, one already fixed by the time of
+writing:
+
+1. **This document lived outside the repository being merged.** `specs/027-merge-branches/`
+   (this very file) was never actually part of `Argus-Digilians` - it lived one level up, in the
+   orchestration workspace. Once PR #2 merged, the "authoritative record" the PR description
+   itself repeatedly cited would have become permanently disconnected from the code it documents.
+   **Fixed**: copied into the repo as `specs/027-merge-branches/` (001 was already taken by
+   `001-rag-integration` - confirmed via `validate_specs.py`'s duplicate-number check, which
+   caught the collision immediately). Commit `139bf56`. A final sync pass (updating this file's
+   own internal "027-merge-branches" self-references to "027-merge-branches") is planned for
+   right before the actual merge, once this document stops changing.
+
+2. **The `unit-tests` CI gate - the only BLOCKING test job - collects just 10 of 311 tests.**
+   Confirmed directly: `pytest --collect-only -q -m unit` -> "10/311 tests collected (301
+   deselected)". Only `tests/test_rag/test_manifest.py` carries `@pytest.mark.unit`; nothing else
+   in the whole suite does. `full-tests` (which runs `pytest -m "not eval and not slow"`, nearly
+   everything) is `continue-on-error: true` - non-blocking. This means a green `unit-tests` check
+   verifies almost nothing about the branch - a real, pre-existing gap in this project's own
+   test-marking discipline (predates this session; the marker infrastructure and the fact that
+   only one file uses it both trace back to `fix/copy-setup-to-scripts`'s original CI design, not
+   anything introduced during branch-unification). **Not fixed** - retroactively deciding which of
+   301 unmarked tests are genuinely "unit" tests (fast, mocked-boundary) vs. integration-flavored
+   is real per-test judgment, not a mechanical relabeling, and is its own separate undertaking.
+   **Disclosed instead**: `full-tests` passing for the actual merge SHA (not an older cached run)
+   should be treated as the real correctness signal to require before merging, not `unit-tests`
+   alone - `unit-tests` passing is real but narrow.
+
+3. **The docstring generator (commit `2036d72`) had a real accuracy bug its own "verified-safe"
+   claim didn't cover.** It labeled every test-function parameter "pytest fixture (see the
+   module's @pytest.fixture definitions)." unconditionally - false for
+   `unittest.mock.patch`-injected parameters (`unittest.TestCase`-style tests, which this codebase
+   also uses alongside plain pytest fixtures). Confirmed directly:
+   `tests/test_smart_web_search.py::test_successful_search_formats_results`'s `mock_ddgs_cls`
+   parameter is `@patch`-injected, not a pytest fixture, yet was labeled as one. This is exactly
+   the failure mode `specs/016-docstring-enforcement`'s FR-006 warns about, and the earlier
+   "verified-safe" framing was accurate for *content preservation* (independently verified,
+   167/167) but did not cover *wording accuracy* of the newly-generated text itself - a real gap
+   in what "verified" meant. **Fixed**: replaced the phrase everywhere with wording true regardless
+   of injection mechanism. Commit `060971a`.
+
+**What this confirms about the process, not just the code**: a delayed/independent review found
+real defects in work that had already passed local gates (pytest/ruff/mypy/compileall) - none of
+those tools check documentation *accuracy*, only structure. This is the same lesson as the
+"delayed opencode review" methodology note earlier in this document, now demonstrated a second
+time by a different reviewer on different content. The orchestrator's own generated tooling is not
+exempt from the same "review, don't accept the self-report" discipline applied to every delegate
+dispatch - and even having already applied that discipline once (the two docstring-corruption bugs
+caught before shipping), a *third* pass by a fresh, independent reviewer still found something the
+orchestrator's own verification missed.
+
+**Reconciled position on merging**: local verification alone (311/311 pytest, ruff/mypy/ASCII/
+spec-doc all clean) is necessary but not sufficient - it does not substitute for `full-tests`
+actually passing on GitHub's infrastructure for the real merge SHA. Merging should wait until
+either (a) Actions resumes and a fresh `full-tests` run completes for the latest commit, or (b) the
+human makes an informed decision to proceed without that signal, explicitly accepting the residual
+risk - not merge on local-only verification treated as equivalent to a real CI run.
+
+**opencode's independent retrospective** (dispatched in parallel with codex's, above; hung with no
+output for a long period before eventually returning a genuinely thorough answer - consistent with
+its unreliable-but-eventually-valuable pattern documented earlier this feature) found two more real,
+independently-confirmed issues neither codex nor the orchestrator's own pass had caught:
+
+1. **Command injection risk in `app/tools/self_heal.py`**: `system_self_heal()` built a shell
+   command string by interpolating an LLM-tool-call-derived package name, then executed it via
+   `subprocess.run(cmd, shell=True, ...)`. Confirmed real - `tool_info` flows from the agent's own
+   tool-call arguments, and nothing sanitizes it before it reaches a shell. Fixed: list-form
+   `subprocess.run([sys.executable, "-m", "pip", "install", "-U", package], ...)`, no shell
+   involved. Commit `8adf63d`.
+2. **Two vacuous tests**: `tests/test_gui/test_imports.py` and `tests/test_gui/test_dashboard.py`
+   both wrapped their import assertions in `try/except RuntimeError: pass` - a test that can never
+   fail no matter what breaks, as long as the failure happens to raise `RuntimeError`. Confirmed by
+   running both the raw import and the actual pytest session directly: all 4 GUI modules import
+   cleanly with zero `RuntimeError` right now, meaning the swallow was current dead code, not
+   presently hiding anything - but it would have silently masked a real future regression that
+   happened to raise that specific exception type. Removed the swallow in both files; they now fail
+   loudly on a genuine import break. Commit `8adf63d`.
+
+opencode also flagged `experimental_agent/`'s zero test coverage as "the single biggest risk" given
+the two confirmed bugs already found there and `_safe_step()`'s catch-all design meaning more of the
+same shape are plausible. Writing real tests for all 13 steps was judged disproportionate for this
+session (each needs mocked LLM/HTTP boundaries); instead added
+`app/modules/experimental_agent/README.md` making the risk and a concrete graduation checklist
+impossible to miss for whoever next touches the module, rather than leaving it findable only by
+reading this tasks.md file. Commit `2c0b521`.
+
+**Third independent reviewer, same session, two more real findings.** This is now three separate
+review passes (the delayed opencode dispatch that found the `_collect_xss_targets`/`self._session`
+bugs, codex's retrospective, and opencode's parallel retrospective) each finding something the
+others missed on the same body of work. No single reviewer - including the orchestrator, twice -
+caught everything. This is the clearest evidence this feature's own methodology notes have argued
+for all along: the value of genuine multi-reviewer disagreement is not theoretical.
 
 ## Open Follow-Ups (found during execution, deliberately deferred — not silently dropped)
 
