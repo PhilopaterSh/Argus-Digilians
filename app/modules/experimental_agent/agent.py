@@ -900,7 +900,7 @@ class ArgusPipeline:
 
     # -- Step 6: XSS detection (verified) ---------------------------------
 
-    def _collect_xss_targets(self, r) -> list[tuple[str, str]]:
+    def _collect_xss_targets(self, r=None) -> list[tuple[str, str]]:
         """
         Build a list of (test_url, param_name) pairs from multiple sources:
           1. Params already in the target URL itself  (?search=test)
@@ -994,7 +994,7 @@ class ArgusPipeline:
     def _session_get_no_redirect(self, url: str, timeout: int = 12):
         """GET without following redirects; returns Response or None."""
         try:
-            return self._session.get(
+            return requests.get(
                 url, timeout=timeout,
                 allow_redirects=False,
                 verify=False,
@@ -1148,7 +1148,7 @@ class ArgusPipeline:
         found = False
         for payload in payloads:
             try:
-                r = self._session.post(
+                r = requests.post(
                     self.target,
                     data=payload.encode("utf-8"),
                     headers={"Content-Type": "application/xml"},
