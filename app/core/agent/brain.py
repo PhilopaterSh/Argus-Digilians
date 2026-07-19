@@ -463,6 +463,28 @@ class ArgusBrain:
                 print(f"[BRAIN] Self-heal attempt for '{missing_cmd}' raised: {e}")
         return healed_any
 
+    def _record_graph_edge(
+        self,
+        entity_type: str,
+        entity_value: str,
+        source_val: str,
+        target_val: str,
+        rel_type: str,
+    ) -> None:
+        """Persist a single knowledge-graph edge during recon so that
+        Query_Knowledge_Graph has real data to return. No-op (and never
+        fatal) when memory is disabled or a write fails."""
+        if self.memory is None:
+            return
+        value = (entity_value or "").strip()
+        if not value:
+            return
+        try:
+            self.memory.upsert_entity(entity_type, value)
+            self.memory.add_relation(source_val, target_val, rel_type)
+        except Exception as e:
+            print(f"[BRAIN] graph edge write skipped ({rel_type}): {e}")
+
     def _run_tool_safely(self, tool_name: str, target: str) -> str:
         tool = self.tool_map.get(tool_name)
         if tool is None:
@@ -604,6 +626,17 @@ class ArgusBrain:
         observations: Dict[str, str] = {}
         counter = {"i": 0, "total": len(DETERMINISTIC_PHASES)}
 
+        # Seed the knowledge graph with the root domain up front. add_relation
+        # only writes an edge when BOTH endpoints already exist as entities,
+        # so the root must be registered before any USES_TECH / SUBDOMAIN_OF
+        # edge can attach to it.
+        graph_root = self._to_bare_hostname(target)
+        if self.memory is not None and graph_root:
+            try:
+                self.memory.upsert_entity("domain", graph_root)
+            except Exception as e:
+                print(f"[BRAIN] could not seed graph root '{graph_root}': {e}")
+
         def emit(label: str, obs: str, domain: str = target) -> None:
             counter["i"] += 1
             observations[label] = obs
@@ -642,10 +675,16 @@ class ArgusBrain:
                         print(f"[BRAIN] Chaining: re-checking discovered subdomain '{sub}'")
                         sub_obs = self._run_tool_safely("Check_Reachability", sub)
                         emit(f"Check_Reachability[{sub}]", sub_obs, domain=sub)
+                        # Persist the edge so Query_Knowledge_Graph has data.
+                        self._record_graph_edge("domain", sub, sub, graph_root, "SUBDOMAIN_OF")
 
             elif tool_name == "Recon_Suite":
                 raw_tech = self._parse_tech(observation)
                 tech = self._clean_tech_string(raw_tech)
+                if tech:
+                    # Persist each detected technology as a graph edge.
+                    for token in tech.split():
+                        self._record_graph_edge("tech", token, graph_root, token, "USES_TECH")
                 if tech and "Smart_Web_Search" in self.tool_map:
                     counter["total"] += 1
                     query = f"known CVEs and exploits for {tech}"

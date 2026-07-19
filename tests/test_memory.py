@@ -141,11 +141,11 @@ class TestArgusMemory:
             mem: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
         """
         mem.add_relation("ghost-a", "ghost-b", "LINKED_TO")
-        assert mem.get_graph_insights() == ""
+        assert mem.get_graph_insights() == "No cross-target relationships recorded yet."
 
     def test_get_graph_insights_empty(self, mem):
         """Verify Get graph insights empty."""
-        assert mem.get_graph_insights() == ""
+        assert mem.get_graph_insights() == "No cross-target relationships recorded yet."
 
     def test_get_blackboard_summary_empty(self, mem):
         """Verify Get blackboard summary empty."""

@@ -348,10 +348,12 @@ class ArgusMemory:
                        ORDER BY r.timestamp DESC
                        LIMIT 100"""
                 ).fetchall()
+                if not rows:
+                    return "No cross-target relationships recorded yet."
                 return "\n".join(f"({s}) --[{t}]--> ({o})" for s, t, o in rows)
         except Exception as e:
             logger.error("get_graph_insights failed: %s", e)
-            return ""
+            return "Knowledge graph unavailable (query error)."
 
     # ------------------------------------------------------------------
     # CRUD: Targets

@@ -55,19 +55,31 @@ class PayloadSuggester:
     def suggest_payloads(self, vulnerability_type):
         """Searches PayloadsAllTheThings for relevant payloads based on the vulnerability type."""
         print(f"[*] Fetching suggested payloads for: {vulnerability_type}")
-        
-        mapping = {
-            "sqli": "SQL Injection",
-            "xss": "XSS Injection",
-            "lfi": "File Inclusion",
-            "rfi": "File Inclusion",
-            "ssti": "Server Side Template Injection",
-            "command_injection": "Command Injection",
-            "nosql": "NoSQL Injection",
-            "graphql": "GraphQL Injection"
-        }
-        
-        matched_dir = mapping.get(vulnerability_type.lower())
+
+        vt = (vulnerability_type or "").lower()
+
+        # Callers (e.g. brain._build_exploit_query) pass verbose vuln-class
+        # phrases like "SQL authentication bypass injection", not the exact
+        # short codes an exact-key dict expects. Match on signal words so
+        # both a short code ("sqli") and a full phrase resolve to a real
+        # PayloadsAllTheThings directory. Order matters: most specific first.
+        signal_map = [
+            (("sqli", "sql"), "SQL Injection"),
+            (("xss", "cross-site script", "cross site script"), "XSS Injection"),
+            (("lfi", "rfi", "file inclusion", "traversal"), "File Inclusion"),
+            (("ssti", "template injection"), "Server Side Template Injection"),
+            (("command injection", "command_injection", "rce"), "Command Injection"),
+            (("upload",), "Upload Insecure Files"),
+            (("nosql",), "NoSQL Injection"),
+            (("graphql",), "GraphQL Injection"),
+            # login / auth-bypass endpoints -> SQLi payloads are the right start
+            (("auth", "bypass", "login"), "SQL Injection"),
+        ]
+
+        matched_dir = next(
+            (directory for signals, directory in signal_map if any(s in vt for s in signals)),
+            None,
+        )
         if not matched_dir:
             return f"No specialized payload repository found for '{vulnerability_type}'. Try searching specifically for 'sqli', 'xss', 'lfi', etc."
 
