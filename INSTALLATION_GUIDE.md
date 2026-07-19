@@ -3,7 +3,7 @@
 This guide covers the supported installation approach using the unified master
 installer, as well as the legacy manual fallback. For the underlying manual
 steps the installer automates (useful for offline/air-gapped provisioning or
-understanding what each step does), see `Argus_Master_Documentation.md`.
+understanding what each step does), see `docs/Argus_Master_Documentation.md`.
 
 ---
 
@@ -185,8 +185,8 @@ START: Do you want to install Argus?
 
 - `scripts/README.md` - Launch scripts and installer guide
 - `Setup/README.md` - Legacy step scripts reference
-- `Argus_Master_Documentation.md` - Full technical documentation
-- `Plan md/Plan.md` - Unified installer design plan
+- `docs/Argus_Master_Documentation.md` - Full technical documentation
+- `docs/history/Plan.md` - Unified installer design plan
 
 ---
 

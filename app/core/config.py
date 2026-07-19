@@ -1,6 +1,6 @@
 """Centralized configuration for the Argus Security Framework.
 
-Reads `config.yaml` at project root and provides typed access to all settings.
+Reads `config/config.yaml` and provides typed access to all settings.
 All components should import from here instead of hardcoding values.
 """
 
@@ -85,7 +85,7 @@ class ArgusConfig:
             return cls._instance
 
         if path is None:
-            path = os.getenv("ARGUS_CONFIG", "config.yaml")
+            path = os.getenv("ARGUS_CONFIG", "config/config.yaml")
 
         cfg = cls()
         if os.path.isfile(path):

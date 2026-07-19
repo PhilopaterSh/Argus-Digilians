@@ -79,4 +79,4 @@ Use these individual step scripts only if you are:
 
 - `scripts/README.md` - Master installer and launch scripts guide
 - `INSTALLATION_GUIDE.md` - Detailed installation reference
-- `Argus_Master_Documentation.md` - Full technical documentation
+- `../docs/Argus_Master_Documentation.md` - Full technical documentation

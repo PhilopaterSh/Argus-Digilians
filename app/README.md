@@ -58,7 +58,7 @@ LAUNCH_CLI.bat C
 
 - **Package Structure**: All subdirectories have `__init__.py` to function as proper Python packages
 - **Import Precedence**: Main project root is inserted at position 0 in `sys.path` for correct relative imports
-- **Dependencies**: See `Argus_Master_Documentation.md` for full dependency list
+- **Dependencies**: See `../docs/Argus_Master_Documentation.md` for full dependency list
 
 ## Important Files
 

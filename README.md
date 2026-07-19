@@ -146,7 +146,7 @@ This README is a quick start, not the full picture. For anything beyond it:
 | Detailed installation reference (all modes, prerequisites, troubleshooting) | [INSTALLATION_GUIDE.md](INSTALLATION_GUIDE.md) |
 | "Which script do I run?" - every script in `scripts/`, what it's for | [scripts/README.md](scripts/README.md) |
 | Feature/spec implementation status across all phases | [specs/checklist.md](specs/checklist.md) |
-| Manual/offline setup reference (what the installer automates, step by step) | [Argus_Master_Documentation.md](Argus_Master_Documentation.md) |
+| Manual/offline setup reference (what the installer automates, step by step) | [docs/Argus_Master_Documentation.md](docs/Argus_Master_Documentation.md) |
 | Contributing (fork/branch/test/PR workflow) | [CONTRIBUTING.md](CONTRIBUTING.md) |
 
 ---

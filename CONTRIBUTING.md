@@ -8,7 +8,7 @@ We welcome contributions to **Argus**. Please follow the guidelines below to ens
 2. **Write clear commit messages** adhering to the conventional commits style.
 3. **Add or update tests** in the `tests/` directory.
 4. **Run the full test suite** (`npm run test` or `python -m pytest`).
-5. **Update documentation** (README, docs, or Argus_Master_Documentation) as needed.
+5. **Update documentation** (README, docs, or docs/Argus_Master_Documentation.md) as needed.
 6. Submit a **Pull Request** with a concise description of your changes.
 
 ## Code Style

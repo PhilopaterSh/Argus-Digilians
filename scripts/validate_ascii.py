@@ -5,7 +5,7 @@ Implements the CI "doc-validation" (ASCII-safe) stage from
 specs/012-spec-reconciliation/spec.md (section 7) and enforces
 Constitution principle VI (ASCII-safe console/log output, no mixed-language files).
 
-Scans app/, scripts/, tests/ plus root config.yaml for non-ASCII bytes in
+Scans app/, scripts/, tests/ plus config/config.yaml for non-ASCII bytes in
 code/config files. Exit code 0 if clean, 1 if any non-ASCII byte is found.
 Standard library only.
 """
@@ -14,7 +14,7 @@ import sys
 
 ROOT = os.path.join(os.path.dirname(__file__), "..")
 ROOTS = ("app", "scripts", "tests")
-EXTRA_FILES = ("config.yaml",)
+EXTRA_FILES = ("config/config.yaml",)
 SKIP_DIRS = ("Argus_venv", "node_modules", ".git", "__pycache__", ".opencode", "archive")
 EXTS = (".py", ".bat", ".ps1", ".sh", ".yaml", ".yml", ".cfg", ".ini", ".toml")
 

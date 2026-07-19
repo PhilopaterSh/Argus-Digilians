@@ -11,7 +11,7 @@ CANONICAL_DEFAULT_PORT = 12199
 
 
 def get_port() -> int:
-    config_path = os.path.join(os.path.dirname(__file__), "..", "config.yaml")
+    config_path = os.path.join(os.path.dirname(__file__), "..", "config", "config.yaml")
     try:
         import yaml  # imported lazily so a missing dep still yields the default
         with open(config_path, encoding="utf-8") as f:

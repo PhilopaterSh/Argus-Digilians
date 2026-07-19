@@ -602,7 +602,7 @@ function Resolve-OllamaModelNames {
     # the env-var/hardcoded default instead of the config.yaml value.
     $resolvedModel = $script:OLLAMA_MODEL
     $resolvedEmbedModel = $script:OLLAMA_EMBED_MODEL
-    $cfgPath = Join-Path $ProjectRoot "config.yaml"
+    $cfgPath = Join-Path $ProjectRoot "config\config.yaml"
     if (Test-Path -LiteralPath $cfgPath) {
         try {
             $yaml = Get-Content -LiteralPath $cfgPath -Raw

@@ -18,7 +18,7 @@ errors = []
 # Test 1: config.yaml loads correctly
 try:
     import yaml
-    with open(os.path.join(REPO_ROOT, 'config.yaml')) as f:
+    with open(os.path.join(REPO_ROOT, 'config', 'config.yaml')) as f:
         cfg = yaml.safe_load(f)
     print('[OK] config.yaml loaded:', cfg)
 except Exception as e:
