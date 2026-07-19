@@ -969,6 +969,48 @@ others missed on the same body of work. No single reviewer - including the orche
 caught everything. This is the clearest evidence this feature's own methodology notes have argued
 for all along: the value of genuine multi-reviewer disagreement is not theoretical.
 
+## T032: Merge to `main` (Feature Closed) - 2026-07-19
+
+Human gave explicit, direct confirmation to merge despite GitHub Actions CI still not confirmed
+(the human's own account-side investigation into the Actions-minutes issue was ongoing and
+deliberately not blocked on further - see the Methodology Notes above).
+
+**Method**: GitHub's PR-merge API (`gh pr merge --merge`) failed twice - first "Head branch is out
+of date" (despite `origin/main` confirmably unchanged since it was last merged into this branch),
+then "Pull Request is not mergeable" while `mergeable`/`mergeStateStatus` stayed stuck at `UNKNOWN`
+- almost certainly the same account-side issue that stopped Actions from triggering. Rather than
+block indefinitely on a GitHub API that wasn't resolving, merged directly: created a detached
+worktree on `origin/main`, ran `git merge --no-ff origin/unify/027-merge-branches`, which completed
+with **zero conflicts** (`ort` strategy) since `main`'s only 2 unique commits were already reconciled
+during the earlier PR-conflict-resolution merge (`d5a2242`) - full pytest suite run against the
+merged tree first (311/311 passed), then pushed directly to `main` (`git push origin HEAD:main`).
+Merge commit: `e418d31`.
+
+**Result**: `main` now contains the complete branch-unification history. GitHub auto-closed PR #2
+(all its commits are reachable from `main`) but shows it as **Closed**, not the special **Merged**
+badge, since the merge didn't happen through GitHub's own tracked merge action - a comment was
+added to the PR explaining this explicitly so it isn't later mistaken for "closed without merging."
+
+**What shipped**: all 9 contributor branches unified; 3 real bugs fixed pre-merge (`1309e5b`); 2 more
+found by a delayed opencode review and fixed (`3361d89`); a full CI-fix round (mypy, pytest
+invocation, Pester syntax, spec-doc validation, ASCII compliance, a genuinely-missing `SmartWebSearch`
+feature, a stale `ai-eval` path); a session retrospective (codex + opencode) that found and fixed a
+real command-injection vector, two vacuous tests, an inaccurate docstring-generator phrase, and
+brought this feature's own spec-kit record into the repo (`specs/027-merge-branches/`).
+
+**What remains genuinely open, not resolved by this merge**:
+- T026: installer clean-environment validation, deferred/waived (no Sandbox/VM available).
+- Issue #1: `Argus_Secure_Sync.exe`'s `argus/DESKTOP-BVV10T0` archival copy still needs its security
+  review.
+- 421 docstring violations tracked in `specs/checklist-docstring-backfill.md`.
+- `unit-tests`' narrow 10/311 coverage (pre-existing project gap, disclosed not fixed).
+- `experimental_agent/`'s zero test coverage (opt-in, unregistered, README documents the risk).
+- GitHub Actions CI was never confirmed green on GitHub's own infrastructure for the final merge SHA
+  - only local verification. If/when Actions resumes, running it against `main`'s new state would be
+  the first real confirmation.
+
+This feature (`specs/027-merge-branches`, shipped in-repo as `specs/027-merge-branches`) is closed.
+
 ## Open Follow-Ups (found during execution, deliberately deferred — not silently dropped)
 
 - **`momen`'s live XSS scanning capability was only partially ported (T012/T015, 2026-07-18).**
