@@ -31,13 +31,30 @@ if %errorlevel% neq 0 (
     echo [OK] SSH bridge active.
 )
 
-:: 3. Launch Streamlit GUI (this folder IS the project root)
-echo [*] Launching Web Interface at http://localhost:12199 ...
+:: 3. Detect a working Python interpreter.
+::    A double-clicked .bat does not always inherit the per-user PATH entry
+::    (Python installed under %LOCALAPPDATA%\Programs\Python), so 'python' may
+::    be "not recognized". The 'py' launcher in C:\Windows is always on PATH.
+set "PYEXE="
+where py    >nul 2>&1 && set "PYEXE=py"
+if not defined PYEXE ( where python >nul 2>&1 && set "PYEXE=python" )
+if not defined PYEXE (
+    if exist "%LOCALAPPDATA%\Programs\Python\Python312\python.exe" set "PYEXE=%LOCALAPPDATA%\Programs\Python\Python312\python.exe"
+)
+if not defined PYEXE (
+    echo [!] Python not found. Install Python 3 from https://www.python.org/downloads/
+    echo     and tick "Add python.exe to PATH" during setup.
+    pause
+    exit /b 1
+)
+
+:: 4. Launch Streamlit GUI (this folder IS the project root)
+echo [*] Launching Web Interface at http://localhost:17000 ...
 set "PYTHONPATH=%~dp0;%PYTHONPATH%"
 set "PYTHONWARNINGS=ignore"
 set "STREAMLIT_LOG_LEVEL=error"
 
-start http://localhost:12199
-python -m streamlit run "GUI\app.py" --server.port 12199 --server.headless true --server.enableCORS false --server.enableXsrfProtection false
+start http://localhost:17000
+"%PYEXE%" -m streamlit run "GUI\app.py" --server.port 17000 --server.headless true --server.enableCORS false --server.enableXsrfProtection false
 
 pause
