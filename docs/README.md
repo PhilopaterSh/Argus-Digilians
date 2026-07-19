@@ -14,6 +14,7 @@ These are the authoritative sources of truth. When any other document disagrees,
 | [`ARGUS_SPECKIT_ARCHITECTURE_REVIEW.md`](ARGUS_SPECKIT_ARCHITECTURE_REVIEW.md) | Point-in-time architecture review (pre-consolidation baseline) |
 | [`../.specify/memory/constitution.md`](../.specify/memory/constitution.md) | Project governance and coding/process principles (supersedes the removed `GEMINI.md`) |
 | [`../scripts/README.md`](../scripts/README.md) | Repository structure and script/entry-point overview |
+| [`diagrams/argus_class_diagram.puml`](diagrams/argus_class_diagram.puml) | Canonical class diagram (Facade/Registry/Strategy/Factory/Blackboard patterns) - self-declared source of truth for `app/core/*`/`app/tools/*`, previously unindexed here (found 2026-07-19) |
 | [`history/ARGUS_TECHNICAL_ARCHITECTURE_v1.5_LEGACY.md`](history/ARGUS_TECHNICAL_ARCHITECTURE_v1.5_LEGACY.md) | Archived pre-RAG architecture (historical - moved into `history/` 2026-07-10) |
 
 Automation and validation: `scripts/validate_specs.py`, `scripts/validate_ascii.py`,
