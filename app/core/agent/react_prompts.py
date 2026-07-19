@@ -135,6 +135,159 @@ def build_react_system_prompt(state: dict) -> str:
     )
 
 
+def build_collector_prompt(state: dict) -> str:
+    """Build the Collector role's system prompt (specs/020, feature-flagged
+    off by default - see config.yaml's enable_multi_agent_roles).
+
+    Scoped to recon/discovery tools only (FR-002) - Collector proposes and
+    executes exactly ONE tool call per graph visit, then control returns to
+    the Planner, which decides the next role. Same Thought/Action output
+    format as the single-loop prompt (`build_react_system_prompt`) for
+    consistency and to reuse the same parsing code.
+
+    Args:
+        state (dict): Current graph state (an `ArgusAgentState`, passed as a
+            plain dict); reads the same fields `build_react_system_prompt`
+            does, plus `_tools` scoped to Collector's subset by the caller.
+
+    Returns:
+        str: The complete system prompt text for this turn.
+    """
+    tool_block = _format_tool_descriptions(state.get("_tools", {}))
+    called_block = _format_call_history(state.get("tool_call_history", []))
+    reflection_block = _format_reflection_notes(state.get("reflection_notes", []))
+    return (
+        f"ROLE: You are the Collector agent in Argus AI's multi-agent pentesting team.\n"
+        f"Your ONLY job is reconnaissance and discovery - mapping the target's attack\n"
+        f"surface, finding leaked secrets, and gathering context. You do NOT scan for\n"
+        f"vulnerabilities or attempt exploitation - that's the Exploiter agent's job.\n"
+        f"TARGET: {state.get('target', 'unknown')}\n\n"
+        f"BLACKBOARD (live intelligence from the whole team):\n"
+        f"{state.get('blackboard_summary', 'No findings yet.')}\n\n"
+        f"LAST TOOL OUTPUT:\n{state.get('tool_result', 'None')}\n"
+        f"LAST ERROR:\n{state.get('tool_error', 'None')}\n\n"
+        f"REFLECTION NOTES:\n{reflection_block}\n\n"
+        f"TOOLS ALREADY CALLED THIS RUN (may retry ONE once if you doubt the result):\n"
+        f"{called_block}\n\n"
+        f"YOUR TOOLS:\n{tool_block}\n\n"
+        f"RULES:\n"
+        f"1. Choose ONE tool per response.\n"
+        f"2. Don't repeat a call you already trust the result of.\n"
+        f"3. You never give a Final Answer - the Planner decides when your job here is done.\n\n"
+        f"OUTPUT FORMAT (exact):\n"
+        f"Thought: <your reasoning>\n"
+        f"Action: {{\"name\": \"ToolName\", \"input\": \"value\"}}\n\n"
+        f"Available tool names: {list(state.get('_tools', {}).keys())}"
+    )
+
+
+def build_exploiter_prompt(state: dict) -> str:
+    """Build the Exploiter role's system prompt (specs/020, feature-flagged
+    off by default). Mirrors `build_collector_prompt` but scoped to
+    vulnerability-scanning/exploitation tools (FR-002).
+
+    Args:
+        state (dict): Current graph state; see `build_collector_prompt`.
+
+    Returns:
+        str: The complete system prompt text for this turn.
+    """
+    tool_block = _format_tool_descriptions(state.get("_tools", {}))
+    called_block = _format_call_history(state.get("tool_call_history", []))
+    reflection_block = _format_reflection_notes(state.get("reflection_notes", []))
+    return (
+        f"ROLE: You are the Exploiter agent in Argus AI's multi-agent pentesting team.\n"
+        f"Your ONLY job is vulnerability scanning and exploitation - the Collector agent\n"
+        f"already mapped the attack surface below. Research a payload for any\n"
+        f"vulnerability class the Blackboard suggests, then actually attempt it - research\n"
+        f"alone without attempting it is not exploitation.\n"
+        f"TARGET: {state.get('target', 'unknown')}\n\n"
+        f"BLACKBOARD (live intelligence from the whole team):\n"
+        f"{state.get('blackboard_summary', 'No findings yet.')}\n\n"
+        f"LAST TOOL OUTPUT:\n{state.get('tool_result', 'None')}\n"
+        f"LAST ERROR:\n{state.get('tool_error', 'None')}\n\n"
+        f"REFLECTION NOTES:\n{reflection_block}\n\n"
+        f"TOOLS ALREADY CALLED THIS RUN (may retry ONE once if you doubt the result):\n"
+        f"{called_block}\n\n"
+        f"YOUR TOOLS:\n{tool_block}\n\n"
+        f"RULES:\n"
+        f"1. Choose ONE tool per response.\n"
+        f"2. Don't repeat a call you already trust the result of.\n"
+        f"3. You never give a Final Answer - the Planner decides when your job here is done.\n\n"
+        f"OUTPUT FORMAT (exact):\n"
+        f"Thought: <your reasoning>\n"
+        f"Action: {{\"name\": \"ToolName\", \"input\": \"value\"}}\n\n"
+        f"Available tool names: {list(state.get('_tools', {}).keys())}"
+    )
+
+
+def build_planner_prompt(state: dict) -> str:
+    """Build the Planner role's system prompt (specs/020, feature-flagged
+    off by default). The Planner owns the phase-transition decision (FR-003)
+    - it never calls an execution tool itself, only decides which role acts
+    next based on the Blackboard's current state.
+
+    Args:
+        state (dict): Current graph state; reads `target`/`blackboard_summary`/
+            `reflection_notes`/`role_history`.
+
+    Returns:
+        str: The complete system prompt text for this turn.
+    """
+    reflection_block = _format_reflection_notes(state.get("reflection_notes", []))
+    role_history = state.get("role_history", [])
+    history_block = " -> ".join(role_history) if role_history else "(run just started)"
+    return (
+        f"ROLE: You are the Planner agent in Argus AI's multi-agent pentesting team.\n"
+        f"You do not run tools yourself. You look at what the team has learned so far and\n"
+        f"decide which specialist acts next.\n"
+        f"TARGET: {state.get('target', 'unknown')}\n\n"
+        f"BLACKBOARD (live intelligence from the whole team):\n"
+        f"{state.get('blackboard_summary', 'No findings yet.')}\n\n"
+        f"REFLECTION NOTES:\n{reflection_block}\n\n"
+        f"ROLE HISTORY THIS RUN: {history_block}\n\n"
+        f"YOUR SPECIALISTS:\n"
+        f"- collector: reconnaissance, attack-surface mapping, leak detection. Send work here\n"
+        f"  if the Blackboard doesn't yet show a mapped attack surface for this target.\n"
+        f"- exploiter: vulnerability scanning and exploitation attempts. Send work here once\n"
+        f"  the Collector has found something to scan or exploit.\n"
+        f"- summarizer: produces the final report. Choose this once the team has attempted\n"
+        f"  both reconnaissance AND at least one vulnerability-scanning/exploitation step -\n"
+        f"  not before, and not indefinitely after (don't loop the same specialist forever\n"
+        f"  if the Blackboard isn't changing).\n\n"
+        f"Decide the single next specialist to act."
+    )
+
+
+def build_summarizer_prompt(state: dict) -> str:
+    """Build the Summarizer role's system prompt (specs/020, feature-flagged
+    off by default). The Summarizer is the only role that produces the
+    final `SecurityReport` (FR-004) - it synthesizes the whole team's
+    findings, never executes a tool.
+
+    Args:
+        state (dict): Current graph state; reads `target`/`blackboard_summary`.
+
+    Returns:
+        str: The complete system prompt text for this turn.
+    """
+    return (
+        f"ROLE: You are the Summarizer agent in Argus AI's multi-agent pentesting team.\n"
+        f"The Collector and Exploiter agents have finished their work below. Synthesize\n"
+        f"everything into a comprehensive security report. You do not run tools.\n"
+        f"TARGET: {state.get('target', 'unknown')}\n\n"
+        f"BLACKBOARD (everything the team found):\n"
+        f"{state.get('blackboard_summary', 'No findings yet.')}\n\n"
+        f"RULES:\n"
+        f"1. Your overall_risk_score MUST match the severities of your own findings - if\n"
+        f"   every finding is Low severity with no remediation needed, the score must be\n"
+        f"   low (e.g. 1-3), not high.\n"
+        f"2. If the team found nothing exploitable, say so explicitly rather than inflating\n"
+        f"   the assessment.\n\n"
+        f"Final Answer: <comprehensive security report>"
+    )
+
+
 def build_prebuilt_system_prompt(state: dict) -> str:
     """Build system prompt for the create_react_agent path.
 

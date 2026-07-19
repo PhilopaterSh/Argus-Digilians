@@ -28,6 +28,12 @@ class ArgusAgentState(TypedDict):
     tool_call_history: list[str]
     reflection_notes: list[str]
     phase56_nudged: bool
+    # specs/020 (multi-agent role separation, feature-flagged off by default -
+    # see config.yaml's enable_multi_agent_roles): only populated when the
+    # multi-role graph (react_workflow.py::build_multi_role_workflow) is in
+    # use; the single-loop graph never sets these.
+    current_role: NotRequired[str]
+    role_history: NotRequired[list[str]]
 
 
 class ArgusPrebuiltState(ArgusAgentState):

@@ -71,6 +71,13 @@ class ArgusConfig:
     # escape hatch in case it pushes a run past max_iterations' time budget in
     # practice (NFR-002).
     enable_inter_reflection: bool = True
+    # specs/020-multi-agent-role-separation: routes ArgusBrain through the
+    # experimental Planner/Collector/Exploiter/Summarizer graph
+    # (react_workflow.py::_build_multi_role_workflow) instead of the
+    # production single-loop graph. Default OFF - this is a genuinely
+    # uncertain-value experiment (unlike enable_inter_reflection's default
+    # ON), not yet measured against the single-loop baseline (NFR-001/T007).
+    enable_multi_agent_roles: bool = False
 
     rag: RAGSettings = field(default_factory=RAGSettings)
     streamlit: StreamlitSettings = field(default_factory=StreamlitSettings)

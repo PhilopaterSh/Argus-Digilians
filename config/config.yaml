@@ -13,6 +13,12 @@ max_retries: 3
 # max_iterations' time budget in practice.
 enable_inter_reflection: true
 
+# specs/020-multi-agent-role-separation: routes ArgusBrain through the
+# experimental Planner/Collector/Exploiter/Summarizer graph instead of the
+# production single-loop graph. Default false - not yet measured against
+# the single-loop baseline (NFR-001). See specs/020's tasks.md T006/T007.
+enable_multi_agent_roles: false
+
 # RAG (Retrieval-Augmented Generation) settings
 rag:
   enabled: true

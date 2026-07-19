@@ -1,8 +1,12 @@
 """Unit tests for app/core/agent/brain_tools.py::build_argus_tools (specs/017,
-extended specs/018 CHK090)."""
+extended specs/018 CHK090, extended specs/020 role partitioning)."""
 from unittest.mock import MagicMock
 
-from app.core.agent.brain_tools import build_argus_tools
+from app.core.agent.brain_tools import (
+    ROLE_TOOL_PARTITIONS,
+    build_argus_tools,
+    partition_tools_by_role,
+)
 
 EXPECTED_TOOL_NAMES = {
     "Check_Reachability", "Subdomain_Enumeration", "Recon_Suite", "Query_Memory",
@@ -65,3 +69,54 @@ def test_new_chk090_tools_delegate_to_the_correct_bridge_methods():
 
     tool_by_name["Task_Difficulty_Assessment"].func("http://example.com")
     bridge.assess_difficulty.assert_called_once_with("http://example.com")
+
+
+class TestRolePartitioning:
+    """specs/020 (multi-agent role separation, feature-flagged off by
+    default) - build_argus_tools(role=...) / partition_tools_by_role()."""
+
+    def test_role_none_returns_the_full_17_tool_set_unchanged(self):
+        """Every existing caller (specs/017-019) passes no role argument -
+        must be byte-for-byte the same as before this parameter existed."""
+        tools = build_argus_tools(MagicMock())
+        assert {t.name for t in tools} == EXPECTED_TOOL_NAMES
+        assert len(tools) == 17
+
+    def test_collector_role_returns_only_recon_tools(self):
+        tools = build_argus_tools(MagicMock(), role="collector")
+        assert {t.name for t in tools} == ROLE_TOOL_PARTITIONS["collector"]
+        assert "Run_Nikto" not in {t.name for t in tools}
+
+    def test_exploiter_role_returns_only_exploitation_tools(self):
+        tools = build_argus_tools(MagicMock(), role="exploiter")
+        assert {t.name for t in tools} == ROLE_TOOL_PARTITIONS["exploiter"]
+        assert "Recon_Suite" not in {t.name for t in tools}
+
+    def test_planner_and_summarizer_roles_get_only_read_only_memory_tools(self):
+        """FR-002: Planner and Summarizer get no direct execution tools at
+        all - only Query_Memory/Query_Knowledge_Graph."""
+        for role in ("planner", "summarizer"):
+            tools = build_argus_tools(MagicMock(), role=role)
+            assert {t.name for t in tools} == {"Query_Memory", "Query_Knowledge_Graph"}
+
+    def test_every_tool_is_assigned_to_at_least_one_execution_role(self):
+        """No tool should be silently unreachable by any role."""
+        assigned = ROLE_TOOL_PARTITIONS["collector"] | ROLE_TOOL_PARTITIONS["exploiter"]
+        all_names = EXPECTED_TOOL_NAMES - {"Query_Memory", "Query_Knowledge_Graph"}
+        assert all_names <= assigned
+
+    def test_partition_tools_by_role_matches_build_argus_tools_role_filtering(self):
+        """partition_tools_by_role() (used by ArgusBrain, which only has the
+        flat tool list, not a bridge reference) must produce the identical
+        split build_argus_tools(bridge, role=...) would from scratch."""
+        bridge = MagicMock()
+        full_list = build_argus_tools(bridge)
+
+        partitioned = partition_tools_by_role(full_list)
+
+        assert {t.name for t in partitioned["collector"]} == {
+            t.name for t in build_argus_tools(bridge, role="collector")
+        }
+        assert {t.name for t in partitioned["exploiter"]} == {
+            t.name for t in build_argus_tools(bridge, role="exploiter")
+        }
