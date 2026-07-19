@@ -33,10 +33,14 @@ assert the import doesn't raise.
   exposes `register()`/`run_module()`/`run_all()`/`list_modules()` as this package's own
   lightweight plugin registry. None of the 8 scripts above actually register through it, though -
   that registry currently has no real callers either.
-- `ddgs.py` is a single-line, no-op re-export (`from duckduckgo_search import DDGS`) with no
-  `__main__` guard and no function - not a CLI utility like the others, and not used anywhere.
-  Confirmed pointless during this same review; left in place (not deleted) rather than acted on
-  unilaterally, per this project's standing three-way-review practice.
+- `ddgs.py` is a no-op re-export with no `__main__` guard and no function - not a CLI utility like
+  the others, and not used anywhere. Confirmed pointless; kept rather than deleted (the human's
+  explicit call). Its import was real dead weight, though: it hardcoded the pre-rename
+  `duckduckgo_search` package name with no fallback, which passed locally (this dev machine only
+  has the old package installed) but failed in real CI (which only installs the current `ddgs`
+  package per `config/requirements.txt`) - `tests/test_modules/test_imports.py::test_module_imports[app.modules.ddgs]`
+  failed with `ModuleNotFoundError` on GitHub Actions. Fixed 2026-07-19 to use the same
+  `ddgs`-with-`duckduckgo_search`-fallback pattern `app/tools/web_search.py` already uses.
 
 ## Before treating any of this as production-critical
 
