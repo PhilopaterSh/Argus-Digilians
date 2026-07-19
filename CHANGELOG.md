@@ -2,6 +2,87 @@
 
 All notable changes to this project will be documented in this file.
 
+## Fixed the mypy errors surfaced by merging specs/020's core-agent code onto current main (2026-07-19)
+
+Merging `specs/020` (below) into today's `main` required rebasing every touched file onto
+substantial independent history (the SALMA merge, mypy/docstring passes, this session's own
+knowledge-graph and archive-cleanup work) rather than a blind overwrite - verified via `git log
+<base>..main -- <path>` per file, not assumed safe from a clean `git merge-tree` alone (which
+would have missed a real conflict in `specs/022/spec.md` caught the same way earlier in this
+session). One real textual conflict in `brain.py`'s graph-construction call site, resolved by
+hand. Two new mypy errors (`planner_node`/`summarizer_node` passing the `ArgusAgentState`
+TypedDict directly to prompt builders typed as plain `dict`) fixed using the exact `{**state,
+...}` dict-literal pattern `_run_specialist_step` already used successfully elsewhere in the same
+file, not a new workaround. Verified: 336/336 pytest, ruff clean, mypy clean (CI's exact 10-file
+list), both the default and flagged graph-construction paths smoke-tested directly against a fake
+LLM/tool set.
+
+## Implemented specs/020 (multi-agent role separation) as an experimental, feature-flagged-off path - measured, not promoted to default (2026-07-11)
+
+Recovered from uncommitted work (`wip/multi-agent-role-separation`, preserved and merged onto
+current `main` on 2026-07-19 - see the entry above for that merge's own details) and landed here
+in its original, still-accurate form:
+
+User proposed starting `specs/020` (Planner/Collector/Exploiter/Summarizer role separation),
+initially as a heavier multi-*model* design (Dolphin-Llama3 as Coordinator, DeepSeek-Coder as
+Exploit Analyst, an abliterated Llama-3-8B as Verifier). Researched that specific proposal before
+building anything: this machine's actual VRAM (confirmed via `nvidia-smi`: 16GB total, RTX 2000
+Ada) can't hold more than ~2 of those 7-8B models resident at once, making 4-model swapping a
+real, unmeasured latency risk, not the "close to one 33B model" the proposal assumed;
+abliteration measurably regresses TruthfulQA specifically (-7.1, other benchmarks near-unchanged)
+- the wrong tradeoff for a Verifier role whose entire job is judging true vs. false findings;
+and recent research ("Persona-Pruner") shows the field moving toward extracting multiple personas
+from one dense model rather than deploying several full models - validating `specs/020`'s
+original FR-001 scope (one shared model, role-scoped prompts/tools) over the heavier alternative.
+Full findings + sources in `specs/020-multi-agent-role-separation/research.md`'s 2026-07-11
+addendum. User approved proceeding with FR-001 exactly as originally scoped.
+
+Implemented:
+- `app/core/agent/react_prompts.py`: 4 new role-scoped prompt builders (`build_collector_prompt`,
+  `build_exploiter_prompt`, `build_planner_prompt`, `build_summarizer_prompt`).
+- `app/core/agent/brain_tools.py`: `build_argus_tools(bridge, role=...)` plus new
+  `ROLE_TOOL_PARTITIONS` (the single source of truth for FR-002's tool split - Collector gets
+  recon/discovery tools, Exploiter gets scanning/exploitation tools, Planner/Summarizer get only
+  read-only `Query_Memory`/`Query_Knowledge_Graph`) and `partition_tools_by_role()` (so
+  `ArgusBrain`, which only holds the flat tool list and no `WSLBridgeTools` reference, gets the
+  identical split without rebuilding tools from a bridge).
+- `app/core/agent/react_state.py`: `current_role`/`role_history` fields, `NotRequired` so the
+  production single-loop graph is unaffected.
+- `app/core/agent/react_workflow.py`: new standalone `_build_multi_role_workflow()` - `planner`
+  makes a structured routing decision (new `_PlannerDecision`/`_try_planner_decision`, mirroring
+  `_try_structured_action`'s exact schema-constrained-decoding-first pattern) -> `collector`/
+  `exploiter` each execute exactly one tool call per visit -> back to `planner` -> ... ->
+  `summarizer` (terminal). Deliberately a standalone graph, not a generalization of the
+  production `_build_custom_workflow`'s closures, so the proven single-loop path stays provably
+  unaffected regardless of this experimental path's behavior - `_parse_react_output` was safely
+  extracted to module level first (a pure function, zero behavior change; full suite re-verified
+  green before building on top of it) so both graphs share it without duplicating the parsing
+  logic.
+- `app/core/agent/react_workflow.py` also gained `_extract_vulnerability_hints()` - a separate,
+  always-active (not behind the `enable_multi_agent_roles` flag) deterministic scan of tool
+  results for page-title/keyword vulnerability signals, injecting an explicit Reflection nudge.
+  Applies to the production `_build_custom_workflow` path too. Research-backed
+  (arXiv:2606.16364 - prompt-only fixes recover at most ~23% of this tool-selection failure
+  mode), same nudge-message mechanism `_check_early_termination` already uses. Confirmed with the
+  human before including, since it is a real production-behavior change bundled into the same
+  file as the flagged-off specs/020 work, not itself part of specs/020.
+- `config.yaml`/`config.py`: `enable_multi_agent_roles` flag, default `false`. 22 new tests across
+  `tests/test_agent/{test_react_prompts,test_brain_tools}.py`, `tests/test_agent/
+  test_langgraph_workflow.py`.
+
+**NFR-001 measurement** (`tests/manual/specs020_wallclock_comparison.py`, mocked but fixed
+per-call latency so the comparison isolates orchestration overhead from inference-time noise): on
+an equivalent-effort scenario (2 real tool calls, then a report), the multi-role graph took
+**2.00x the LLM calls** of the single-loop graph (6 vs. 3) - structural, not scenario-specific,
+since every Collector/Exploiter action pairs with one Planner routing decision in this topology.
+Converted to this project's own already-measured *real* per-call latency (**10.96s** average for
+a real WhiteRabbitNeo-V3-7B ReAct call): the same 2-tool-call scenario would cost single-loop
+3 x 10.96s ~= 33s vs. multi-role 6 x 10.96s ~= 66s - a real ~33s of added latency for just 2 tool
+calls, compounding further over the 5-10-tool-call runs typical of live testing.
+
+**Honest result: borderline, lands exactly at NFR-001's own pre-agreed 2x rollback threshold, not
+clearly under it.** Not promoted to default (`enable_multi_agent_roles` stays `false`).
+
 ## Fixed false "unreachable" on WAF/CDN-fronted targets, wired PayloadsAllTheThings into Advanced_Evasion_Probe, and gave RAG real security content (2026-07-10)
 User asked to test against a real PortSwigger Web Security Academy lab, then asked to wire
 `Advanced_Evasion_Probe` up to PayloadsAllTheThings automatically and "make use of RAG." Three
