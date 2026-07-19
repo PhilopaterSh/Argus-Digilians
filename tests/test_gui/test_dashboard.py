@@ -7,11 +7,8 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..",
 
 def test_dashboard_imports():
     """Verify Dashboard imports."""
-    try:
-        import app.GUI.dashboard
-        assert app.GUI.dashboard is not None
-    except RuntimeError:
-        pass
+    import app.GUI.dashboard
+    assert app.GUI.dashboard is not None
 
 
 def test_pages_imports():

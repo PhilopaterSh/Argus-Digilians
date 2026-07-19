@@ -11,9 +11,10 @@ GUI_MODULES = [
 
 @pytest.mark.parametrize("module_path", GUI_MODULES)
 def test_gui_module_imports(module_path):
-    """Verify Gui module imports."""
-    try:
-        mod = importlib.import_module(module_path)
-        assert mod is not None
-    except RuntimeError:
-        pass
+    """Verify Gui module imports.
+
+    Args:
+        module_path (str): Dotted path of the GUI module to import.
+    """
+    mod = importlib.import_module(module_path)
+    assert mod is not None

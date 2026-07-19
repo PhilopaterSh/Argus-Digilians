@@ -47,8 +47,10 @@ class SelfHealingService(BaseToolService):
         if "pip install" in tool_info.lower() or "import" in tool_info.lower():
             package = tool_info.split("install")[-1].strip().split()[0] if "install" in tool_info else tool_info.split()[-1]
             print(f"[*] Attempting to install Python package: {package}")
-            cmd = f"{sys.executable} -m pip install -U {package}"
-            res = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+            res = subprocess.run(
+                [sys.executable, "-m", "pip", "install", "-U", package],
+                capture_output=True, text=True,
+            )
             if res.returncode == 0:
                 return f"Successfully installed Python package: {package}. You can now retry the failed action."
             else:
