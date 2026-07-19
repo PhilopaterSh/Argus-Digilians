@@ -6,7 +6,8 @@ This directory contains the main application logic and components for the Argus 
 
 ### `GUI/`
 - **Purpose**: Streamlit web interface for the Argus Studio
-- **Entry Point**: `app/GUI/app.py`
+- **Entry Point**: `app/GUI/dashboard.py` (`app/GUI/app.py` is a deprecated one-line
+  re-export kept only for backward compatibility - see its own docstring)
 - **Port**: 12199 (HTTP) / 12200 (HTTPS)
 - **Key Features**:
   - WSL Bridge configuration panel
@@ -44,13 +45,13 @@ This directory contains the main application logic and components for the Argus 
 
 ### Launch Streamlit UI
 ```bash
-cd path\to\remote_Argus_PhilopaterSh
+cd path\to\Argus-Digilians
 LAUNCH_STUDIO.bat C
 ```
 
 ### Launch CLI Agent
 ```bash
-cd path\to\remote_Argus_PhilopaterSh
+cd path\to\Argus-Digilians
 LAUNCH_CLI.bat C
 ```
 

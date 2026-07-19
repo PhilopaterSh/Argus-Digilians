@@ -1,6 +1,5 @@
 import re
 import requests
-from app.tools.tool_registry import WSLBridgeTools
 
 def main():
     target = "http://testasp.vulnweb.com"

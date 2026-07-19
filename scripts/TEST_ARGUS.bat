@@ -104,13 +104,14 @@ goto menu
 
 :test_gui
 cls
+call Argus_venv\Scripts\activate.bat
+for /f "delims=" %%i in ('python scripts\get_port.py') do set "STREAMLIT_PORT=%%i"
 echo.
 echo [TEST] Launching Streamlit Web GUI...
-echo Opening at http://localhost:8501
+echo Opening at http://localhost:%STREAMLIT_PORT%
 echo Press Ctrl+C to stop the server.
 echo.
-call Argus_venv\Scripts\activate.bat
-python -m streamlit run app\GUI\dashboard.py --logger.level=error
+python -m streamlit run app\GUI\dashboard.py --server.port %STREAMLIT_PORT% --logger.level=error
 goto menu
 
 :test_cli

@@ -14,7 +14,7 @@ graph TB
         KB[(Knowledge Base<br/>.md .json .csv .pdf)]
         Mem[ArgusMemory<br/>SQLite Blackboard]
         Modules[Tactical Modules<br/>apps/modules/]
-        Tools[Tool Registry<br/>13 Services]
+        Tools[Tool Registry<br/>17 Services]
     end
 
     subgraph External["External Systems"]
@@ -86,7 +86,7 @@ The health check verifies: Argus_venv, Ollama, Kali (WSL), and SSH bridge (port 
 ## Project Structure
 
 ```text
-remote_Argus_PhilopaterSh/
+Argus-Digilians/
 +-- INSTALL.bat                     # Single-click master installer (launcher)
 +-- scripts/
 |   +-- ARGUS_INSTALLER.ps1         # Unified self-elevating installer (single source of truth)
@@ -112,7 +112,8 @@ remote_Argus_PhilopaterSh/
 +-- tests/                          # Test suites
 +-- data/                           # Data & databases
 +-- logs/                           # Installer & runtime logs
-+-- archive/                        # Deprecated/superseded code, retained for reference
++-- archive/                        # Retained old/unrelated code (see archive/AI_Agents_Project -
+|                                    # a standalone prototype, not superseded Argus code)
 ```
 
 ---

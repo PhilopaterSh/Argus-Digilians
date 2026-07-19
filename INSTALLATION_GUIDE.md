@@ -48,7 +48,7 @@ Double-click `INSTALL.bat` at the project root. A UAC prompt will appear.
 **Option B: From Terminal**
 
 ```powershell
-cd C:\AI_PenTest_Project\remote_Argus_PhilopaterSh
+cd path\to\Argus-Digilians
 .\INSTALL.bat
 ```
 

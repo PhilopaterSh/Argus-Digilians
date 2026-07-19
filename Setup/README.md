@@ -37,12 +37,12 @@ Use these individual step scripts only if you are:
 - Pulls the AI model (WhiteRabbitNeo-V3-7B)
 
 ### Step 3: Kali Linux Tools
-**File:** `Step_3_Kali_Tools_Setup.bat`
 
-- Verifies Kali WSL distro
-- Runs `check_and_install.sh` inside WSL as root
-- Installs security tools (nmap, gobuster, subfinder, etc.)
-- Configures SSH daemon
+Not covered by a script in this directory - `ARGUS_INSTALLER.ps1` installs security
+tools (nmap, gobuster, subfinder, etc.) and configures the SSH daemon directly via
+its own embedded WSL provisioning logic. There is no `Step_3_Kali_Tools_Setup.bat`
+or `check_and_install.sh` here to run manually for this step - use the master
+installer, or provision Kali tools by hand inside WSL.
 
 ---
 
@@ -52,17 +52,14 @@ Use these individual step scripts only if you are:
 |------|---------|--------|
 | `Step_1_Core_Foundation.bat` | WSL2 + Kali + Ollama setup | Legacy |
 | `Step_2_AI_Python_Env.bat` | Python venv + AI model | Legacy |
-| `Step_3_Kali_Tools_Setup.bat` | Kali tools via WSL | Legacy |
-| `check_and_install.sh` | Kali tools installer (run inside WSL) | **Active** (used by master installer) |
-| `requirements.txt` | Python package dependencies | **Active** |
-| `setup_python_kali.sh` | Python setup inside Kali | Legacy |
-| `argus_recon_fixed.sh` | Recon engine script (Linux) | Legacy |
-| `run_kali_setup.bat` | Manual Kali setup trigger | Legacy |
+| `requirements.txt` | Python package dependencies | **Active** - used by CI (`.github/workflows/ci.yml`); the master installer embeds its own copy of these dependencies rather than reading this file at runtime |
 | `README.md` | This file | - |
 
-> `check_and_install.sh` and `requirements.txt` remain the authoritative source
-> for Kali tool installation and Python dependencies respectively. The master
-> installer references them directly.
+> Corrected 2026-07-19: this table previously listed 5 files that do not exist in
+> this directory (`Step_3_Kali_Tools_Setup.bat`, `check_and_install.sh`,
+> `setup_python_kali.sh`, `argus_recon_fixed.sh`, `run_kali_setup.bat`) - found
+> during a fresh, no-assumptions audit of the whole repo. `requirements.txt` remains
+> the authoritative source for Python runtime dependencies.
 
 ---
 

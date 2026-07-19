@@ -16,7 +16,9 @@ assert the import doesn't raise.
 
 - `argus_deep_exploit.py`, `argus_reasoning.py`, `stealth_exploit.py` - standalone exploitation/
   reasoning CLI entry points.
-- `crawler.py` - a standalone crawler script (`requests.get` + regex href extraction). Distinct
+- `crawler.py` - a standalone crawler script (`requests.get` + regex href extraction) with a
+  hardcoded demo target (`http://testasp.vulnweb.com`), not a parameterized tool - confirmed
+  2026-07-19, along with an unused import (`WSLBridgeTools`, removed same date). Distinct
   from `app/tools/crawler.py`'s `CrawlerService`, which is the production crawler actually
   registered in `app/tools/tool_registry.py`'s `WSLBridgeTools`. Same basename, unrelated code -
   if grepping for "crawler", check which file a result is actually in.
