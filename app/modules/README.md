@@ -26,6 +26,15 @@ assert the import doesn't raise.
   thin wrapper around `WSLBridgeTools`.
 - `seed_memory.py` - manually seeds `ArgusMemory`'s knowledge-graph tables
   (`upsert_entity`/`add_relation`) with example data for local testing/demos.
+- `build_payload_db.py` - ingests flat payload `.txt` files (expected layout: `payloads/sqli.txt`,
+  `xss.txt`, `lfi.txt`, `path_traversal.txt`, `lowercase-headers.txt`) into a searchable SQLite DB
+  with inferred `context`/`encoding` columns. Recovered 2026-07-19 from uncommitted work on the
+  `momen` branch (see `_uncommitted-work-review/README.md` in the workspace root for provenance) -
+  **no `payloads/` directory with this layout exists anywhere in this repo's history**, and nothing
+  calls this script or reads its output DB; it is a standalone data-prep tool for whoever supplies
+  their own payload wordlists, not a wired-up capability. Distinct from `app/tools/payloads.py`'s
+  `PayloadSuggester`, which is live and sources payloads from `PayloadsAllTheThings` inside the WSL
+  bridge instead.
 
 ## `base.py` and `ddgs.py` - different from the above
 

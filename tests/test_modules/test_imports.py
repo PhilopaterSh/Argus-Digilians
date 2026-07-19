@@ -14,6 +14,7 @@ MODULES = [
     "app.modules.seed_memory",
     "app.modules.ddgs",
     "app.modules.crawler",
+    "app.modules.build_payload_db",
 ]
 
 
