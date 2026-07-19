@@ -28,7 +28,15 @@ class SmartWebSearch:
         print(f"[*] Searching internet for: {query}")
         try:
             with DDGS(timeout=self._timeout) as ddgs:
-                results = list(ddgs.text(query, max_results=5))
+                # A single backend frequently returns [] on rate-limit rather
+                # than raising, which used to surface as a false "no results".
+                # Try each backend in turn (one DDGS instance, one search
+                # attempt) before concluding there is genuinely nothing.
+                results = []
+                for backend in ("html", "lite", "api"):
+                    results = list(ddgs.text(query, max_results=5, backend=backend))
+                    if results:
+                        break
                 if not results:
                     return "No results found on the web."
 
