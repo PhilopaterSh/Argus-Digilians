@@ -1414,3 +1414,40 @@ patch's `TypeError` fallback for a `backend`-less signature was confirmed unnece
 than ported speculatively. Verified: all 5 targeted tests pass unmodified, full suite 311/311, ruff
 clean. Committed locally (`9fc0102`), not yet pushed, same as every other commit this project pushes
 only on explicit human authorization.
+
+## Methodology Note (2026-07-19): Closing Two Gaps Found by Asking "Are We Actually Done?"
+
+When the human asked whether the project had reached a genuine stopping point, the orchestrator
+checked rather than answering from memory, and found two real gaps neither party had been tracking:
+
+**In-repo spec copy had gone stale.** PR #2's own body states this file was shipped into the repo
+(as `specs/027-merge-branches/tasks.md`, renumbered since `001` was already taken by an unrelated
+feature) specifically "so the record travels with the code once this merges." It hadn't been kept in
+sync since the merge point (`e418d31`) - the in-repo copy was missing every Methodology Note from
+"Workspace Cleanup After Feature Closure" onward, 6 sections / 346 lines, including this session's
+own workspace audit and `web_search.py` fix. Confirmed by diffing both files: identical content
+before that point except for the expected `001` vs `027` naming (the repo's own text confirms this
+renumbering happened deliberately at merge time). Fixed by appending the missing content verbatim to
+`specs/027-merge-branches/tasks.md` (one internal `unify/001-merge-branches` reference renamed to
+`unify/027-merge-branches` to match the repo's convention, the only substantive change) - commit
+`310463c`. This methodology note itself will now need the same propagation once written, to avoid
+immediately re-drifting.
+
+**Issue #1 had been closed without its actual work being done.** The repo's own `gh api` timeline
+showed it was closed by `PhilopaterSh` (2026-07-19T07:39:47Z, no linked commit) the day after a
+comment explicitly said it "stays open" for `argus/DESKTOP-BVV10T0`'s copy pending a real
+provenance/signing/malware-scan review - a review that, per that same comment thread, was never
+performed. The orchestrator had no record of closing it and flagged the discrepancy rather than
+assuming either "still open, ignore the GitHub state" or "closed, so it must be resolved." Asked the
+human directly: confirmed as a deliberate risk-acceptance decision (the file lives only on an
+archival branch, never reachable from `main` or executed by any running code path), not an accidental
+closure or a completed review. Documented on the issue itself via a comment
+(2026-07-19, issuecomment-5015994081) so the closed state carries its own rationale for any future
+reader, rather than looking like a silently-abandoned or silently-resolved security question.
+
+**Why this matters methodologically**: both gaps existed precisely because they lived outside the
+places this project's own verification habits (pytest, ruff, `git status`, CI checks) naturally look -
+one in a file's sync state across two locations, one in a GitHub issue's comment-vs-state consistency.
+Neither would have surfaced from "run the tests and check CI" alone. The lesson from every review round
+this file documents holds again here: the answer to "are we done" is worth actually checking, not
+inferring from the last visible state.
