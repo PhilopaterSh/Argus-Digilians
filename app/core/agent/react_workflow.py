@@ -67,6 +67,36 @@ PHASE_5_6_TOOLS = frozenset({
 # early-termination flag check, independent of Final Answer detection.
 _FLAG_PATTERN = re.compile(r"flag\{[^}]+\}", re.IGNORECASE)
 
+# Live-discovered 2026-07-19: a tool result can be arbitrarily large (e.g.
+# Subdomain_Enumeration against a domain with heavy passive-DNS noise like
+# example.com returning ~3000 lines) - the `tool_result` STATE field was
+# already bounded to this same length, but the Observation message actually
+# shown to the LLM was not, and an unbounded observation demonstrably
+# derailed the model into hallucinating an unrelated vulnerability instead
+# of reasoning about the real recon data. Matches OBSERVATION_MAX_CHARS
+# below to `tool_result`'s existing bound for consistency, not a new value.
+OBSERVATION_MAX_CHARS = 2000
+
+
+def _bounded_observation(result: Any) -> str:
+    """Render a tool result as an Observation message, bounded so a single
+    oversized result can't crowd out the model's usable context.
+
+    Args:
+        result (Any): The raw tool return value (usually a str).
+
+    Returns:
+        str: `str(result)`, truncated to `OBSERVATION_MAX_CHARS` with a
+        trailing notice if truncation happened - so the model knows the
+        data is partial rather than silently reasoning over a cut-off list
+        as if it were complete.
+    """
+    text = str(result)
+    if len(text) <= OBSERVATION_MAX_CHARS:
+        return text
+    omitted = len(text) - OBSERVATION_MAX_CHARS
+    return f"{text[:OBSERVATION_MAX_CHARS]}\n... [truncated, {omitted} more characters omitted]"
+
 
 def _check_early_termination(text: str) -> Optional[str]:
     """Return the first `flag{...}`-shaped match in `text`, or None.
@@ -178,6 +208,16 @@ def _try_structured_action(llm: Any, system_text: str, messages: list) -> Option
     regex parser in parse_node can consume it unchanged. Returns None if structured
     decoding is unavailable or the model does not honor it, so callers fall back to
     plain llm.invoke() + regex parsing (012 FR-C10).
+
+    Args:
+        llm (Any): The chat LLM to invoke (must support `with_structured_output`
+            for the structured path; falls back to `None` otherwise).
+        system_text (str): The fully-rendered ReAct system prompt.
+        messages (list): The conversation history to invoke the LLM with.
+
+    Returns:
+        Optional[str]: A synthesized `Thought:`/`Action:`/`Final Answer:` string
+        on success, or `None` if structured decoding is unavailable/fails.
     """
     if not hasattr(llm, "with_structured_output"):
         return None
@@ -412,7 +452,18 @@ def build_workflow(
 def _build_prebuilt_workflow(
     llm: ChatOllama, tools: list, memory: Optional[ArgusMemory] = None
 ) -> Any:
-    """Build workflow using create_react_agent (requires tool_calls support)."""
+    """Build workflow using create_react_agent (requires tool_calls support).
+
+    Args:
+        llm (ChatOllama): The chat LLM to bind tools to (must support native
+            tool-calling).
+        tools (list): The tool list to bind and expose to the agent.
+        memory (Optional[ArgusMemory]): Blackboard memory for context refresh
+            before each LLM call; skipped entirely if `None`.
+
+    Returns:
+        Any: Compiled LangGraph graph with the standard `.invoke()`/`.stream()` contract.
+    """
     from langgraph.prebuilt import create_react_agent
     from app.core.agent.react_state import ArgusPrebuiltState
 
@@ -436,7 +487,16 @@ def _build_prebuilt_workflow(
         return update
 
     def post_hook(state: dict) -> dict:
-        """Save tool decisions after LLM response."""
+        """Save tool decisions after LLM response.
+
+        Args:
+            state (dict): Current graph state; reads `messages`/`target`.
+
+        Returns:
+            dict: Empty dict (no state update - this hook's effect is
+            persisting findings to `memory` as a side effect, not returning
+            new state).
+        """
         last = state["messages"][-1] if state["messages"] else None
         if last is None or memory is None:
             return {}
@@ -653,7 +713,7 @@ def _build_custom_workflow(
 
         try:
             result = tool_map[name](inp)
-            obs = f"Observation: {result}"
+            obs = f"Observation: {_bounded_observation(result)}"
             bb = (
                 f"{state['blackboard_summary']}\n"
                 f"- [{name}] {str(inp)[:80]} -> {str(result)[:200]}"
@@ -770,6 +830,14 @@ def _build_custom_workflow(
         return "end"
 
     def route_after_execute(state: ArgusAgentState) -> str:
+        """Loop back to the agent, or end at the iteration budget.
+
+        Args:
+            state (ArgusAgentState): Current graph state.
+
+        Returns:
+            str: The next node name - "agent" or "end".
+        """
         if state["iteration_count"] >= state["max_iterations"]:
             return "end"
         return "agent"
@@ -974,7 +1042,7 @@ def _build_multi_role_workflow(
             "tool_result": str(result)[:2000],
             "tool_error": None,
             "blackboard_summary": bb,
-            "messages": [agent_message, HumanMessage(content=f"Observation: {result}")] + extra_messages,
+            "messages": [agent_message, HumanMessage(content=f"Observation: {_bounded_observation(result)}")] + extra_messages,
             "tool_call_history": state.get("tool_call_history", []) + [call_key],
             "reflection_notes": reflection_notes,
             "iteration_count": state["iteration_count"] + 1,

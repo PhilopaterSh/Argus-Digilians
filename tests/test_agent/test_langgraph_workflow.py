@@ -14,6 +14,7 @@ from typing import Any
 from langchain_core.messages import AIMessage, HumanMessage
 from app.core.agent.react_workflow import (
     _ArgusAction,
+    _bounded_observation,
     _build_custom_workflow,
     _build_multi_role_workflow,
     _build_prebuilt_workflow,
@@ -28,6 +29,7 @@ from app.core.agent.react_workflow import (
     _try_structured_action,
     _try_structured_final_answer,
     extract_target,
+    OBSERVATION_MAX_CHARS,
 )
 from app.core.agent.react_state import ArgusAgentState
 
@@ -315,6 +317,33 @@ def test_check_early_termination_no_match_returns_none():
     """Verify Check early termination no match returns none."""
     assert _check_early_termination("no flag here, just a normal result") is None
     print("  [PASS] test_check_early_termination_no_match_returns_none")
+
+
+def test_bounded_observation_short_result_passes_through_unchanged():
+    """Verify Bounded observation short result passes through unchanged."""
+    assert _bounded_observation("a short tool result") == "a short tool result"
+    print("  [PASS] test_bounded_observation_short_result_passes_through_unchanged")
+
+
+def test_bounded_observation_oversized_result_is_truncated_with_notice():
+    """Live-discovered 2026-07-19: Subdomain_Enumeration against example.com
+    returned ~3000 lines, which - before this fix - was passed to the LLM
+    unbounded (unlike the parallel tool_result state field, which was
+    already truncated) and demonstrably caused the model to hallucinate an
+    unrelated vulnerability instead of reasoning about the real recon data."""
+    huge_result = "x" * (OBSERVATION_MAX_CHARS + 500)
+    bounded = _bounded_observation(huge_result)
+    assert len(bounded) < len(huge_result)
+    assert bounded.startswith("x" * OBSERVATION_MAX_CHARS)
+    assert "truncated" in bounded
+    assert "500" in bounded
+    print("  [PASS] test_bounded_observation_oversized_result_is_truncated_with_notice")
+
+
+def test_bounded_observation_coerces_non_string_input():
+    """Verify Bounded observation coerces non string input."""
+    assert _bounded_observation(12345) == "12345"
+    print("  [PASS] test_bounded_observation_coerces_non_string_input")
 
 
 def test_build_reflection_note_blocked_response_suggests_bypass():
