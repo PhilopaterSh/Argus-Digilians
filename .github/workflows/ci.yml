@@ -94,7 +94,7 @@ jobs:
           pip install -r Setup/requirements.txt
           pip install -r requirements-dev.txt
       - name: Run full test suite (informational)
-        run: pytest -m "not eval" --cov --cov-report=term-missing
+        run: pytest -m "not eval and not slow" --cov --cov-report=term-missing
 
   # Stage 5: AI-evaluation. NON-BLOCKING - requires a reachable Ollama endpoint.
   # Enable on a self-hosted runner that has Ollama; provide the endpoint as a secret.

@@ -13,6 +13,11 @@ logger = logging.getLogger(__name__)
 OLLAMA_URL = "http://localhost:11434/api/tags"
 OLLAMA_HEALTH_TIMEOUT = 5
 WSL_TERMINATE_TIMEOUT = 10
+# subprocess.CREATE_NO_WINDOW only exists on Windows; accessing it directly raises
+# AttributeError on Linux/macOS before Popen is even called (this module's real target
+# is Windows, per the project's Technical Context, but it must still be importable and
+# testable on a Linux CI runner). 0 is a no-op creationflags value everywhere else.
+CREATE_NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 
 
 class SelfHealingService(BaseToolService):
@@ -125,7 +130,7 @@ class SelfHealingService(BaseToolService):
         try:
             subprocess.Popen(
                 ["ollama", "serve"],
-                creationflags=subprocess.CREATE_NO_WINDOW,
+                creationflags=CREATE_NO_WINDOW,
             )
             return "Successfully restarted Ollama."
         except FileNotFoundError:
