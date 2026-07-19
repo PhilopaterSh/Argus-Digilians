@@ -740,6 +740,7 @@ should be revisited whenever new capability is considered, not treated as closed
 | 024 | LoRA fine-tuning pipeline | Proposed | none (offline pipeline) | Medium — needs training-capable hardware not guaranteed on target machines |
 | 025 | Subtask-level benchmark suite (SR/SCR/TTE + ablation) | Proposed | none (needed to *measure* 019/020) | Low |
 | 026 | Ethical safeguards (auth gate, audit log, watermarking, RAG gating) | Proposed | none | Low |
+| 028 | Human-in-the-loop escalation on detected stuck loops | Proposed | 019 (done) | Low - complements, not replaces, 019's existing structural duplicate-call guard |
 
 Recommended sequencing per each phase's own spec.md: `019` is done; `025` (benchmark suite) is
 next-most-valuable since it's what lets `020`'s "measure 019's residual gap before committing"

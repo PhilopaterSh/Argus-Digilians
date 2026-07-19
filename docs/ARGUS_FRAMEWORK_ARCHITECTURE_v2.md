@@ -2,7 +2,7 @@
 
 This document provides a detailed technical overview of the Argus Security Framework architecture, structured according to the **arc42** template and visualized using the **C4 Model** concepts.
 
-> **Canonical reconciliation:** Cross-cutting naming, ports, Python version, RAG embedding/index design, parsing, testing, and CI/CD are governed by **`specs/012-spec-reconciliation`**. Where this document and `012` disagree, `012` wins - **except for agent topology**, where `012` §4's ADR-15 (a bounded `Recon → Scanner → Exploit ⇄ Reflective → Post-Exploit` LangGraph node graph) was superseded as the production driver by **`specs/017-restore-react-agent`** (2026-07-08) after live testing found a single ReAct loop more reliable against this project's actual model than the multi-node graph - see ADR-17/18/19 below. `010`'s node graph (`app/core/agent/graph.py`, `nodes/`) is retained, not deleted (Constitution VII), but is not what `ArgusBrain` invokes today. This document was updated 2026-07-10 to describe the current `017`/`018`/`019` architecture accurately (single `ArgusBrain`, canonical RAG names, embedding manifest, port **12199**, Python **3.12**, **17** ReAct-loop tools via `brain_tools.py`).
+> **Canonical reconciliation:** Cross-cutting naming, ports, Python version, RAG embedding/index design, parsing, testing, and CI/CD are governed by **`specs/012-spec-reconciliation`**. Where this document and `012` disagree, `012` wins - **except for agent topology**, where `012` §4's ADR-15 (a bounded `Recon -> Scanner -> Exploit ⇄ Reflective -> Post-Exploit` LangGraph node graph) was superseded as the production driver by **`specs/017-restore-react-agent`** (2026-07-08) after live testing found a single ReAct loop more reliable against this project's actual model than the multi-node graph - see ADR-17/18/19 below. `010`'s node graph (`app/core/agent/graph.py`, `nodes/`) is retained, not deleted (Constitution VII), but is not what `ArgusBrain` invokes today. This document was updated 2026-07-10 to describe the current `017`/`018`/`019` architecture accurately (single `ArgusBrain`, canonical RAG names, embedding manifest, port **12199**, Python **3.12**, **17** ReAct-loop tools via `brain_tools.py`).
 
 > **Standing research foundation (per explicit project direction, 2026-07-10):** `docs/history/2603.27127v1.pdf` ("Red-MIRROR: Agentic LLM-based Autonomous Penetration Testing with Reflective Verification and Knowledge-augmented Interaction," arXiv:2603.27127v1) is not a one-time gap analysis - it is the **continuing reference framework this project measures itself against for the remainder of its development**. Concretely: SRMM (Shared Recurrent Memory Mechanism) motivated `specs/019`'s Blackboard/RAG memory-write discipline; Dual-Phase Reflection (Intra-/Inter-reflection) motivated `specs/019`'s duplicate-call blocking and 3x self-consistency majority vote on exploitation tools; the Planner Agent's global-context-aggregation-driven escalation (Sec. 3.3.2) motivated this entry's own PHASE 7 (Chaining & Escalation, see `react_prompts.py`) as a single-loop analogue. The paper's remaining unimplemented concepts (4-agent role split, LoRA fine-tuning, XBOW/Vulhub-style benchmarking) are tracked as the standing backlog in `specs/checklist.md` (`specs/020` through `specs/026`) and should stay the first place to look when deciding what to build next, not just when this document was first written.
 
@@ -116,9 +116,9 @@ graph TB
 | Component | Path | Responsibility |
 |-----------|------|----------------|
 | **ArgusBrain** | `app/core/agent/brain.py` | Reasoning interface: `_refresh_blackboard()` + `_enrich_with_rag()` context assembly (RAG + Blackboard fusion, `target` extracted from the *raw* pre-enrichment query per `018`'s CHK080 fix), then `_run_structured_graph()` drives `react_workflow.py`'s custom `StateGraph` (`_build_custom_workflow`) to completion via `.stream(stream_mode="values")`, forwarding each new message to any `on_graph_event(status, detail)` callback (`react_callback.py::LiveFeedCallbackHandler`) for live-feed observability. `_finalize_graph_output()` extracts the final answer via structured decoding (`_try_structured_final_answer`) with a Pydantic/regex-JSON fallback, never fabricating a report if the graph never reached `Final Answer:` (Constitution VIII). One retry on a known transient Ollama/CUDA infra crash signature (`018` addendum); any other exception fails immediately. The `brain_v2.py`/`agent_factory_v2.py`/dual `use_react` path this section previously described **does not exist** - it was proven non-functional (both branches called the identical `AgentExecutor`) and removed by `018`. |
-| **ReAct Workflow** | `app/core/agent/react_workflow.py` (+`react_state.py`, `react_prompts.py`, `react_callback.py`) | `017`/`018`/`019`'s actual production reasoning loop: a 3-node `StateGraph` (`agent` → `parse` → `execute`, looping until `Final Answer:` or `max_iterations`=15). Tool selection tries Ollama schema-constrained structured decoding first (`_try_structured_action`, `ChatOllama.with_structured_output`), falling back to regex text parsing. `019` added: per-response Intra-reflection notes on a blocked 3rd-identical-call (`_build_reflection_note`), a 3x self-consistency majority-vote Inter-reflection check scoped to `EXPLOITATION_TOOLS` (`_inter_reflect`, gated by `enable_inter_reflection`), and an early-termination nudge on a `flag{...}`-shaped tool result (`_check_early_termination`) - see ADR-19. |
+| **ReAct Workflow** | `app/core/agent/react_workflow.py` (+`react_state.py`, `react_prompts.py`, `react_callback.py`) | `017`/`018`/`019`'s actual production reasoning loop: a 3-node `StateGraph` (`agent` -> `parse` -> `execute`, looping until `Final Answer:` or `max_iterations`=15). Tool selection tries Ollama schema-constrained structured decoding first (`_try_structured_action`, `ChatOllama.with_structured_output`), falling back to regex text parsing. `019` added: per-response Intra-reflection notes on a blocked 3rd-identical-call (`_build_reflection_note`), a 3x self-consistency majority-vote Inter-reflection check scoped to `EXPLOITATION_TOOLS` (`_inter_reflect`, gated by `enable_inter_reflection`), and an early-termination nudge on a `flag{...}`-shaped tool result (`_check_early_termination`) - see ADR-19. |
 | **RAG Engine** | `app/core/rag/rag_engine.py` | Orchestrates retrieval + context fusion via `format_combined_context()` |
-| **Embedding Factory** | `app/core/rag/embeddings.py` | Singleton: Ollama nomic-embed-text → HuggingFace → OpenAI fallback |
+| **Embedding Factory** | `app/core/rag/embeddings.py` | Singleton: Ollama nomic-embed-text -> HuggingFace -> OpenAI fallback |
 | **Document Processor** | `app/core/rag/document_processor.py` | Structural chunking per file type (see §5.2) |
 | **Vector Store** | `app/core/rag/vector_store.py` | FAISS build/persist/load/similarity_search |
 | **ArgusMemory** | `app/core/memory/memory_service.py` | SQLite Blackboard with 5 tables (targets, findings, entities, relations, global_state). `get_blackboard_summary(max_chars=3000)` (one survivor per domain+data_type, bounded by character count - the shape `Query_Memory`/GUI/TDA callers rely on verbatim) and, since `019`, the additive `summarize_for_planning(k=3)` (per-`(domain, tool_name)`-bounded, provenance-tagged `[tool_name] ...` lines, adapting Red-MIRROR's SRMM `GetAggregatedContext` to this schema) are separate methods with separate callers - see ADR-19. |
@@ -293,7 +293,7 @@ graph TB
 
 ## 6. Runtime View (C4 Level 3: Components)
 
-### 6.1 Complete Query Lifecycle (Exact Code Path — reflects `017`/`018`/`019`)
+### 6.1 Complete Query Lifecycle (Exact Code Path - reflects `017`/`018`/`019`)
 
 > This section previously described a `use_react`/`brain_v2.py`/`_get_simple_chain()` dual-path
 > that a live production run (`018`) proved never actually existed as a real fallback - both
@@ -473,7 +473,7 @@ flowchart LR
 
 - **Host OS:** Windows 10/11.
 - **AI Engine:** Ollama (Localhost:11434) with models: `WhiteRabbitNeo-V3-7B`, `nomic-embed-text`.
-- **GUI:** Streamlit "Argus Studio" dashboard on canonical port **12199** (`config.yaml` → `streamlit.port`; per `012` §2.6 / ADR-16).
+- **GUI:** Streamlit "Argus Studio" dashboard on canonical port **12199** (`config.yaml` -> `streamlit.port`; per `012` §2.6 / ADR-16).
 - **Vector Store:** FAISS (CPU) persisted to `app/core/rag/store/`, with `store/manifest.json` recording the pinned embedder (per ADR-9).
 - **Environment:** `Argus_venv` (Python **3.12**, canonical across all specs per `012` §2.6).
 - **Directory Structure:**
@@ -522,13 +522,89 @@ flowchart LR
 - **ADR 10: Why RAG + Blackboard Fusion?** Separating static knowledge (techniques, cheatsheets) from live target state (active findings) prevents the LLM from confusing general knowledge with current reconnaissance data, reducing hallucination and improving decision accuracy.
 - **ADR 11: Why Structural Chunking?** Different file formats carry meaning in their structure. JSON lists, CSV rows, and Markdown headers each require format-specific splitting to preserve semantic coherence during retrieval.
 - **ADR 12: Why LangChain vs LangGraph?** LangChain is utilized for the linear, deterministic RAG indexing and query flow (docs, embeddings, FAISS) due to its specialized retrieval modules. LangGraph is selected for the autonomous Penetration Testing Agent to handle non-linear execution, cycles (e.g. feedback loops during failed exploits), multi-agent orchestration, and native state management without spaghetti code.
-- **ADR 13: Structured output over regex parsing (per `012` §5).** Tool/Action selection uses structured decoding as the primary path — native `tool_calls` for tool-calling models, and Ollama `format=json` (JSON-schema-constrained) for others — emitting `{ "tool": <name>, "input": <value> }`. The legacy JSON/text regex dual-parser (from `013`) is retained only as a fallback. Rationale: eliminates a whole class of parse failures and reduces retries/latency.
+- **ADR 13: Structured output over regex parsing (per `012` §5).** Tool/Action selection uses structured decoding as the primary path - native `tool_calls` for tool-calling models, and Ollama `format=json` (JSON-schema-constrained) for others - emitting `{ "tool": <name>, "input": <value> }`. The legacy JSON/text regex dual-parser (from `013`) is retained only as a fallback. Rationale: eliminates a whole class of parse failures and reduces retries/latency.
 - **ADR 14: One canonical Brain + descriptive RAG names (per `012` §2).** The `_v2` shadow files (`brain_v2.py`, `agent_factory_v2.py`) are collapsed into a single `app/core/agent/brain.py` (`ArgusBrain`) and `agent_factory.py`; RAG modules keep the descriptive names `document_processor.py` / `vector_store.py` / `rag_engine.py` (not `010`'s `processor/vectorstore/engine`). Rationale: SRP/maintainability and one unambiguous name per concept.
-- **ADR 15: Canonical agent topology = explicit bounded node graph (per `012` §4) — *superseded by ADR-17, see correction below*.** The production agent was originally the LangGraph node graph `Recon → Scanner → Exploit ⇄ Reflective → Post-Exploit` in `app/core/agent/graph.py`/`nodes/`, bounded by `MAX_RETRIES` + a recursion limit. **Correction (`017`, 2026-07-08):** live testing found this multi-node graph less reliable against this project's actual model (`WhiteRabbitNeo-V3-7B`) than a single ReAct loop - `017` restored `ArgusBrain` to drive a single-loop agent instead. `010`'s graph is retained (Constitution VII: code + its tests stay, nothing deleted) but is **not** what `ArgusBrain` invokes today.
+- **ADR 15: Canonical agent topology = explicit bounded node graph (per `012` §4) - *superseded by ADR-17, see correction below*.** The production agent was originally the LangGraph node graph `Recon -> Scanner -> Exploit ⇄ Reflective -> Post-Exploit` in `app/core/agent/graph.py`/`nodes/`, bounded by `MAX_RETRIES` + a recursion limit. **Correction (`017`, 2026-07-08):** live testing found this multi-node graph less reliable against this project's actual model (`WhiteRabbitNeo-V3-7B`) than a single ReAct loop - `017` restored `ArgusBrain` to drive a single-loop agent instead. `010`'s graph is retained (Constitution VII: code + its tests stay, nothing deleted) but is **not** what `ArgusBrain` invokes today.
 - **ADR 16: Unified Streamlit port 12199 (per `012` §2.6).** One value in `config.yaml` (`streamlit.port: 12199`), with `get_port.py`'s fail-safe default equal to it, consumed by every launcher and the `011` dashboard. Supersedes the divergent `8199`/`8501` values. Rationale: eliminates port drift at the source.
 - **ADR 17: Restore a single ReAct loop as the production agent (`017`, 2026-07-08).** Reversing ADR-15's node-graph topology: `ArgusBrain.ask()` drives one `AgentExecutor`-style loop (later replaced by `react_workflow.py`'s custom graph, ADR-18) instead of the `010` multi-node graph. Rationale: the multi-node graph's phase-transition logic assumed reliability properties (consistent structured hand-offs between nodes) that didn't hold for a 7B local model prone to format drift; a single loop with one retry/reflection point per iteration proved more robust in practice. `brain_tools.py::build_argus_tools()` (17 tools) and `scripts/run_agent.py` are `017`'s canonical tool-wiring and CLI entry points.
 - **ADR 18: Structured-output decoding over regex-only parsing for the ReAct loop (`018`, 2026-07-08).** A live production run (`https://www.cultbeauty.co.uk/`) timed out after 900s with zero results: `WhiteRabbitNeo-V3-7B` never once produced a valid free-text `Thought:/Action:/Action Input:` line across ~26 retries, and `ArgusBrain`'s claimed "falls back to a simpler sequential execution model" was never actually true (`_get_react_agent()`/`_get_simple_chain()` built the identical `AgentExecutor`). Fix: `react_workflow.py`'s custom `StateGraph` (`_build_custom_workflow`), already built for `013` but disconnected from production, tries Ollama schema-constrained structured decoding first (`llm.with_structured_output`, near-100% parse success per Ollama's own docs), falling back to regex parsing only if unavailable - applied to both tool selection (`_try_structured_action`) and the final report (`_try_structured_final_answer`). Requires `ChatOllama` (`build_chat_llm()`), not `OllamaLLM` (`build_llm()`) - the latter's `with_structured_output` raises `NotImplementedError`, confirmed live. `max_iterations` set to 15 (structured decoding needs far fewer retries than free-text parsing's old default of 50). A live re-run found and fixed 4 further real bugs (documented in `specs/018-structured-agent-reliability/spec.md`'s addendum) plus one mitigated transient Ollama/CUDA infrastructure crash (one retry, exact-signature-matched only).
 - **ADR 19: SRMM/Dual-Phase-Reflection-inspired memory + reflection upgrade (`019`, 2026-07-10).** From a gap analysis against the Red-MIRROR paper (arXiv:2603.27127v1, `docs/history/2603.27127v1.pdf`), whose own ablation study found its Shared Recurrent Memory Mechanism and Dual-Phase Reflection components synergistic (not merely additive) - under adaptive/replacement-based input filtering, neither alone solved any challenge while the combination solved 100%. Adapted (not ported verbatim) to Argus's single-loop architecture: `ArgusMemory.summarize_for_planning(k=3)` (per-`(domain, tool_name)`-bounded, additive to - not replacing - `get_blackboard_summary()`, whose exact shape existing tests/callers depend on); `_build_reflection_note()` (response-aware Intra-reflection replacing generic duplicate-call text); `_inter_reflect()` (3x self-consistency majority vote, Wang et al. ICLR 2023, scoped to `EXPLOITATION_TOOLS` via `enable_inter_reflection`); `_check_early_termination()` (flag-pattern nudge, not a forced structural exit - `Final Answer:` remains the sole completion signal, Constitution VIII). Measured live against the production model (`specs/019.../tasks.md` T013): the 3x vote costs ~0.82s vs. a normal ~10.96s reasoning call (~8%, not the ~300% naively expected), because the vote prompt constrains output to one word and this model's decode time is output-token-bound - confirmed safe as the default by measurement, not assumption. Rationale for adapting rather than adopting the paper's full multi-agent split: see `specs/020-multi-agent-role-separation/spec.md` - `020` is deliberately deferred pending measurement of `019`'s residual gap.
+- **ADR 21: Browser automation (`022`) stays a plain tool the existing agent calls, not a separately-reasoning "AI Browser Agent" (2026-07-13).** Researched the distinction directly: a headless browser (Playwright) executes deterministic code; an "AI Browser Agent" (e.g. Browser-Use) is an LLM deciding actions dynamically *on top of* a headless browser - a genuinely separate, additional decision loop, even in frameworks' text-only (non-vision) modes that could technically run on a local small model. Adopting one would mean two independently-reasoning LLM loops for one task (Argus's own ReAct loop, plus the browser agent's internal one) - directly repeating the same per-decision latency cost this project has already measured with real numbers for other multi-loop designs. `022`'s existing design (a plain `Render_Page_JS`/`Browser_Interact` tool pair Argus's own agent calls directly, FR-003's explicit "no in-tool LLM decision loop" stance) was already the right call before this research pass, not a gap - confirmed, not changed. Matches a pattern recent 2026 agentic-pentesting write-ups independently converge on ("Playwright MCP" - browser primitives exposed as callable tools for an existing agent, not a nested agent).
+
+## 10. Research References
+
+Every external source this project's architecture decisions have cited, grouped by the question
+each research pass answered. Per-decision context and full reasoning live in the relevant
+`specs/<phase>/research.md` (or the ADR entry above referencing it) - this section is the
+consolidated bibliography, not a duplicate of that reasoning (Constitution IX). Primary source
+for the whole `019`-`026` backlog is `docs/history/2603.27127v1.pdf` (Red-MIRROR,
+arXiv:2603.27127v1) - listed once here, not repeated per topic below.
+
+**RAG-augmented penetration-testing agent architecture** (grounding the general direction behind
+`019`'s memory/reflection upgrade):
+- [RAG Production Guide 2026 (Lushbinary)](https://lushbinary.com/blog/rag-retrieval-augmented-generation-production-guide/)
+- [Design and Implementation of a RAG-Enhanced LLM Chatbot for Penetration Testing Tasks (ScienceDirect)](https://www.sciencedirect.com/science/article/pii/S1877050926006514)
+- [SoK: Agentic Retrieval-Augmented Generation (arXiv:2603.07379)](https://arxiv.org/pdf/2603.07379)
+- [RAG-Augmented LLMs for Penetration Testing: benchmarking open-source models (ScienceDirect)](https://www.sciencedirect.com/science/article/pii/S2667305326000566)
+- [Securing Retrieval-Augmented Generation (arXiv:2604.08304)](https://arxiv.org/html/2604.08304v1)
+- [LLM Pentesting: The 2026 Checklist (Repello AI)](https://repello.ai/blog/llm-pentesting-checklist-and-tools)
+- [AI/LLM Penetration Testing Methodology - 2026 Playbook (AxVeil)](https://axveil.com/blog/ai-llm-penetration-testing-methodology)
+- [Efficient RAG for VAPT in Automotive Engineering](https://doi.org/10.3390/a19070555)
+- [Retrieval-Augmented Generation: Comprehensive Survey (arXiv:2506.00054)](https://arxiv.org/html/2506.00054v1)
+
+**PayloadsAllTheThings dynamic payload extraction** (grounding `Advanced_Evasion_Probe`'s
+`fetch_intruder_payloads()`, 2026-07-10):
+- [awesome-wordlists (GitHub)](https://github.com/gmelodie/awesome-wordlists)
+- [SecLists (GitHub)](https://github.com/danielmiessler/SecLists)
+- [PayloadsAllTheThings (GitHub, swisskyrepo)](https://github.com/swisskyrepo/PayloadsAllTheThings)
+
+**LLM tool-selection failure modes** (grounding `_extract_vulnerability_hints()`'s deterministic,
+code-level evidence-extraction design over a prompt-only fix, 2026-07-11):
+- [Looking Is Not Picking: An Attention-Segment Account of Tool-Selection Failures in LLM Agents (arXiv:2606.16364)](https://arxiv.org/abs/2606.16364)
+- [ToolFailBench: Diagnosing Tool-Use Failures in LLM Agents (arXiv:2607.04686)](https://arxiv.org/html/2607.04686v1)
+- [LLM Agents Already Know When to Call Tools - Even Without Reasoning (arXiv:2605.09252)](https://arxiv.org/html/2605.09252v1)
+
+**Local model orchestration cost** (grounding `020`'s rejection of the multi-model variant,
+2026-07-11):
+- [Ollama vs vLLM: Performance Benchmark 2026 (SitePoint)](https://www.sitepoint.com/ollama-vs-vllm-performance-benchmark-2026/)
+- [Performance Test: Ollama 0.5.0 vs. vLLM 0.4.0 (DEV Community)](https://dev.to/johalputt/performance-test-ollama-050-vs-vllm-040-local-llm-inference-latency-on-nvidia-rtx-5090-and-1pol)
+
+**Abliteration's effect on model quality** (grounding `020`'s rejection of an abliterated model
+for the Verifier/Summarizer role, 2026-07-11):
+- [Comparative Analysis of LLM Abliteration Methods (arXiv:2512.13655)](https://arxiv.org/pdf/2512.13655)
+- [Heretic vs Abliterated LLMs: Refusal Rates & Benchmarks (2026)](https://aithinkerlab.com/heretic-ai-abliteration-benchmarks-2026/)
+- [The Cost of Abliteration in Large Language Models](https://kirill.korins.ky/articles/the-cost-of-abliteration-in-large-language-models/)
+
+**Single dense model with multiple personas vs. multiple full models** (grounding `020`'s
+FR-001 single-model design, 2026-07-11):
+- [Single Dense Model Hosts Hundreds of Agent Personas as Lightweight Masks (ai\|expert, Persona-Pruner)](https://aiexpert.news/en/article/persona-pruner-lightweight-models-for-multi-agent-role-playing-systems)
+
+**AI Browser Agent vs. plain headless browser** (grounding `022`'s tool-not-agent design,
+2026-07-13):
+- [Headless Browser vs AI Agents: When to Use Each (2026, TinyFish)](https://www.tinyfish.ai/blog/headless-browser-vs-ai-agents)
+- [Browser Tools for AI Agents Part 1: Playwright, Puppeteer (DEV Community)](https://dev.to/stevengonsalvez/browser-tools-for-ai-agents-part-1-playwright-puppeteer-and-why-your-agent-picked-playwright-k71)
+- [browser-use (GitHub)](https://github.com/browser-use/browser-use)
+- [Supported Models - Browser Use docs](https://docs.browser-use.com/open-source/supported-models)
+- [Using Ollama with Browser-Use to Leverage Local LLMs (Medium)](https://medium.com/@tossy21/using-ollama-with-browser-use-to-leverage-local-llms-6e1fba532b58)
+- [AWE: Adaptive Agents for Dynamic Web Penetration Testing (arXiv:2603.00960)](https://arxiv.org/html/2603.00960)
+- [Top 10 Agentic AI Penetration Testing Tools in 2026 (zerothreat.ai)](https://zerothreat.ai/blog/top-10-agentic-ai-penetration-testing-tools)
+- [autopentest-ai (GitHub)](https://github.com/bhavsec/autopentest-ai)
+
+**Playwright's own documentation** (grounding `022`'s locator-priority correction, 2026-07-10):
+- `playwright.dev/docs/locators` (cited via `docs/history/2603.27127v1.pdf` reference [39], and
+  independently checked against current Playwright documentation during `022`'s research pass).
+
+**Additional browser-automation techniques** (grounding `022`'s FR-006/007/008 - network/HAR
+capture, console/page-error capture for payload-execution verification, session-state
+extraction - 2026-07-13):
+- [How to Intercept API Calls Requests in Playwright](https://roundproxies.com/blog/intercept-network-playwright/)
+- [Network - Playwright (official docs)](https://playwright.dev/docs/network)
+- [XSS Vulnerability Tester MCP Server (PulseMCP)](https://www.pulsemcp.com/servers/xss-vulnerability-tester)
+- [How to Monitor JavaScript Logs & Exceptions with Playwright (Checkly)](https://www.checklyhq.com/blog/how-to-monitor-javascript-logs-and-exceptions-with-playwright/)
+- [Storage & Authentication - Playwright (official docs)](https://playwright.dev/agent-cli/commands/storage)
+- [Using Playwright's storageState (BrowserStack)](https://www.browserstack.com/guide/playwright-storage-state)
+- [mcp-browser (GitHub, badchars)](https://github.com/badchars/mcp-browser)
+- [hexstrike-ai (GitHub)](https://github.com/0x4m4/hexstrike-ai)
 
 ---
 
@@ -544,4 +620,8 @@ codebase before being written here, not assumed from memory - see the correspond
 verification pass in `CHANGELOG.md`. `app/core/agent/graph.py`/`nodes/` (the superseded `010`
 node graph) and `app/modules/` (pre-`017` tactical modules) are confirmed still present on disk
 - retained per Constitution VII, not deleted, just no longer reachable from `ArgusBrain`'s
-production path.*
+production path. Updated 2026-07-13: added ADR-21 (`022`'s AI-Browser-Agent-vs-plain-tool
+research finding) plus the new section 10 Research References section - a consolidated bibliography of
+every external source this project's architecture decisions have cited, at the user's explicit
+request, so the reasoning behind `019`-`022`'s design choices stays traceable to real sources
+rather than living only in chat history.*
