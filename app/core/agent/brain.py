@@ -465,15 +465,21 @@ class ArgusBrain:
 
     def _record_graph_edge(
         self,
-        entity_type: str,
-        entity_value: str,
+        entity: tuple[str, str],
         source_val: str,
         target_val: str,
         rel_type: str,
     ) -> None:
         """Persist a single knowledge-graph edge during recon so that
         Query_Knowledge_Graph has real data to return. No-op (and never
-        fatal) when memory is disabled or a write fails."""
+        fatal) when memory is disabled or a write fails.
+
+        entity: (entity_type, entity_value) for the new node this edge
+        introduces - always equal to whichever of source_val/target_val
+        isn't the already-registered graph root, so it's bundled here
+        rather than passed as two more separate positional strings.
+        """
+        entity_type, entity_value = entity
         if self.memory is None:
             return
         value = (entity_value or "").strip()
@@ -676,7 +682,7 @@ class ArgusBrain:
                         sub_obs = self._run_tool_safely("Check_Reachability", sub)
                         emit(f"Check_Reachability[{sub}]", sub_obs, domain=sub)
                         # Persist the edge so Query_Knowledge_Graph has data.
-                        self._record_graph_edge("domain", sub, sub, graph_root, "SUBDOMAIN_OF")
+                        self._record_graph_edge(("domain", sub), sub, graph_root, "SUBDOMAIN_OF")
 
             elif tool_name == "Recon_Suite":
                 raw_tech = self._parse_tech(observation)
@@ -684,7 +690,7 @@ class ArgusBrain:
                 if tech:
                     # Persist each detected technology as a graph edge.
                     for token in tech.split():
-                        self._record_graph_edge("tech", token, graph_root, token, "USES_TECH")
+                        self._record_graph_edge(("tech", token), graph_root, token, "USES_TECH")
                 if tech and "Smart_Web_Search" in self.tool_map:
                     counter["total"] += 1
                     query = f"known CVEs and exploits for {tech}"
