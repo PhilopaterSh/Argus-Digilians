@@ -215,6 +215,11 @@ def _try_planner_decision(llm: Any, system_text: str) -> Optional[str]:
     shape (a routing choice, not a tool call) doesn't fit `_ArgusAction`'s
     schema.
 
+    Args:
+        llm (Any): The chat LLM to invoke (must support `with_structured_output`
+            for the structured path; falls back to `None` otherwise).
+        system_text (str): The Planner's fully-rendered system prompt.
+
     Returns:
         Optional[str]: One of `"collector"`/`"exploiter"`/`"summarizer"` on
         success, or `None` if structured decoding is unavailable/fails -
@@ -321,7 +326,14 @@ def _parse_react_output(content: str, default_input: str) -> dict:
     closure dependencies - both the single-loop graph and the multi-role
     graph's collector/exploiter nodes call this identically.
 
-    Returns dict with optional keys: tool_name, tool_input, phase.
+    Args:
+        content (str): The raw LLM response text to parse.
+        default_input (str): Fallback `tool_input` value when the parsed
+            action doesn't specify one explicitly.
+
+    Returns:
+        dict: Optional keys `tool_name`, `tool_input`, `phase` - whichever
+        the parsed content actually specifies.
     """
     # 1. Detect Final Answer
     if re.search(r"Final Answer:", content):
@@ -476,6 +488,9 @@ def _build_custom_workflow(
             `ArgusConfig.enable_inter_reflection` by callers; defaults True
             here only for direct/test callers that don't thread config
             through.
+
+    Returns:
+        Any: Compiled LangGraph graph with the standard `.invoke()`/`.stream()` contract.
     """
     tool_map = _build_tool_map(tools)
 
@@ -830,6 +845,15 @@ def _build_multi_role_workflow(
     exploiter_tool_map = _build_tool_map(tools_by_role.get("exploiter", []))
 
     def planner_node(state: ArgusAgentState) -> dict:
+        """Decide which specialist (Collector/Exploiter/Summarizer) acts next.
+
+        Args:
+            state (ArgusAgentState): Current graph state.
+
+        Returns:
+            dict: State updates - `current_role`, appended `role_history`,
+            incremented `iteration_count`.
+        """
         system_text = build_planner_prompt({**state})
         decision = _try_planner_decision(llm, system_text)
         if decision is None:
@@ -852,7 +876,22 @@ def _build_multi_role_workflow(
         state: ArgusAgentState, role_name: str, tool_map: Dict[str, Callable], prompt_builder: Callable
     ) -> dict:
         """Shared propose -> parse -> execute logic for Collector/Exploiter -
-        exactly one tool call per visit, then control returns to Planner."""
+        exactly one tool call per visit, then control returns to Planner.
+
+        Args:
+            state (ArgusAgentState): Current graph state.
+            role_name (str): The specialist role invoking this step
+                ("collector" or "exploiter"), used for logging/Blackboard entries.
+            tool_map (Dict[str, Callable]): This role's own tool subset.
+            prompt_builder (Callable): The role-scoped prompt builder to render
+                the system prompt with (`build_collector_prompt` or
+                `build_exploiter_prompt`).
+
+        Returns:
+            dict: State updates - `messages`, `blackboard_summary`,
+            `tool_call_history`, `reflection_notes`, incremented
+            `iteration_count`, and (on a real tool call) `tool_result`/`tool_error`.
+        """
         system_text = prompt_builder({**state, "_tools": tool_map})
         structured_content = _try_structured_action(llm, system_text, state["messages"])
         if structured_content is not None:
@@ -942,12 +981,38 @@ def _build_multi_role_workflow(
         }
 
     def collector_node(state: ArgusAgentState) -> dict:
+        """Run one Collector (recon/discovery) tool call via `_run_specialist_step`.
+
+        Args:
+            state (ArgusAgentState): Current graph state.
+
+        Returns:
+            dict: See `_run_specialist_step`'s return contract.
+        """
         return _run_specialist_step(state, "collector", collector_tool_map, build_collector_prompt)
 
     def exploiter_node(state: ArgusAgentState) -> dict:
+        """Run one Exploiter (scanning/exploitation) tool call via `_run_specialist_step`.
+
+        Args:
+            state (ArgusAgentState): Current graph state.
+
+        Returns:
+            dict: See `_run_specialist_step`'s return contract.
+        """
         return _run_specialist_step(state, "exploiter", exploiter_tool_map, build_exploiter_prompt)
 
     def summarizer_node(state: ArgusAgentState) -> dict:
+        """Produce the terminal Final Answer report from the accumulated Blackboard.
+
+        Args:
+            state (ArgusAgentState): Current graph state.
+
+        Returns:
+            dict: State updates - the final `messages` entry (guaranteed to
+            contain "Final Answer:"), `phase` set to "done", incremented
+            `iteration_count`.
+        """
         system_text = build_summarizer_prompt({**state})
         raw = llm.invoke([SystemMessage(content=system_text)])
         content = str(getattr(raw, "content", raw))
@@ -960,11 +1025,27 @@ def _build_multi_role_workflow(
         }
 
     def route_after_planner(state: ArgusAgentState) -> str:
+        """Route to the Planner's chosen specialist, or force Summarizer at budget.
+
+        Args:
+            state (ArgusAgentState): Current graph state.
+
+        Returns:
+            str: The next node name - "collector", "exploiter", or "summarizer".
+        """
         if state["iteration_count"] >= state["max_iterations"]:
             return "summarizer"
         return state.get("current_role") or "summarizer"
 
     def route_after_specialist(state: ArgusAgentState) -> str:
+        """Route back to the Planner after a specialist step, or force Summarizer at budget.
+
+        Args:
+            state (ArgusAgentState): Current graph state.
+
+        Returns:
+            str: The next node name - "planner" or "summarizer".
+        """
         if state["iteration_count"] >= state["max_iterations"]:
             return "summarizer"
         return "planner"

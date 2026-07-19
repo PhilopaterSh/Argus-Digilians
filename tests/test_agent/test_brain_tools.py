@@ -83,11 +83,13 @@ class TestRolePartitioning:
         assert len(tools) == 17
 
     def test_collector_role_returns_only_recon_tools(self):
+        """Verify Collector role returns only recon tools."""
         tools = build_argus_tools(MagicMock(), role="collector")
         assert {t.name for t in tools} == ROLE_TOOL_PARTITIONS["collector"]
         assert "Run_Nikto" not in {t.name for t in tools}
 
     def test_exploiter_role_returns_only_exploitation_tools(self):
+        """Verify Exploiter role returns only exploitation tools."""
         tools = build_argus_tools(MagicMock(), role="exploiter")
         assert {t.name for t in tools} == ROLE_TOOL_PARTITIONS["exploiter"]
         assert "Recon_Suite" not in {t.name for t in tools}

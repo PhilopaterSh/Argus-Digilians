@@ -21,6 +21,13 @@ class SmartWebSearch:
         Bounded by ``max_web_search_attempts`` (config.yaml) for the
         lifetime of this instance - counts failed searches too, so a
         persistent upstream/network failure can't retry indefinitely.
+
+        Args:
+            query (str): The search query text.
+
+        Returns:
+            str: Formatted search results, an explicit "no results"/error
+            message, or the attempt-limit-reached message - never raises.
         """
         if self._attempts >= self._max_attempts:
             return "Maximum Smart Web Search attempts reached; skipping further searches."

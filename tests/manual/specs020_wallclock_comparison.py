@@ -40,10 +40,24 @@ class TimedMockLLM:
     comparison something non-zero and consistent to measure."""
 
     def __init__(self, responses: list[str]):
+        """Store the fixed response cycle and reset the call counter.
+
+        Args:
+            responses (list[str]): Responses to cycle through on each `invoke()`.
+        """
         self.responses = responses
         self.call_count = 0
 
     def invoke(self, messages, **kwargs):
+        """Return the next cyclic response after a simulated latency delay.
+
+        Args:
+            messages: Ignored - this mock always returns the next fixed response.
+            **kwargs: Ignored, accepted for interface compatibility with a real LLM.
+
+        Returns:
+            AIMessage: The next response in the fixed cycle.
+        """
         time.sleep(SIMULATED_LLM_LATENCY_SECONDS)
         response = self.responses[self.call_count % len(self.responses)]
         self.call_count += 1
@@ -51,13 +65,32 @@ class TimedMockLLM:
 
 
 def timed_recon(target: str) -> str:
+    """Simulate a recon tool call with a fixed latency delay.
+
+    Args:
+        target (str): Target URL (unused - this mock always returns the
+            same fixed result).
+
+    Returns:
+        str: A fixed, fake subdomain-enumeration result.
+    """
     time.sleep(SIMULATED_TOOL_LATENCY_SECONDS)
     return "Subdomains: admin.test.com, api.test.com."
 
 
 def Run_Nikto(target: str) -> str:
-    """Same name as the real tool so EXPLOITATION_TOOLS/PHASE_5_6_TOOLS
-    allowlists recognise it, matching the test suite's own convention."""
+    """Simulate an exploitation-class tool call with a fixed latency delay.
+
+    Same name as the real tool so EXPLOITATION_TOOLS/PHASE_5_6_TOOLS
+    allowlists recognise it, matching the test suite's own convention.
+
+    Args:
+        target (str): Target URL (unused - this mock always returns the
+            same fixed result).
+
+    Returns:
+        str: A fixed, fake Nikto scan result.
+    """
     time.sleep(SIMULATED_TOOL_LATENCY_SECONDS)
     return "Nikto scan complete: found /admin/ directory listing enabled."
 
@@ -83,6 +116,11 @@ BASE_STATE = {
 
 
 def run_single_loop() -> tuple[float, int]:
+    """Run the production single-loop graph through the 2-tool-call scenario.
+
+    Returns:
+        tuple[float, int]: Wall-clock elapsed seconds and total LLM call count.
+    """
     llm = TimedMockLLM([
         'Thought: recon.\nAction: {"name": "timed_recon", "input": "https://test.com"}',
         'Thought: scan.\nAction: {"name": "Run_Nikto", "input": "https://test.com"}',
@@ -96,6 +134,11 @@ def run_single_loop() -> tuple[float, int]:
 
 
 def run_multi_role() -> tuple[float, int]:
+    """Run the experimental multi-role graph through the same scenario.
+
+    Returns:
+        tuple[float, int]: Wall-clock elapsed seconds and total LLM call count.
+    """
     llm = TimedMockLLM([
         "Start with collector to map the attack surface.",
         'Thought: recon.\nAction: {"name": "timed_recon", "input": "https://test.com"}',
@@ -115,6 +158,7 @@ def run_multi_role() -> tuple[float, int]:
 
 
 def main():
+    """Run both graphs and print the NFR-001 comparison summary."""
     single_time, single_calls = run_single_loop()
     multi_time, multi_calls = run_multi_role()
 

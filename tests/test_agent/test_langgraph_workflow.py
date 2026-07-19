@@ -285,23 +285,27 @@ def test_check_early_termination_detects_flag():
 
 
 def test_extract_vulnerability_hints_detects_title_pattern():
+    """Verify Extract vulnerability hints detects title pattern."""
     hints = _extract_vulnerability_hints("Tech: [200 OK] Title[File path traversal, simple case]")
     assert any("File path traversal, simple case" in h for h in hints)
     print("  [PASS] test_extract_vulnerability_hints_detects_title_pattern")
 
 
 def test_extract_vulnerability_hints_detects_keyword():
+    """Verify Extract vulnerability hints detects keyword."""
     hints = _extract_vulnerability_hints("The response body reflects a classic SQL Injection error.")
     assert any("sql injection" in h for h in hints)
     print("  [PASS] test_extract_vulnerability_hints_detects_keyword")
 
 
 def test_extract_vulnerability_hints_no_match_returns_empty():
+    """Verify Extract vulnerability hints no match returns empty."""
     assert _extract_vulnerability_hints("Host is up. Port 80 open, Apache 2.4.") == []
     print("  [PASS] test_extract_vulnerability_hints_no_match_returns_empty")
 
 
 def test_extract_vulnerability_hints_handles_empty_input():
+    """Verify Extract vulnerability hints handles empty input."""
     assert _extract_vulnerability_hints("") == []
     assert _extract_vulnerability_hints(None) == []
     print("  [PASS] test_extract_vulnerability_hints_handles_empty_input")
@@ -730,6 +734,7 @@ def test_structured_final_answer_falls_back_on_exception():
 # specs/020 (multi-agent role separation, feature-flagged off by default)
 # =======================================================
 def test_planner_decision_structured_success():
+    """Verify Planner decision structured success."""
     llm = StructuredMockLLM(structured_response=_PlannerDecision(
         reasoning="nothing mapped yet", next_role="collector",
     ))
@@ -738,12 +743,14 @@ def test_planner_decision_structured_success():
 
 
 def test_planner_decision_falls_back_when_unsupported():
+    """Verify Planner decision falls back when unsupported."""
     llm = MockLLM(["plain text, no with_structured_output"])
     assert _try_planner_decision(llm, "system text") is None
     print("  [PASS] test_planner_decision_falls_back_when_unsupported")
 
 
 def test_planner_decision_invalid_role_returns_none():
+    """Verify Planner decision invalid role returns none."""
     llm = StructuredMockLLM(structured_response=_PlannerDecision(
         reasoning="?", next_role="not_a_real_role",
     ))
@@ -780,6 +787,7 @@ def test_multi_role_full_cycle_collector_then_exploiter_then_summarizer():
 
 
 def test_multi_role_collector_runs_exactly_one_tool_call_per_visit():
+    """Verify Multi role collector runs exactly one tool call per visit."""
     llm = MockLLM([
         "collector",
         'Thought: recon.\nAction: {"name": "mock_recon", "input": "https://test.com"}',
