@@ -95,12 +95,7 @@ Argus-Digilians/
 |   +-- run_argus_cli.py             # CLI entry point
 |   +-- README.md                   # Scripts usage guide
 |
-+-- Setup/                          # Legacy installation scripts (manual fallback)
-|   +-- Step_1_Core_Foundation.bat
-|   +-- Step_2_AI_Python_Env.bat
-|   +-- requirements.txt            # Python dependencies
-|   +-- README.md                   # Legacy setup guide
-|
++-- config/                         # config.yaml, requirements.txt, requirements-dev.txt
 +-- app/                            # Main application
 |   +-- GUI/                        # Streamlit web UI
 |   +-- core/                       # AI brain, config, agent, memory, RAG

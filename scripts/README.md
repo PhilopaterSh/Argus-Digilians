@@ -13,10 +13,8 @@ A fully self-contained PowerShell script that embeds all dependencies
 (requirements.txt, check_and_install.sh) internally as here-strings.
 It has ZERO external file dependencies — copy this ONE file and run it.
 This is the **only** supported installer; the previous `INSTALL_EVERYTHING.ps1`
-was removed (it depended on the now-archived `Setup/` directory).
-
-After a successful first run, the legacy `Setup/` directory is automatically
-archived to `Setup_legacy/`.
+was removed (it depended on a `Setup/` directory that no longer exists in this
+repository - see STEP 9 below).
 
 **Execution (from project root):**
 
@@ -45,7 +43,9 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts\ARGUS_INSTALLER.ps1
 6. Kali Security Tools (embedded check_and_install.sh inside WSL)
 7. SSH Bridge (sshd + port 22 test)
 8. Embedded Health Check (venv, Ollama, Kali, SSH)
-9. Cleanup (archive Setup/ to Setup_legacy/)
+9. Cleanup (archives a `Setup/` directory to `Setup_legacy/` if one is present -
+   a leftover from older checkouts; a fresh clone of this repository no longer
+   has a `Setup/` directory, so this step is a no-op on it)
 
 ---
 
@@ -118,9 +118,6 @@ scripts/
 +-- README.md                    # This file
 ```
 
-Legacy manual install steps live in `Setup/` at the project root, not under `scripts/` -
-see `Setup/README.md`.
-
 ---
 
 ## Important Notes
@@ -130,9 +127,8 @@ see `Setup/README.md`.
 - **Elevation Required:** The installer handles Admin elevation internally.
   No need to "Run as Administrator" manually.
 - **Self-Contained:** `ARGUS_INSTALLER.ps1` embeds all dependencies internally.
-  Copy ONE file and run it anywhere — no Setup/ directory needed.
-- **Post-Install:** After a successful run, `Setup/` is archived to `Setup_legacy/`.
-  The legacy files remain as a debugging fallback.
+  Copy ONE file and run it anywhere — no `Setup/` directory needed (removed
+  2026-07-19; it had no remaining use beyond what this installer already covers).
 - **Idempotent:** Re-running the installer is safe; completed steps are skipped.
 - **Log File:** Every run writes to `logs/argus_install_<timestamp>.log`.
 

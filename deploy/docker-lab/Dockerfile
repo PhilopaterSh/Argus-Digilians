@@ -49,7 +49,7 @@ RUN wget -q https://github.com/projectdiscovery/subfinder/releases/download/v2.6
 WORKDIR /argus
 
 # Python dependencies (runtime requirements of the current app/)
-COPY Setup/requirements.txt /argus/requirements.txt
+COPY config/requirements.txt /argus/requirements.txt
 RUN pip install --no-cache-dir -r /argus/requirements.txt
 
 # Current application code (redesign onto app/, not the legacy main.py)

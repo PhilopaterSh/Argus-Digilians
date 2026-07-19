@@ -11,7 +11,7 @@ without Ollama; the final AI-eval needs a runtime.
 
 ## Prerequisites
 
-- Python 3.12. `langchain-core` for the message types (already in `Setup/requirements.txt`).
+- Python 3.12. `langchain-core` for the message types (already in `config/requirements.txt`).
 - Run from the repository root.
 
 ---

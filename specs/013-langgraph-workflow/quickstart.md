@@ -16,7 +16,7 @@ from `spec.md` (Success Criteria SC-001..004, User Stories), `tasks.md` T017-T03
 
 ## Prerequisites
 
-- Python 3.12 (canonical per `012` section 2.6) with dependencies from `Setup/requirements.txt`
+- Python 3.12 (canonical per `012` section 2.6) with dependencies from `config/requirements.txt`
   (includes `langgraph>=0.2.0`).
 - Ollama running locally for the integration checks (`spec.md` Assumptions).
 - Run from the project root.

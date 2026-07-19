@@ -20,7 +20,7 @@ layer is redesigned onto `app/`.
 **Language/Version**: Python 3.12 (`app/`) inside a container; base image `python:3.11-slim` may be
 bumped to 3.12-slim during implementation.
 
-**Primary Dependencies**: Docker Engine + Compose v2 (new, optional); `Setup/requirements.txt` for the
+**Primary Dependencies**: Docker Engine + Compose v2 (new, optional); `config/requirements.txt` for the
 agent; recon tools installed in the image (nmap, nikto, gobuster, ffuf, subfinder, whatweb).
 
 **Storage**: named volume `ollama_storage` for the model; no host DB required (the Blackboard lives

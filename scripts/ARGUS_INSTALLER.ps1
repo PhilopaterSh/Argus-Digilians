@@ -13,8 +13,9 @@
     check_and_install.sh, argus_recon_fixed.sh) internally as here-strings.
     It has ZERO external file dependencies - copy this ONE file and run it.
 
-    After a successful first run, the old Setup/ directory is archived to
-    Setup_legacy/.
+    If a `Setup/` directory is present (an older checkout - a fresh clone of this
+    repository no longer ships one, removed 2026-07-19), a successful first run
+    archives it to `Setup_legacy/`.
 
 .PARAMETER Offline
     Skip all network downloads (Python winget, Ollama install, ollama pull).

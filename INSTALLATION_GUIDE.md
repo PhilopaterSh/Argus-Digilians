@@ -1,22 +1,24 @@
 # Installation Guide - Argus Security Framework
 
 This guide covers the supported installation approach using the unified master
-installer, as well as the legacy manual fallback. For the underlying manual
-steps the installer automates (useful for offline/air-gapped provisioning or
-understanding what each step does), see `docs/Argus_Master_Documentation.md`.
+installer. There is no separate manual step-script fallback anymore - the
+legacy `Setup/Step_*.bat` scripts were removed 2026-07-19, since they had no
+real remaining use beyond what the unified installer already covers. For the
+underlying manual steps the installer automates (useful for offline/air-gapped
+provisioning or understanding what each step does), see
+`docs/Argus_Master_Documentation.md`.
 
 ---
 
 ## Quick Summary
 
-| Aspect | Unified Installer | Legacy Manual Steps |
-|--------|-------------------|-------------------|
-| **Status** | **Recommended** | Fallback only |
-| **Entry Point** | `INSTALL.bat` (root) | `Setup/Step_*.bat` (manual) |
-| **Execution** | Automatic (one command) | Manual (step-by-step) |
-| **Admin Handling** | Auto-elevates via UAC | Must run as Admin manually |
-| **Health Check** | Embedded at end of install | `INSTALL.bat health` (same script) |
-| **Logging** | Unified log file | Console only |
+| Aspect | Unified Installer |
+|--------|-------------------|
+| **Entry Point** | `INSTALL.bat` (root) |
+| **Execution** | Automatic (one command) |
+| **Admin Handling** | Auto-elevates via UAC |
+| **Health Check** | Embedded at end of install |
+| **Logging** | Unified log file |
 
 ---
 
@@ -120,21 +122,6 @@ READY TO RUN -> scripts\LAUNCH_STUDIO.bat or scripts\LAUNCH_CLI.bat
 
 ---
 
-## Legacy Path: Manual Step-by-Step
-
-> Use only for debugging or CI/CD scenarios. See `Setup/README.md` for details.
-
-```batch
-cd Setup/
-Step_1_Core_Foundation.bat
-Step_2_AI_Python_Env.bat
-Step_3_Kali_Tools_Setup.bat
-```
-
-Each script has its own Admin check and must be run as Administrator.
-
----
-
 ## Troubleshooting
 
 ### Unified Installer Issues
@@ -170,10 +157,6 @@ START: Do you want to install Argus?
     |       +-- YES -> INSTALL.bat (unified installer)
     |       +-- NO  -> continue
     |
-    +-- Debugging a specific step?
-    |       +-- YES -> Setup/Step_*.bat (manual)
-    |       +-- NO  -> continue
-    |
     +-- CI/CD pipeline?
     |       +-- YES -> scripts/ARGUS_INSTALLER.ps1 -DryRun (validate)
     |       +-- NO  -> INSTALL.bat
@@ -184,7 +167,6 @@ START: Do you want to install Argus?
 ## References
 
 - `scripts/README.md` - Launch scripts and installer guide
-- `Setup/README.md` - Legacy step scripts reference
 - `docs/Argus_Master_Documentation.md` - Full technical documentation
 - `docs/history/Plan.md` - Unified installer design plan
 

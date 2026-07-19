@@ -74,7 +74,7 @@ jobs:
           python-version: "3.12"
       - name: Install runtime + dev dependencies
         run: |
-          pip install -r Setup/requirements.txt
+          pip install -r config/requirements.txt
           pip install -r config/requirements-dev.txt
       - name: Run unit tests
         run: pytest -m unit --cov --cov-report=term-missing
@@ -91,7 +91,7 @@ jobs:
           python-version: "3.12"
       - name: Install runtime + dev dependencies
         run: |
-          pip install -r Setup/requirements.txt
+          pip install -r config/requirements.txt
           pip install -r config/requirements-dev.txt
       - name: Run full test suite (informational)
         run: pytest -m "not eval and not slow" --cov --cov-report=term-missing
@@ -111,7 +111,7 @@ jobs:
           python-version: "3.12"
       - name: Install runtime + dev dependencies
         run: |
-          pip install -r Setup/requirements.txt
+          pip install -r config/requirements.txt
           pip install -r config/requirements-dev.txt
       - name: AI-evaluation (recall@k / faithfulness; agent-loop termination)
         run: pytest -m eval || python tests/manual/ai_benchmark.py
