@@ -1451,3 +1451,38 @@ one in a file's sync state across two locations, one in a GitHub issue's comment
 Neither would have surfaced from "run the tests and check CI" alone. The lesson from every review round
 this file documents holds again here: the answer to "are we done" is worth actually checking, not
 inferring from the last visible state.
+
+## Methodology Note (2026-07-19): Reviewing and Merging the Two `wip/*` Branches
+
+A full branch-by-branch audit (every branch's commits-ahead-of-`main` count, checked directly rather
+than assumed) confirmed every branch's unique content was already accounted for - merged, deliberately
+discarded with documented evidence, or independently converged to the same end state - except the two
+`wip/*` branches recovered earlier this session, which had been deliberately left unreviewed pending
+this exact step. The human asked to begin reviewing and merging them.
+
+**`wip/momen-launch-script-fixes` (`f7b9e2f`, 3 files)**: opencode-delegate was dispatched for the
+required discuss-before-editing step but was still hung with zero output after more than an hour -
+well past this project's previously-documented worst case (~68 minutes) - so the human granted the
+same kind of one-time exception as the `web_search.py` round, extended explicitly to cover the rest of
+this review. Findings, verified directly against current `main` rather than assumed from the branch's
+own commit message:
+
+- `LAUNCH_CLI.bat`/`LAUNCH_STUDIO.bat`'s PATH-based `py`/`python` auto-detection is **stale, not
+  applied**. `main`'s current versions already solve the underlying problem more robustly - calling
+  `Argus_venv\Scripts\python.exe` directly (`LAUNCH_STUDIO.bat`) or activating the venv first
+  (`LAUNCH_CLI.bat`), sidestepping PATH-based lookup entirely - and additionally has dynamic
+  `config.yaml`-driven port resolution where this branch hardcodes yet a third port value (`17000`,
+  distinct from both the original `12199` and `argus/SALMA`'s uncommitted `15000` found earlier this
+  session), and targets the long-discarded `GUI\app.py` instead of the canonical
+  `app/GUI/dashboard.py`. Applying this patch would have been a regression, not an improvement.
+- `build_payload_db.py` (new file, found only in the SALMA copy per the original recovery) **ported**
+  to `app/modules/build_payload_db.py` (commit `a9091b1`) - a standalone SQLite payload-ingestion
+  utility with no present-day caller and no `payloads/*.txt` input directory anywhere in this repo's
+  history (checked across every branch, not just `main`), so documented in `app/modules/README.md` as
+  an unregistered dev utility, matching the existing convention for that directory's other 8 standalone
+  scripts, rather than presented as a wired-up capability. Fixed 3 em-dash characters (non-ASCII) to
+  satisfy `validate_ascii.py`. Added to `tests/test_modules/test_imports.py`'s import-check list.
+  Verified: 312/312 pytest (up from 311), ruff clean, `validate_ascii.py` clean (163 files).
+
+The branch itself was left untouched on `origin` (not deleted), consistent with this feature's
+history-preservation practice for every other branch.
