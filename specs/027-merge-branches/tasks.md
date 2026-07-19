@@ -1551,3 +1551,73 @@ untouched on `origin` per this feature's history-preservation practice. A future
 it should also decide `specs/020`'s own `spec.md`/`tasks.md` status text and `specs/checklist.md`'s
 Phase 020 entry together with the code, so documentation and implementation land atomically
 rather than repeating this round's exclusion/inclusion split.
+
+## Methodology Note (2026-07-19): The Deferred Code - `specs/020` Actually Merged (`c05c9db`, `bded2d7`)
+
+The human asked to proceed with the deferred piece from the note above. Every file was checked
+against current `main` (not assumed safe from the branch's old base) before touching it - `git log
+<base>..main -- <path>` per file, the same discipline that caught the earlier `specs/022/spec.md`
+near-miss:
+
+- `app/core/agent/react_prompts.py`/`react_state.py`: zero independent main-side history, applied
+  directly.
+- `app/core/agent/brain.py`: **5** independent main commits since the wip branch's base (the
+  SALMA merge, 2 mypy fixes, a docstring-compliance pass, and this session's own earlier
+  knowledge-graph fix + `_record_graph_edge` refactor). 3-way merged (`git merge-file`); one real
+  textual conflict at the graph-construction call site, resolved by hand - kept main's
+  `Dict[str, Any]` type annotation, added wip's conditional multi-role routing.
+- `app/core/agent/brain_tools.py`, `react_workflow.py`: 1 independent main commit each
+  (`b5faadd`'s `Archive_Research_Subagent` rewrite; a docstring pass). Both 3-way merged cleanly,
+  zero conflicts.
+- `app/core/config.py`: 2 independent main commits, 3-way merged cleanly.
+- `config.yaml`: moved to `config/config.yaml` since the branch's base and substantially
+  restructured (port/threshold changes, reordered sections) - the automatic 3-way merge failed to
+  align at all (one giant conflict block, not a clean insertion point). Added the single new flag
+  by hand instead, matching the existing `enable_inter_reflection` flag's style, rather than
+  fighting the auto-merge.
+- Three test files (`test_brain_tools.py`, `test_react_prompts.py`, `test_langgraph_workflow.py`):
+  moved from `tests/test_registry/` to `tests/test_agent/` by an unrelated main-branch
+  reorganization (`ac797c5`) since the branch's base - traced via `git log --follow` first, then
+  3-way merged at the current location, zero conflicts.
+
+**A second, separate finding surfaced mid-review, not part of specs/020 itself**:
+`react_workflow.py`'s new `_extract_vulnerability_hints()` - a deterministic scan of tool results
+for page-title/keyword vulnerability signals, injecting an explicit Reflection nudge - is called
+from the **production** `_build_custom_workflow` path, not just the new flagged-off
+`_build_multi_role_workflow`. Unlike everything else in this file, it is not behind
+`enable_multi_agent_roles` - merging it changes the live agent's default behavior immediately, not
+just adds a dormant capability. Surfaced to the human explicitly rather than bundled in silently
+just because it lived in the same file/commit; approved for inclusion (well-reasoned, research-backed
+- arXiv:2606.16364 on tool-selection failures - and uses the same nudge-message mechanism the
+existing `_check_early_termination` already does).
+
+**mypy caught 2 real errors** (`app/core/agent/react_workflow.py`, part of CI's exact checked-file
+list): `planner_node`/`summarizer_node` passed the `ArgusAgentState` TypedDict directly to prompt
+builders typed as plain `dict`. Fixed using the exact pattern already working elsewhere in the same
+file (`_run_specialist_step` passes `{**state, "_tools": tool_map}` - a dict-literal spread, which
+mypy accepts where the bare TypedDict is rejected) - applied `{**state}` at both call sites rather
+than inventing a new workaround.
+
+Verified: 336/336 pytest (up from 312), ruff clean, mypy clean (CI's exact 10-file list),
+`validate_ascii.py` clean (164 files), `validate_specs.py` clean. Both code paths smoke-tested
+directly (not just import-checked): `_build_custom_workflow` (default) and
+`_build_multi_role_workflow` (flagged) each construct a real LangGraph graph without error against
+a fake LLM/tool set - as close to a functional check as this environment allows without a live
+Ollama server.
+
+**Completed the atomic doc+code pairing** the deferral note above called for: `specs/020`'s
+`spec.md`/`tasks.md` status text, `specs/checklist.md`'s Phase 020 entry and backlog-table row,
+`CHANGELOG.md`'s implementation entry, and `docs/ARGUS_FRAMEWORK_ARCHITECTURE_v2.md`'s ADR-20
+(restored, including its two dangling cross-references that had been reworded to avoid pointing at
+a removed entry) and `docs/ARCHITECTURE_AUDIT_REPORT.md`'s status row - all updated from "Proposed"
+to "Implemented" now that the claim is true. Caught and fixed two accuracy issues while doing this,
+not just copy-pasted the original wip content: the Phase 020 checklist record's test paths were
+stale (pre-dated the `tests/test_registry/` -> `tests/test_agent/` rename), and its "1 pre-existing
+failure" claim was checked against a real pytest run rather than trusted - the actual result is
+336/336 clean, since the DuckDuckGo flake that failure referred to was independently fixed on
+`main` earlier this session. One new `validate_specs.py` violation (a double-bolded status line
+the gate's prefix-match doesn't recognize) fixed by comparing against `specs/018`'s already-passing
+format rather than guessed.
+
+`wip/multi-agent-role-separation` left untouched on `origin`, per this feature's
+history-preservation practice - fully reviewed now, nothing left deferred on it.
