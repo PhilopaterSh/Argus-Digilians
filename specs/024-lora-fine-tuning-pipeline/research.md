@@ -54,3 +54,14 @@ close the gap to a frontier commercial model. Any Argus proposal to replicate th
 carry the same honesty — the value case here is not "make Argus's model as good as DeepSeek-V3.2,"
 it's "measurably improve Argus's existing model's structured-output/domain-reasoning behavior
 within the constraints of what's locally hostable," a much narrower and more defensible claim.
+
+## Out-of-scope note: RLHF/agentic-RL, not SFT, was separately researched and rejected for now
+
+`specs/027/research.md`'s follow-up section researches whether RLHF (or the newer agentic-RL
+techniques that add anti-redundancy reward shaping, e.g. OTC-PO/HiPRAG/step-level rubric
+rewards) would help the "agent repeats itself" failure class. Conclusion there: not adopted -
+it requires a full RL training loop (reward signal + GRPO/PPO policy optimization), which is a
+different, heavier infrastructure investment than this spec's supervised LoRA pipeline, and
+plain RLHF's documented "action bias" property may work against this specific problem without
+purpose-built reward shaping on top. Flagged as a possible future follow-up to this spec (not
+`019`/`027`) if Argus ever builds real RL training infrastructure beyond SFT.

@@ -18,26 +18,60 @@ from langchain_core.tools import Tool
 
 from app.tools.tool_registry import WSLBridgeTools
 
+# specs/020 (multi-agent role separation, feature-flagged off by default -
+# see config.yaml's enable_multi_agent_roles) FR-002's tool partition, kept
+# here as the one place that lists which tool names belong to which role
+# (Constitution IX) - `build_argus_tools(bridge, role=...)` below filters
+# the full 17-tool list against this mapping rather than maintaining a
+# second, separately-constructed tool list per role.
+# Collector: reconnaissance/discovery only. Exploiter: vulnerability
+# scanning/exploitation only. Planner/Summarizer: read-only memory access,
+# no execution tools at all (FR-002 - "no direct execution tools"), so they
+# have no entry here; build_argus_tools() returns just
+# {Query_Memory, Query_Knowledge_Graph} for either directly.
+# Reflective_Pre_Verify/System_Self_Heal are generic utilities relevant to
+# any role that runs commands, so both Collector and Exploiter get them.
+ROLE_TOOL_PARTITIONS = {
+    "collector": {
+        "Check_Reachability", "Subdomain_Enumeration", "Recon_Suite",
+        "Crawl_Target", "Secret_Scanner", "Smart_Web_Search",
+        "Task_Difficulty_Assessment", "Archive_Research_Subagent",
+        "Reflective_Pre_Verify", "System_Self_Heal",
+    },
+    "exploiter": {
+        "Run_Nikto", "Run_FFUF", "Exploit_Suggester", "Advanced_Evasion_Probe",
+        "Run_Kali_Command", "Reflective_Pre_Verify", "System_Self_Heal",
+    },
+}
+_PLANNER_SUMMARIZER_TOOLS = {"Query_Memory", "Query_Knowledge_Graph"}
 
-def build_argus_tools(bridge: WSLBridgeTools) -> list[Tool]:
+
+def build_argus_tools(bridge: WSLBridgeTools, role: str = None) -> list[Tool]:
     """Wrap WSLBridgeTools methods as LangChain Tools for ArgusBrain's ReAct agent.
 
     Args:
         bridge (WSLBridgeTools): The tool facade whose bound methods back each
             Tool's `func`.
+        role (str, optional): One of `"collector"`, `"exploiter"`,
+            `"planner"`, `"summarizer"` (specs/020, feature-flagged off by
+            default) to return only that role's tool subset per
+            `ROLE_TOOL_PARTITIONS`/`_PLANNER_SUMMARIZER_TOOLS`. `None`
+            (default) returns the full 17-tool list, unchanged from before
+            this parameter existed - every existing caller (`019` and
+            earlier) is unaffected.
 
     Returns:
-        list[Tool]: 17 tools covering recon, memory/graph queries, scanning,
-        exploitation research, reflective self-verification, and raw command
-        execution - the true union of every tool any of this project's
-        historical tool lists ever exposed (see the module docstring's
-        2026-07-09 audit), not just the 12 that happened to survive the
-        original consolidation. `run_specialized_module` is the one
-        intentional omission - it's no longer present on `WSLBridgeTools`
-        (the modules/ scripts it invoked were not migrated during the
+        list[Tool]: The full 17-tool list covering recon, memory/graph
+        queries, scanning, exploitation research, reflective
+        self-verification, and raw command execution when `role` is `None`
+        (see the module docstring's 2026-07-09 audit for how this list was
+        assembled) - or just `role`'s subset when specified.
+        `run_specialized_module` is the one intentional omission from the
+        full list - it's no longer present on `WSLBridgeTools` (the
+        modules/ scripts it invoked were not migrated during the
         tool-registry refactor).
     """
-    return [
+    all_tools = [
         Tool(
             name="Check_Reachability",
             func=bridge.check_reachability,
@@ -124,3 +158,34 @@ def build_argus_tools(bridge: WSLBridgeTools) -> list[Tool]:
             description="Execute ANY raw command in the Kali Linux terminal (WSL). Use this for manual subdomain discovery (subfinder, assetfinder), fixing tools, or custom reconnaissance chains.",
         ),
     ]
+    if role is None:
+        return all_tools
+    if role in ("planner", "summarizer"):
+        allowed = _PLANNER_SUMMARIZER_TOOLS
+    else:
+        allowed = ROLE_TOOL_PARTITIONS.get(role, set())
+    return [t for t in all_tools if t.name in allowed]
+
+
+def partition_tools_by_role(tools: list) -> dict:
+    """Split an already-built flat tool list into role subsets, using the
+    same `ROLE_TOOL_PARTITIONS` mapping `build_argus_tools(bridge, role=...)`
+    filters against - so a caller that already has `ArgusBrain`'s flat
+    17-tool list (no `WSLBridgeTools` reference of its own) doesn't need to
+    rebuild tools from a bridge just to get the specs/020 multi-role
+    partition (Constitution IX - one partition definition, two entry points).
+
+    Args:
+        tools (list): Flat list of `Tool` objects (e.g. `ArgusBrain.tools`).
+
+    Returns:
+        dict: `{"collector": [...], "exploiter": [...]}` - tools whose name
+        isn't in either partition (there shouldn't be any, given
+        `ROLE_TOOL_PARTITIONS` covers all 17) are silently omitted from
+        both, matching `build_argus_tools(role=...)`'s own filtering
+        behavior.
+    """
+    return {
+        "collector": [t for t in tools if t.name in ROLE_TOOL_PARTITIONS["collector"]],
+        "exploiter": [t for t in tools if t.name in ROLE_TOOL_PARTITIONS["exploiter"]],
+    }

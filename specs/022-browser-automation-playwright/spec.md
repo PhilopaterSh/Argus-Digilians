@@ -6,7 +6,13 @@
 
 **Created**: 2026-07-10
 
-**Status**: Proposed — spec kit only, not yet implemented.
+**Status**: Proposed — spec kit only, not yet implemented. Design choice re-confirmed 2026-07-13:
+user asked whether a full "AI Browser Agent" framework (e.g. Browser-Use) would be a better fit
+than a plain headless-browser tool - researched and confirmed this spec's existing FR-003/
+"Explicitly out of scope" stance (no in-tool LLM decision loop) was already correct, not a design
+gap - a full AI Browser Agent would add a second, independently-reasoning LLM loop underneath
+Argus's own agent loop, repeating the exact per-decision latency cost `020`'s NFR-001 measurement
+found real numbers for. See `research.md`'s 2026-07-13 addendum.
 
 **Input**: Gap analysis of `docs/history/2603.27127v1.pdf` against Argus's current codebase,
 requested by the user 2026-07-10.
@@ -71,6 +77,29 @@ primitive (a real browser engine) that nothing in Argus's current toolchain prov
   rendered DOM when the agent needs it. Screenshots are explicitly out of scope for v1 (FR
   omission is deliberate — see Explicitly out of scope) since Argus's GUI/report pipeline has no
   image-attachment channel today.
+- **FR-006** (added 2026-07-13b web-research validation): `Render_Page_JS`'s JSON-out MUST
+  optionally include a bounded, truncated list of network requests observed while the page
+  loaded (`{url, method, status}` per entry, capped at a fixed count) when a `capture_network:
+  bool` argument is set — closing a second, distinct blind spot beyond rendering: a SPA's real
+  attack surface is often the fetch/AJAX calls it makes to backend API endpoints after load,
+  which appear in no HTML, rendered or not, only in network traffic (`page.on("request")`/
+  `page.on("response")` is Playwright's documented mechanism for this).
+- **FR-007** (added 2026-07-13b): Both `Render_Page_JS` and `Browser_Interact`'s JSON-out MUST
+  always include `console_logs: list[str]` and `page_errors: list[str]` (captured via
+  `page.on("console")`/`page.on("pageerror")`) — this is the concrete, content-based mechanism
+  for verifying an injected test payload actually *executed* (e.g. a payload containing
+  `console.log('argus_xss_<marker>')` appearing in `console_logs` is real proof of execution),
+  consistent with `SENSITIVE_CONTENT_INDICATORS`' existing "verify by real signal, not
+  appearance" philosophy (`app/tools/utils.py`) — extended here to the one vulnerability class
+  (XSS) that specifically requires a real browser to verify at all.
+- **FR-008** (added 2026-07-13b): A new tool MUST extract the current session's cookies
+  (`context.cookies()` — notably sees `HttpOnly` cookies, which page-JS/`document.cookie` cannot,
+  making a missing `Secure`/`HttpOnly` attribute on a session cookie a real, checkable finding
+  this project has no way to detect without a real browser context) and
+  `localStorage`/`sessionStorage` contents (`page.evaluate()`) — the latter feeding the existing
+  `Secret_Scanner`/`SENSITIVE_CONTENT_INDICATORS` pattern-matching once extracted as text, since
+  client-side storage of sensitive tokens/PII is a real, documented information-disclosure
+  class.
 
 ### Non-Functional Requirements
 
@@ -106,6 +135,14 @@ primitive (a real browser engine) that nothing in Argus's current toolchain prov
   any markup — the point is the tool resolves it semantically).
 - **SC-003**: A test simulating a hung/never-resolving page load confirms the tool returns
   within NFR-003's timeout with an honest timeout error, not a hang.
+- **SC-004** (added 2026-07-13b): Against a fixture page that fires an XSS-style payload passed
+  via a form field (e.g. `<script>console.log('argus_marker_xyz')</script>`), `Browser_Interact`'s
+  `console_logs` contains `"argus_marker_xyz"` verbatim — proving FR-007's execution-verification
+  mechanism actually captures real signal, not just that the call succeeds without erroring.
+- **SC-005** (added 2026-07-13b): Against a fixture page that sets a cookie without the `Secure`/
+  `HttpOnly` attributes, `Extract_Session_State` flags it explicitly in its output — proving
+  FR-008's misconfiguration check fires on a real, known-bad case, not just that cookies are
+  returned at all.
 
 ## Assumptions
 

@@ -629,6 +629,52 @@ above. Full detail in `specs/019-shared-memory-reflection-upgrade/{spec,research
 
 ---
 
+## Phase 020 — Multi-Agent Role Separation (Experimental, 2026-07-11)
+
+- [x] CHK112 (DONE 2026-07-11) User proposed a heavier multi-*model* variant of this phase
+  (Dolphin/DeepSeek-Coder/an abliterated Llama-3-8B per role); researched it first rather than
+  accepting or rejecting on priors (full findings + sources: `research.md`'s 2026-07-11
+  addendum) - found the VRAM math doesn't hold on this machine's actual hardware (confirmed live
+  via `nvidia-smi`: 16GB total, RTX 2000 Ada), abliteration specifically regresses TruthfulQA
+  (-7.1), the wrong tradeoff for a judgment-heavy Verifier/Summarizer role, and independent
+  research (Persona-Pruner) validates extracting multiple personas from one dense model over
+  deploying several full models - matching this spec's own original FR-001 scope. User approved
+  proceeding with FR-001 exactly as originally written (T000: GO).
+  Implemented T001-T007 (see `tasks.md` for full detail per task):
+  - `react_prompts.py`: 4 new role-scoped prompt builders (Collector/Exploiter/Planner/
+    Summarizer). `brain_tools.py`: `build_argus_tools(role=...)` + `ROLE_TOOL_PARTITIONS` (single
+    source of truth for FR-002's tool split) + `partition_tools_by_role()`.
+    `react_state.py`: `current_role`/`role_history` fields (`NotRequired` - single-loop graph
+    unaffected). `react_workflow.py`: new standalone `_build_multi_role_workflow()` (not a
+    generalization of the production `_build_custom_workflow`'s closures, so the production path
+    is provably unaffected regardless of this experimental path's behavior) - safely extracted
+    `_parse_react_output` to module level first (pure function, zero behavior change, full suite
+    re-verified green before building on it) so both graphs share it. `config.yaml`/`config.py`:
+    `enable_multi_agent_roles` flag, default `false`. 22 new tests across
+    `tests/test_registry/test_react_prompts.py`, `tests/test_registry/test_brain_tools.py`,
+    `tests/test_langgraph_workflow.py`. Full suite: **296 passed**, 1 pre-existing unrelated
+    failure (same DuckDuckGo flake since CHK082).
+  - **NFR-001 measurement** (`tests/manual/specs020_wallclock_comparison.py`, mocked but fixed
+    per-call latency so the comparison isolates orchestration overhead from inference-time
+    noise): on an equivalent-effort scenario (2 real tool calls, then a report), the multi-role
+    graph took **2.00x the LLM calls** of the single-loop graph (6 vs. 3) - structural, not
+    scenario-specific, since every Collector/Exploiter action pairs with one Planner routing
+    decision in this topology. Converted to this project's own already-measured *real* per-call
+    latency (CHK099: **10.96s** average for a real WhiteRabbitNeo-V3-7B ReAct call) rather than
+    the mocked 0.05s stand-in: the same 2-tool-call scenario would cost single-loop
+    3 x 10.96s ≈ 33s vs. multi-role 6 x 10.96s ≈ 66s - a real ~33s of added latency for just 2
+    tool calls, compounding further over the 5-10-tool-call runs typical of `018`/`019`'s live
+    testing.
+  - **Honest result (Constitution VIII): borderline, lands exactly at NFR-001's own pre-agreed
+    2x rollback threshold, not clearly under it.** Not promoted to default (`enable_multi_agent_
+    roles` stays `false`). T008/T009 blocked pending either a design change (letting
+    Collector/Exploiter run several tool calls per visit before returning to the Planner, to
+    amortize the routing overhead - not implemented in this v1, flagged as a deliberate,
+    documented scope decision, not an oversight) or a team decision to accept the overhead
+    anyway for a measured capability gain once `025` (benchmark suite) exists.
+
+---
+
 ## Repo Organization Pass (2026-07-10)
 
 User asked for a full organization pass so files/folders are "مفيدة ومنظمة بشكل صحيح" (useful
@@ -733,7 +779,7 @@ should be revisited whenever new capability is considered, not treated as closed
 | Phase | Title | Status | Depends on | Risk |
 |-------|-------|--------|------------|------|
 | 019 | Shared-memory + Dual-Phase Reflection upgrade | **Implemented 2026-07-10** (CHK091-100) | none | Low — upgraded existing mechanisms |
-| 020 | Multi-agent role separation (Planner/Collector/Exploiter/Summarizer) | Proposed, **flagged high-risk/optional** | 019 (done) | High — core loop architecture change |
+| 020 | Multi-agent role separation (Planner/Collector/Exploiter/Summarizer) | **Implemented as an experimental feature-flagged-off path 2026-07-11** (CHK112) — NFR-001 measured 2.00x LLM call-count overhead, at the spec's own 2x rollback threshold; not promoted to default | 019 (done) | High — core loop architecture change (materialized: measured, not just projected) |
 | 021 | Specialized exploitation toolkit (JWT/IDOR/upload/XSS-fuzzer/code-injection) | Proposed, per-tool shippable | none (XSS fuzzer soft-depends on 019, now available) | Low — new tools, established pattern |
 | 022 | Browser automation via Playwright | Proposed | none | Medium — new Kali-side runtime dependency |
 | 023 | CVE intelligence & PoC retrieval | Proposed | none | Low-Medium — new external API dependency |

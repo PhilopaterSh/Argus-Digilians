@@ -15,12 +15,16 @@ from langchain_core.messages import AIMessage, HumanMessage
 from app.core.agent.react_workflow import (
     _ArgusAction,
     _build_custom_workflow,
+    _build_multi_role_workflow,
     _build_prebuilt_workflow,
     _build_reflection_note,
     _build_tool_map,
     _check_early_termination,
+    _extract_vulnerability_hints,
     _inter_reflect,
+    _PlannerDecision,
     _supports_tool_calls,
+    _try_planner_decision,
     _try_structured_action,
     _try_structured_final_answer,
     extract_target,
@@ -117,6 +121,14 @@ def mock_flag_tool(target: str) -> str:
     return "Retrieved file contents: flag{argus_test_flag_123}"
 
 
+def mock_title_tool(target: str) -> str:
+    """Returns a whatweb-style tech fingerprint with a Title[...] match -
+    used to test the deterministic vulnerability-hint evidence scan (see
+    _extract_vulnerability_hints), reproducing the real live-run signal a
+    PortSwigger lab's Recon_Suite output contained."""
+    return "Tech: https://test.com [200 OK] Title[File path traversal, simple case]"
+
+
 # -- State fixtures -----------------------------------
 BASE_STATE = {
     "messages": [HumanMessage(content="Scan https://test.com")],
@@ -131,6 +143,14 @@ BASE_STATE = {
     "tool_error": None,
     "tool_call_history": [],
     "remaining_steps": 10,
+}
+
+# specs/020 (multi-agent role separation, feature-flagged off by default)
+MULTI_ROLE_BASE_STATE = {
+    **BASE_STATE,
+    "reflection_notes": [],
+    "current_role": "",
+    "role_history": [],
 }
 
 
@@ -259,6 +279,29 @@ def test_custom_graph_duplicate_call_loop_respects_max_iterations():
 def test_check_early_termination_detects_flag():
     assert _check_early_termination("here is the flag{abc123} you wanted") == "flag{abc123}"
     print("  [PASS] test_check_early_termination_detects_flag")
+
+
+def test_extract_vulnerability_hints_detects_title_pattern():
+    hints = _extract_vulnerability_hints("Tech: [200 OK] Title[File path traversal, simple case]")
+    assert any("File path traversal, simple case" in h for h in hints)
+    print("  [PASS] test_extract_vulnerability_hints_detects_title_pattern")
+
+
+def test_extract_vulnerability_hints_detects_keyword():
+    hints = _extract_vulnerability_hints("The response body reflects a classic SQL Injection error.")
+    assert any("sql injection" in h for h in hints)
+    print("  [PASS] test_extract_vulnerability_hints_detects_keyword")
+
+
+def test_extract_vulnerability_hints_no_match_returns_empty():
+    assert _extract_vulnerability_hints("Host is up. Port 80 open, Apache 2.4.") == []
+    print("  [PASS] test_extract_vulnerability_hints_no_match_returns_empty")
+
+
+def test_extract_vulnerability_hints_handles_empty_input():
+    assert _extract_vulnerability_hints("") == []
+    assert _extract_vulnerability_hints(None) == []
+    print("  [PASS] test_extract_vulnerability_hints_handles_empty_input")
 
 
 def test_check_early_termination_no_match_returns_none():
@@ -390,6 +433,26 @@ def test_early_termination_flag_detection_adds_nudge():
     assert len(nudge_msgs) == 1
     assert "flag{argus_test_flag_123}" in nudge_msgs[0].content
     print("  [PASS] test_early_termination_flag_detection_adds_nudge")
+
+
+def test_vulnerability_hint_in_tool_result_adds_directive_nudge():
+    """2026-07-11: a live run against a real PortSwigger lab found
+    Recon_Suite's own output naming the vulnerability class in a page
+    title, and the model never acted on it. This locks in the fix:
+    execute_node now surfaces that signal as an explicit reflection note
+    instead of relying on the model to notice it unprompted."""
+    llm = MockLLM([
+        "Thought: fingerprint the target.\nAction: mock_title_tool\nAction Input: https://test.com",
+        "Thought: taking the hint into account.\nAction: Run_Nikto\nAction Input: https://test.com",
+        "Thought: done.\nFinal Answer: complete",
+    ])
+    graph = _build_custom_workflow(llm, [mock_title_tool, Run_Nikto], enable_inter_reflection=False)
+    result = graph.invoke(dict(BASE_STATE))
+
+    hint_msgs = [m for m in result["messages"] if "likely vulnerability class" in str(m.content)]
+    assert len(hint_msgs) == 1
+    assert "File path traversal, simple case" in hint_msgs[0].content
+    print("  [PASS] test_vulnerability_hint_in_tool_result_adds_directive_nudge")
 
 
 def test_final_answer_without_phase56_tool_gets_nudged_once_then_accepted():
@@ -646,6 +709,143 @@ def test_structured_final_answer_falls_back_on_exception():
 
 
 # =======================================================
+# specs/020 (multi-agent role separation, feature-flagged off by default)
+# =======================================================
+def test_planner_decision_structured_success():
+    llm = StructuredMockLLM(structured_response=_PlannerDecision(
+        reasoning="nothing mapped yet", next_role="collector",
+    ))
+    assert _try_planner_decision(llm, "system text") == "collector"
+    print("  [PASS] test_planner_decision_structured_success")
+
+
+def test_planner_decision_falls_back_when_unsupported():
+    llm = MockLLM(["plain text, no with_structured_output"])
+    assert _try_planner_decision(llm, "system text") is None
+    print("  [PASS] test_planner_decision_falls_back_when_unsupported")
+
+
+def test_planner_decision_invalid_role_returns_none():
+    llm = StructuredMockLLM(structured_response=_PlannerDecision(
+        reasoning="?", next_role="not_a_real_role",
+    ))
+    assert _try_planner_decision(llm, "system text") is None
+    print("  [PASS] test_planner_decision_invalid_role_returns_none")
+
+
+def test_multi_role_full_cycle_collector_then_exploiter_then_summarizer():
+    """Happy path: planner routes to collector, collector runs one tool,
+    planner routes to exploiter, exploiter runs one tool, planner routes to
+    summarizer, summarizer produces the final report."""
+    llm = MockLLM([
+        "I will start with collector to map the attack surface.",
+        'Thought: recon.\nAction: {"name": "mock_recon", "input": "https://test.com"}',
+        "Recon is done, now send this to the exploiter for vulnerability testing.",
+        'Thought: scan.\nAction: {"name": "Run_Nikto", "input": "https://test.com"}',
+        "Both steps done, time to summarize.",
+        "Final Answer: comprehensive report here",
+    ])
+    graph = _build_multi_role_workflow(
+        llm, {"collector": [mock_recon], "exploiter": [Run_Nikto]},
+        enable_inter_reflection=False,
+    )
+    result = graph.invoke(dict(MULTI_ROLE_BASE_STATE))
+
+    assert result["role_history"] == ["collector", "exploiter", "summarizer"]
+    assert result["phase"] == "done"
+    assert "comprehensive report here" in result["messages"][-1].content
+    # Collector's and Exploiter's tool calls both actually ran (found their
+    # way into the Blackboard), not just the routing decisions.
+    assert "mock_recon" in result["blackboard_summary"]
+    assert "Run_Nikto" in result["blackboard_summary"]
+    print("  [PASS] test_multi_role_full_cycle_collector_then_exploiter_then_summarizer")
+
+
+def test_multi_role_collector_runs_exactly_one_tool_call_per_visit():
+    llm = MockLLM([
+        "collector",
+        'Thought: recon.\nAction: {"name": "mock_recon", "input": "https://test.com"}',
+        "summarizer",
+        "Final Answer: done",
+    ])
+    graph = _build_multi_role_workflow(
+        llm, {"collector": [mock_recon], "exploiter": []},
+        enable_inter_reflection=False,
+    )
+    result = graph.invoke(dict(MULTI_ROLE_BASE_STATE))
+
+    assert len(result["tool_call_history"]) == 1
+    assert result["tool_call_history"][0].startswith("mock_recon::")
+    print("  [PASS] test_multi_role_collector_runs_exactly_one_tool_call_per_visit")
+
+
+def test_multi_role_respects_max_iterations():
+    """If the Planner keeps bouncing work back and forth without ever
+    choosing summarizer, the shared iteration budget still forces
+    termination - the same guarantee the single-loop graph gives via
+    max_iterations, not something specific to this topology's routing."""
+    llm = MockLLM([
+        "collector",
+        'Thought: recon.\nAction: {"name": "mock_recon", "input": "https://test.com"}',
+    ])
+    state = dict(MULTI_ROLE_BASE_STATE)
+    state["max_iterations"] = 5
+    graph = _build_multi_role_workflow(
+        llm, {"collector": [mock_recon], "exploiter": []},
+        enable_inter_reflection=False,
+    )
+    result = graph.invoke(state)
+
+    assert result["iteration_count"] <= state["max_iterations"] + 1
+    assert result["phase"] == "done", "must still reach summarizer, not hang"
+    print(f"  [PASS] test_multi_role_respects_max_iterations (stopped at {result['iteration_count']})")
+
+
+def test_multi_role_planner_defaults_to_summarizer_on_inconclusive_decision():
+    """An inconclusive routing decision (matches none of the 3 expected
+    words) ends the run with whatever's known so far rather than spinning
+    silently (Constitution VIII) - defaults to summarizer, not a crash."""
+    llm = MockLLM([
+        "I genuinely cannot decide what to do next.",
+        "Final Answer: inconclusive but honest",
+    ])
+    graph = _build_multi_role_workflow(
+        llm, {"collector": [mock_recon], "exploiter": []},
+        enable_inter_reflection=False,
+    )
+    result = graph.invoke(dict(MULTI_ROLE_BASE_STATE))
+
+    assert result["role_history"] == ["summarizer"]
+    assert result["phase"] == "done"
+    print("  [PASS] test_multi_role_planner_defaults_to_summarizer_on_inconclusive_decision")
+
+
+def test_multi_role_exploiter_inter_reflection_majority_vote():
+    """Inter-reflection (specs/019) is still reachable from the Exploiter
+    node - EXPLOITATION_TOOLS are all Exploiter-partitioned tools, so this
+    is the only node that can trigger it in this topology."""
+    llm = ReflectionAwareMockLLM(
+        react_responses=[
+            "exploiter",
+            'Thought: scan.\nAction: {"name": "Run_Nikto", "input": "https://test.com"}',
+            "summarizer",
+            "Final Answer: done",
+        ],
+        vote_responses=["yes", "yes", "no"],
+    )
+    graph = _build_multi_role_workflow(
+        llm, {"collector": [], "exploiter": [Run_Nikto]},
+        enable_inter_reflection=True,
+    )
+    result = graph.invoke(dict(MULTI_ROLE_BASE_STATE))
+
+    reflect_msgs = [m for m in result["messages"] if "majority-vote assessment" in str(m.content)]
+    assert len(reflect_msgs) == 1
+    assert "SUCCESS" in reflect_msgs[0].content
+    print("  [PASS] test_multi_role_exploiter_inter_reflection_majority_vote")
+
+
+# =======================================================
 
 if __name__ == "__main__":
     print(f"\n{'='*50}")
@@ -658,6 +858,10 @@ if __name__ == "__main__":
     test_custom_graph_stops_at_max_iterations()
     test_check_early_termination_detects_flag()
     test_check_early_termination_no_match_returns_none()
+    test_extract_vulnerability_hints_detects_title_pattern()
+    test_extract_vulnerability_hints_detects_keyword()
+    test_extract_vulnerability_hints_no_match_returns_empty()
+    test_extract_vulnerability_hints_handles_empty_input()
     test_build_reflection_note_blocked_response_suggests_bypass()
     test_build_reflection_note_generic_response_suggests_different_input()
     test_inter_reflect_majority_yes()
@@ -668,6 +872,7 @@ if __name__ == "__main__":
     test_inter_reflection_majority_inconclusive_appends_note()
     test_inter_reflection_disabled_skips_majority_vote()
     test_early_termination_flag_detection_adds_nudge()
+    test_vulnerability_hint_in_tool_result_adds_directive_nudge()
     test_final_answer_without_phase56_tool_gets_nudged_once_then_accepted()
     test_final_answer_with_phase56_tool_is_not_nudged()
     test_final_answer_with_zero_tool_calls_is_not_nudged()
@@ -686,6 +891,14 @@ if __name__ == "__main__":
     test_structured_final_answer_extracts_security_report()
     test_structured_final_answer_falls_back_when_unsupported()
     test_structured_final_answer_falls_back_on_exception()
+    test_planner_decision_structured_success()
+    test_planner_decision_falls_back_when_unsupported()
+    test_planner_decision_invalid_role_returns_none()
+    test_multi_role_full_cycle_collector_then_exploiter_then_summarizer()
+    test_multi_role_collector_runs_exactly_one_tool_call_per_visit()
+    test_multi_role_respects_max_iterations()
+    test_multi_role_planner_defaults_to_summarizer_on_inconclusive_decision()
+    test_multi_role_exploiter_inter_reflection_majority_vote()
 
     print(f"\n{'='*50}")
     print("ALL TESTS PASSED")

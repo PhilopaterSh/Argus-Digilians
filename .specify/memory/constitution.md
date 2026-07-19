@@ -1,7 +1,30 @@
 <!--
 Sync Impact Report
 ==================
-Version change: 1.2.0 -> 1.3.0 (MINOR: additive commit-discipline principle)
+Version change: 1.3.0 -> 1.4.0 (MINOR: additive research-provenance principle)
+
+Amendment 2026-07-13 (multi-agent/browser-automation research session, fix/copy-setup-to-scripts):
+Added principle (additive only; no existing principle redefined or removed):
+- XI. Documented Research Provenance (NON-NEGOTIABLE)
+Rationale: this session's `specs/020` (multi-agent role separation) and `specs/022`
+(browser automation) decisions were both directly shaped by external web research
+(local-model VRAM/latency limits, abliteration's measured effect on model quality,
+AI-Browser-Agent-vs-headless-browser tradeoffs) that was cited in chat but not
+initially written into any durable project artifact - the same unaudited-reasoning
+gap Principle V already forbids for installer logs and Principle X already closed
+for uncommitted fixes. The user explicitly requested this be made a standing,
+mandatory rule ("يجب أن يتم توثيق النتائج... بشكل ضروري وهام"), not a one-time
+cleanup. `docs/ARGUS_FRAMEWORK_ARCHITECTURE_v2.md`'s new "10. Research References"
+section and the `specs/020`/`022` `research.md` addenda are the first artifacts
+produced under this principle.
+Templates requiring updates:
+- .specify/templates/plan-template.md        -> no change (Constitution Check gate already generic)
+- .specify/templates/spec-template.md        -> no change
+- .specify/templates/tasks-template.md       -> no change
+- .opencode/commands/speckit.constitution.md -> no change (agent-neutral)
+Follow-up TODOs: none - already applied retroactively to this session's `020`/`022`
+research (see `docs/ARGUS_FRAMEWORK_ARCHITECTURE_v2.md` §10 and the two specs'
+`research.md` files).
 
 Amendment 2026-07-08b (repo-hygiene session, fix/copy-setup-to-scripts):
 Added principle (additive only; no existing principle redefined or removed):
@@ -282,6 +305,34 @@ actually fixed and when, which is exactly the kind of unaudited state
 Principle V forbids for installer logs. This principle extends that same
 auditability expectation to source control itself.
 
+### XI. Documented Research Provenance (NON-NEGOTIABLE)
+
+Any external research performed to inform a design decision (web search, literature review,
+benchmark/documentation lookup) MUST have its findings and sources recorded in a durable project
+artifact. Citing a source in conversation only, with no artifact update, does not satisfy this
+principle.
+
+Rules:
+- Every research pass that materially informs an architecture decision, a spec, or a code
+  change MUST be written into the relevant `specs/<phase>/research.md` (as a dated addendum if
+  the spec already exists) or, for research that spans multiple phases or informs general
+  architecture direction, into `docs/ARGUS_FRAMEWORK_ARCHITECTURE_v2.md`'s "Research References"
+  section.
+- Sources MUST be recorded as direct links, not paraphrased without attribution — a future
+  reader must be able to independently verify the finding, not just trust the summary.
+- A decision that cites research without a recorded source is treated the same as Principle
+  VIII's fabrication concern: an unverifiable claim presented as settled fact.
+- This applies to every future research pass without exception, not only ones a reviewer
+  happens to notice were uncited.
+
+Rationale: this session's multi-agent architecture and browser-automation decisions were both
+directly shaped by external research (local-model resource limits, measured model-quality
+tradeoffs, AI-agent-vs-plain-tool design patterns) that existed only in conversation until
+written down — the same unaudited-reasoning gap Principle V already forbids for installer logs
+and Principle X already closed for uncommitted fixes. Undocumented research rots exactly like
+undocumented code duplication (Principle IX): the reasoning behind a decision becomes
+unrecoverable once the conversation that produced it is gone.
+
 ## Security & Operational Constraints
 
 - **Target platform:** Windows 10 (build 19041+) or Windows 11, with WSL2 and a
@@ -325,6 +376,10 @@ auditability expectation to source control itself.
 - **Commit gate:** Per Principle X, a PR/session MUST NOT be considered done while
   a verified fix remains uncommitted; an AI assistant MUST request explicit
   confirmation before each `git commit` rather than batching or auto-committing.
+- **Research provenance gate:** Per Principle XI, a research-informed decision MUST NOT
+  be considered done while its findings/sources exist only in conversation; the relevant
+  `specs/<phase>/research.md` addendum or `docs/ARGUS_FRAMEWORK_ARCHITECTURE_v2.md` §10
+  entry MUST exist before the decision is treated as settled.
 
 ## Governance
 
@@ -343,4 +398,4 @@ Compliance review: every `/speckit.plan` invocation runs a Constitution Check ga
 violations MUST be either resolved or explicitly justified in the plan's Complexity
 Tracking table before implementation begins.
 
-**Version**: 1.3.0 | **Ratified**: 2026-06-27 | **Last Amended**: 2026-07-08
+**Version**: 1.4.0 | **Ratified**: 2026-06-27 | **Last Amended**: 2026-07-13

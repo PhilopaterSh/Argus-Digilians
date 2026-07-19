@@ -20,6 +20,10 @@ from app.core.agent.react_state import ArgusAgentState
 from app.core.agent.react_prompts import (
     build_react_system_prompt,
     build_prebuilt_system_prompt,
+    build_collector_prompt,
+    build_exploiter_prompt,
+    build_planner_prompt,
+    build_summarizer_prompt,
 )
 from app.core.memory.memory_service import ArgusMemory
 from app.core.schemas import SecurityReport
@@ -76,6 +80,57 @@ def _check_early_termination(text: str) -> Optional[str]:
     """
     match = _FLAG_PATTERN.search(text or "")
     return match.group(0) if match else None
+
+
+# 2026-07-11: live testing against a real PortSwigger Web Security Academy
+# lab found Recon_Suite's own tech-fingerprint output contained
+# `Title[File path traversal, simple case...]` - the target's actual
+# vulnerability class, stated outright - and the model never acted on it,
+# running a generic Nikto scan instead. Research on this exact failure mode
+# ("Looking Is Not Picking: An Attention-Segment Account of Tool-Selection
+# Failures in LLM Agents", arXiv:2606.16364) found the model can attend to
+# the right information and still pick wrong, and that prompt-only fixes
+# recover at most ~23% of such failures - the higher-recovery fixes need
+# access to model internals (attention/logit steering) not exposed by
+# Ollama's standard API for this model. So this doesn't rely on the model
+# noticing on its own: it's a deterministic, code-level scan that hands the
+# model an explicit, unambiguous directive instead.
+_TITLE_PATTERN = re.compile(r"Title\[([^\]]+)\]", re.IGNORECASE)
+_VULN_CLASS_KEYWORDS = (
+    "path traversal", "directory traversal", "sql injection", "cross-site scripting",
+    "cross-site request forgery", "server-side request forgery", "xml external entity",
+    "insecure direct object", "authentication bypass", "access control",
+    "insecure deserialization", "template injection", "command injection", "file upload",
+    "clickjacking", "open redirect", "race condition", "json web token",
+    "cors misconfiguration", "prototype pollution", "ldap injection", "nosql injection",
+    "request smuggling", "cache poisoning", "information disclosure",
+)
+
+
+def _extract_vulnerability_hints(text: str) -> list[str]:
+    """Scan a tool result for explicit signals of a specific vulnerability
+    class - a page title naming it (whatweb-style `Title[...]` fingerprint
+    output, as real training labs often do) or a known vulnerability-class
+    keyword appearing verbatim.
+
+    Args:
+        text (str): Tool result / observation text to scan.
+
+    Returns:
+        list[str]: Human-readable hint strings (one for a title match, one
+        for any matched keywords), or `[]` if neither is present.
+    """
+    if not text:
+        return []
+    hints = []
+    title_match = _TITLE_PATTERN.search(text)
+    if title_match:
+        hints.append(f"the page title mentions '{title_match.group(1).strip()}'")
+    lower = text.lower()
+    matched = sorted({kw for kw in _VULN_CLASS_KEYWORDS if kw in lower})
+    if matched:
+        hints.append(f"the output mentions vulnerability-class keyword(s): {', '.join(matched)}")
+    return hints
 
 
 def _build_reflection_note(prior_action: str, prior_response: str) -> str:
@@ -141,6 +196,41 @@ def _try_structured_action(llm: Any, system_text: str, messages: list) -> Option
             f"Action: {json.dumps({'name': action.tool, 'input': action.input or ''})}"
         )
     return None
+
+
+class _PlannerDecision(BaseModel):
+    """Structured routing decision (specs/020, feature-flagged off by
+    default) - the Planner role never calls an execution tool, only
+    decides which specialist acts next (FR-003)."""
+    reasoning: str = Field(description="Brief reasoning for this routing decision")
+    next_role: str = Field(description='One of: "collector", "exploiter", "summarizer"')
+
+
+def _try_planner_decision(llm: Any, system_text: str) -> Optional[str]:
+    """Attempt structured decoding of the Planner's next-role decision.
+
+    Mirrors `_try_structured_action`'s exact pattern (schema-constrained
+    decoding first, regex-friendly text fallback) but targets
+    `_PlannerDecision` instead of `_ArgusAction` - the Planner's output
+    shape (a routing choice, not a tool call) doesn't fit `_ArgusAction`'s
+    schema.
+
+    Returns:
+        Optional[str]: One of `"collector"`/`"exploiter"`/`"summarizer"` on
+        success, or `None` if structured decoding is unavailable/fails -
+        callers fall back to a regex search over a plain `llm.invoke()`
+        response for one of those three words.
+    """
+    if not hasattr(llm, "with_structured_output"):
+        return None
+    try:
+        structured_llm = llm.with_structured_output(_PlannerDecision)
+        result = structured_llm.invoke([SystemMessage(content=system_text)])
+        decision = result if isinstance(result, _PlannerDecision) else _PlannerDecision(**result)
+    except Exception:
+        return None
+    role = decision.next_role.strip().lower()
+    return role if role in ("collector", "exploiter", "summarizer") else None
 
 
 def _try_structured_final_answer(llm: Any, raw_answer: str) -> Optional[dict]:
@@ -221,6 +311,54 @@ def _inter_reflect(llm: Any, action: str, response: str) -> Optional[bool]:
         return None
     yes_count = sum(1 for v in votes if v)
     return yes_count > len(votes) / 2
+
+
+def _parse_react_output(content: str, default_input: str) -> dict:
+    """Parse LLM output: try JSON Action, then text format.
+
+    Module-level (moved out of `_build_custom_workflow`'s `parse_node`
+    closure 2026-07-11, specs/020) since it's a pure function with no
+    closure dependencies - both the single-loop graph and the multi-role
+    graph's collector/exploiter nodes call this identically.
+
+    Returns dict with optional keys: tool_name, tool_input, phase.
+    """
+    # 1. Detect Final Answer
+    if re.search(r"Final Answer:", content):
+        return {"phase": "done"}
+
+    # 2. Try JSON Action format
+    #    Action: {"name": "tool", "input": "value"}
+    json_match = re.search(r"Action:\s*(\{.*?\})", content, re.DOTALL)
+    if json_match:
+        try:
+            parsed = json.loads(json_match.group(1))
+            name = parsed.get("name") or parsed.get("action") or parsed.get("tool")
+            inp = parsed.get("input") or parsed.get("arguments") or parsed.get("arg")
+            if name:
+                return {
+                    "tool_name": name,
+                    "tool_input": str(inp or default_input),
+                    "phase": "",
+                }
+        except json.JSONDecodeError:
+            pass
+
+    # 3. Fallback: Text Action format
+    #    Action: tool_name
+    #    Action Input: value
+    action_match = re.search(r"Action:\s*(\w[\w-]*)", content)
+    input_match = re.search(r"Action Input:\s*(.+)", content)
+
+    if action_match:
+        return {
+            "tool_name": action_match.group(1),
+            "tool_input": input_match.group(1).strip() if input_match else default_input,
+            "phase": "",
+        }
+
+    # 4. Nothing detected
+    return {"tool_error": "Invalid format", "_raw": content}
 
 
 def _supports_tool_calls(llm: ChatOllama) -> bool:
@@ -356,48 +494,6 @@ def _build_custom_workflow(
             "messages": [response],
             "iteration_count": state["iteration_count"] + 1,
         }
-
-    def _parse_react_output(content: str, default_input: str) -> dict:
-        """Parse LLM output: try JSON Action, then text format.
-
-        Returns dict with optional keys: tool_name, tool_input, phase.
-        """
-        # 1. Detect Final Answer
-        if re.search(r"Final Answer:", content):
-            return {"phase": "done"}
-
-        # 2. Try JSON Action format
-        #    Action: {"name": "tool", "input": "value"}
-        json_match = re.search(r"Action:\s*(\{.*?\})", content, re.DOTALL)
-        if json_match:
-            try:
-                parsed = json.loads(json_match.group(1))
-                name = parsed.get("name") or parsed.get("action") or parsed.get("tool")
-                inp = parsed.get("input") or parsed.get("arguments") or parsed.get("arg")
-                if name:
-                    return {
-                        "tool_name": name,
-                        "tool_input": str(inp or default_input),
-                        "phase": "",
-                    }
-            except json.JSONDecodeError:
-                pass
-
-        # 3. Fallback: Text Action format
-        #    Action: tool_name
-        #    Action Input: value
-        action_match = re.search(r"Action:\s*(\w[\w-]*)", content)
-        input_match = re.search(r"Action Input:\s*(.+)", content)
-
-        if action_match:
-            return {
-                "tool_name": action_match.group(1),
-                "tool_input": input_match.group(1).strip() if input_match else default_input,
-                "phase": "",
-            }
-
-        # 4. Nothing detected
-        return {"tool_error": "Invalid format", "_raw": content}
 
     def parse_node(state: ArgusAgentState) -> dict:
         """Extract Action or detect Final Answer from LLM output.
@@ -567,6 +663,22 @@ def _build_custom_workflow(
                 extra_messages.append(HumanMessage(content=nudge))
                 reflection_notes.append(nudge)
 
+            # 2026-07-11: deterministic evidence-extraction check (see
+            # _extract_vulnerability_hints' docstring) - hands the model an
+            # explicit directive instead of relying on it to notice a
+            # signal like a page title on its own.
+            vuln_hints = _extract_vulnerability_hints(str(result))
+            if vuln_hints:
+                hint_note = (
+                    f"Reflection: the {name} result above {' and '.join(vuln_hints)} - "
+                    f"this strongly suggests the target's likely vulnerability class. "
+                    f"Prioritize testing it directly (e.g. Advanced_Evasion_Probe or "
+                    f"Exploit_Suggester for that specific class) over further generic "
+                    f"scanning."
+                )
+                extra_messages.append(HumanMessage(content=hint_note))
+                reflection_notes.append(hint_note)
+
             # specs/019 FR-006 (Red-MIRROR Algorithm 4 Step 1): 3x
             # self-consistency majority vote, scoped to EXPLOITATION_TOOLS
             # only (informational/deterministic tools don't need it).
@@ -660,6 +772,220 @@ def _build_custom_workflow(
     builder.add_conditional_edges(
         "execute", route_after_execute, {"agent": "agent", "end": END}
     )
+
+    return builder.compile()
+
+
+def _build_multi_role_workflow(
+    llm: Any,
+    tools_by_role: Dict[str, list],
+    memory: Optional[ArgusMemory] = None,
+    enable_inter_reflection: bool = True,
+) -> Any:
+    """Build the specs/020 multi-role StateGraph (feature-flagged off by
+    default - see `config.yaml`'s `enable_multi_agent_roles`).
+
+    Topology: `planner` decides which specialist acts next (FR-003);
+    `collector`/`exploiter` each execute exactly ONE tool call per visit
+    (FR-002's tool partition), then control returns unconditionally to
+    `planner`; `summarizer` is terminal and produces the final report
+    (FR-004) via `build_summarizer_prompt`.
+
+    Deliberately a standalone graph rather than a generalization of
+    `_build_custom_workflow`'s closures - the single-loop path is the
+    proven production default (NFR-002) and must stay completely
+    unaffected by this experimental path's existence. Reuses every
+    already-extracted, stateless module-level helper
+    (`_parse_react_output`, `_try_structured_action`,
+    `_check_early_termination`, `_extract_vulnerability_hints`,
+    `_inter_reflect`, `_build_tool_map`) rather than duplicating them.
+
+    Known, intentional scope reduction versus the single-loop graph (v1 of
+    this experimental path - not silently missing, documented per
+    Constitution VIII): does not replicate `parse_node`'s "block a call
+    repeated 3+ times" duplicate-call guard. If NFR-001's wall-clock
+    measurement (specs/020 T006/T007) justifies keeping this path, that
+    guard should be added before any live/production use.
+
+    Args:
+        llm (Any): Shared model instance for all four roles (FR-001 - one
+            model, not four separate model loads).
+        tools_by_role (Dict[str, list]): `{"collector": [...], "exploiter":
+            [...]}` - each built via `build_argus_tools(bridge, role=...)`.
+            Planner/Summarizer call no execution tools at all (FR-002).
+        memory (Optional[ArgusMemory]): Shared Blackboard, written by
+            Collector/Exploiter tool executions exactly as
+            `_build_custom_workflow`'s `execute_node` does.
+        enable_inter_reflection (bool): Same meaning as
+            `_build_custom_workflow`'s - 3x majority vote on
+            `EXPLOITATION_TOOLS` results (only reachable from `exploiter`,
+            since `EXPLOITATION_TOOLS` are all Exploiter-partitioned tools).
+
+    Returns:
+        Any: Compiled LangGraph graph with the same external
+        `.invoke()`/`.stream()` contract as `_build_custom_workflow`'s.
+    """
+    collector_tool_map = _build_tool_map(tools_by_role.get("collector", []))
+    exploiter_tool_map = _build_tool_map(tools_by_role.get("exploiter", []))
+
+    def planner_node(state: ArgusAgentState) -> dict:
+        system_text = build_planner_prompt(state)
+        decision = _try_planner_decision(llm, system_text)
+        if decision is None:
+            raw = llm.invoke([SystemMessage(content=system_text)])
+            content = str(getattr(raw, "content", raw)).lower()
+            decision = next(
+                (c for c in ("collector", "exploiter", "summarizer") if c in content),
+                None,
+            )
+        # An inconclusive routing decision ends the run with whatever's
+        # known so far rather than spinning silently (Constitution VIII).
+        decision = decision or "summarizer"
+        return {
+            "current_role": decision,
+            "role_history": state.get("role_history", []) + [decision],
+            "iteration_count": state["iteration_count"] + 1,
+        }
+
+    def _run_specialist_step(
+        state: ArgusAgentState, role_name: str, tool_map: Dict[str, Callable], prompt_builder: Callable
+    ) -> dict:
+        """Shared propose -> parse -> execute logic for Collector/Exploiter -
+        exactly one tool call per visit, then control returns to Planner."""
+        system_text = prompt_builder({**state, "_tools": tool_map})
+        structured_content = _try_structured_action(llm, system_text, state["messages"])
+        if structured_content is not None:
+            content = structured_content
+        else:
+            raw = llm.invoke([SystemMessage(content=system_text)] + state["messages"])
+            content = str(getattr(raw, "content", raw))
+        agent_message = AIMessage(content=content)
+        parsed = _parse_react_output(content, state["target"])
+
+        if parsed.get("phase") == "done" or "tool_error" in parsed:
+            note = f"Reflection: {role_name} did not produce a usable tool call this turn."
+            return {
+                "iteration_count": state["iteration_count"] + 1,
+                "messages": [agent_message, HumanMessage(content=note)],
+                "reflection_notes": state.get("reflection_notes", []) + [note],
+            }
+
+        name = parsed.get("tool_name")
+        inp = parsed.get("tool_input", state["target"])
+        if not name or name not in tool_map:
+            obs = f"Observation: Unknown tool '{name}' for {role_name}. Available: {list(tool_map.keys())}"
+            return {
+                "iteration_count": state["iteration_count"] + 1,
+                "messages": [agent_message, HumanMessage(content=obs)],
+            }
+
+        try:
+            result = tool_map[name](inp)
+        except Exception as e:
+            result = f"Error executing {name}: {e}"
+
+        bb = (
+            f"{state['blackboard_summary']}\n"
+            f"- [{role_name}/{name}] {str(inp)[:80]} -> {str(result)[:200]}"
+        ).strip()
+        call_key = f"{name}::{inp}"
+        reflection_notes = list(state.get("reflection_notes", []))
+        extra_messages = []
+
+        found_flag = _check_early_termination(str(result))
+        if found_flag:
+            nudge = (
+                f"Reflection: a flag-shaped string was found in this "
+                f"result ({found_flag})."
+            )
+            extra_messages.append(HumanMessage(content=nudge))
+            reflection_notes.append(nudge)
+
+        vuln_hints = _extract_vulnerability_hints(str(result))
+        if vuln_hints:
+            hint_note = (
+                f"Reflection: the {name} result above {' and '.join(vuln_hints)} - "
+                f"this strongly suggests the target's likely vulnerability class."
+            )
+            extra_messages.append(HumanMessage(content=hint_note))
+            reflection_notes.append(hint_note)
+
+        if enable_inter_reflection and name in EXPLOITATION_TOOLS:
+            verdict = _inter_reflect(llm, call_key, str(result))
+            if verdict is not None:
+                verdict_text = "SUCCESS" if verdict else "INCONCLUSIVE/NO FINDING"
+                reflect_msg = f"Reflection: majority-vote assessment of {name} result = {verdict_text}."
+                extra_messages.append(HumanMessage(content=reflect_msg))
+                reflection_notes.append(reflect_msg)
+
+        if memory is not None:
+            try:
+                memory.add_finding(
+                    domain=state["target"],
+                    tool_name=name,
+                    data_type="tool_output",
+                    raw_data=str(result)[:5000],
+                    summary=str(result)[:200],
+                )
+            except Exception:
+                pass
+
+        return {
+            "tool_result": str(result)[:2000],
+            "tool_error": None,
+            "blackboard_summary": bb,
+            "messages": [agent_message, HumanMessage(content=f"Observation: {result}")] + extra_messages,
+            "tool_call_history": state.get("tool_call_history", []) + [call_key],
+            "reflection_notes": reflection_notes,
+            "iteration_count": state["iteration_count"] + 1,
+        }
+
+    def collector_node(state: ArgusAgentState) -> dict:
+        return _run_specialist_step(state, "collector", collector_tool_map, build_collector_prompt)
+
+    def exploiter_node(state: ArgusAgentState) -> dict:
+        return _run_specialist_step(state, "exploiter", exploiter_tool_map, build_exploiter_prompt)
+
+    def summarizer_node(state: ArgusAgentState) -> dict:
+        system_text = build_summarizer_prompt(state)
+        raw = llm.invoke([SystemMessage(content=system_text)])
+        content = str(getattr(raw, "content", raw))
+        if "Final Answer:" not in content:
+            content = f"Final Answer: {content}"
+        return {
+            "messages": [AIMessage(content=content)],
+            "phase": "done",
+            "iteration_count": state["iteration_count"] + 1,
+        }
+
+    def route_after_planner(state: ArgusAgentState) -> str:
+        if state["iteration_count"] >= state["max_iterations"]:
+            return "summarizer"
+        return state.get("current_role") or "summarizer"
+
+    def route_after_specialist(state: ArgusAgentState) -> str:
+        if state["iteration_count"] >= state["max_iterations"]:
+            return "summarizer"
+        return "planner"
+
+    builder = StateGraph(ArgusAgentState)
+    builder.add_node("planner", planner_node)
+    builder.add_node("collector", collector_node)
+    builder.add_node("exploiter", exploiter_node)
+    builder.add_node("summarizer", summarizer_node)
+
+    builder.add_edge(START, "planner")
+    builder.add_conditional_edges(
+        "planner", route_after_planner,
+        {"collector": "collector", "exploiter": "exploiter", "summarizer": "summarizer"},
+    )
+    builder.add_conditional_edges(
+        "collector", route_after_specialist, {"planner": "planner", "summarizer": "summarizer"},
+    )
+    builder.add_conditional_edges(
+        "exploiter", route_after_specialist, {"planner": "planner", "summarizer": "summarizer"},
+    )
+    builder.add_edge("summarizer", END)
 
     return builder.compile()
 

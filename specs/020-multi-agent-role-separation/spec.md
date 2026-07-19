@@ -6,10 +6,14 @@
 
 **Created**: 2026-07-10
 
-**Status**: Proposed — spec kit only, not yet implemented. **Explicitly flagged high-risk /
-optional** — this is the largest architectural bet identified in the Red-MIRROR gap analysis
-and should be decided on its own merits, independent of `019` (which delivers most of the
-paper's measured benefit without this change).
+**Status**: **Implemented as an experimental, feature-flagged-off path** (2026-07-11,
+`enable_multi_agent_roles: false` in `config.yaml`). NFR-001's wall-clock measurement (see
+`tasks.md` T007) came back borderline/inconclusive-leaning-negative - a measured 2.00x LLM
+call-count overhead versus the single-loop baseline, landing exactly at this spec's own
+pre-agreed 2x rollback threshold, not clearly under it. **Not promoted to default.** Originally
+**explicitly flagged high-risk/optional** — this is the largest architectural bet identified in
+the Red-MIRROR gap analysis and should be decided on its own merits, independent of `019` (which
+delivers most of the paper's measured benefit without this change) - that framing held up.
 
 **Input**: Gap analysis of `docs/history/2603.27127v1.pdf` against Argus's current codebase,
 requested by the user 2026-07-10.

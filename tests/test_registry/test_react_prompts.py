@@ -1,4 +1,10 @@
-from app.core.agent.react_prompts import build_react_system_prompt
+from app.core.agent.react_prompts import (
+    build_collector_prompt,
+    build_exploiter_prompt,
+    build_planner_prompt,
+    build_react_system_prompt,
+    build_summarizer_prompt,
+)
 
 
 def _make_state(**overrides):
@@ -63,3 +69,34 @@ class TestBuildReactSystemPrompt:
             _make_state(tool_call_history=["Check_Reachability::https://example.com"])
         )
         assert 'Check_Reachability("https://example.com")' in prompt
+
+
+class TestRolePrompts:
+    """specs/020 (multi-agent role separation, feature-flagged off by
+    default) role-scoped prompt builders."""
+
+    def test_collector_prompt_scopes_to_recon_only(self):
+        prompt = build_collector_prompt(_make_state())
+        assert "Collector agent" in prompt
+        assert "reconnaissance and discovery" in prompt
+        assert "Check_Reachability" in prompt
+
+    def test_exploiter_prompt_scopes_to_exploitation_only(self):
+        prompt = build_exploiter_prompt(_make_state())
+        assert "Exploiter agent" in prompt
+        assert "Run_Nikto" in prompt
+
+    def test_planner_prompt_lists_the_three_specialists(self):
+        prompt = build_planner_prompt(_make_state())
+        assert "collector:" in prompt
+        assert "exploiter:" in prompt
+        assert "summarizer:" in prompt
+
+    def test_planner_prompt_shows_role_history(self):
+        prompt = build_planner_prompt(_make_state(role_history=["collector", "exploiter"]))
+        assert "collector -> exploiter" in prompt
+
+    def test_summarizer_prompt_includes_risk_score_rule(self):
+        prompt = build_summarizer_prompt(_make_state())
+        assert "overall_risk_score MUST match" in prompt
+        assert "Final Answer:" in prompt

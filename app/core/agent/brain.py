@@ -234,17 +234,23 @@ class ArgusBrain:
             never reached a Final Answer within `self.max_iterations`
             (never fabricated - Constitution VIII).
         """
-        from app.core.agent.react_workflow import _build_custom_workflow
+        from app.core.agent.react_workflow import _build_custom_workflow, _build_multi_role_workflow
 
         # specs/019-shared-memory-reflection-upgrade FR-006/NFR-002: read the
         # escape hatch from config at graph-build time, not hardcoded, so an
         # operator can disable the 3x majority-vote check if it measurably
         # pushes a run past max_iterations' time budget in practice.
+        # specs/020-multi-agent-role-separation: enable_multi_agent_roles
+        # reads the same way - default False, an experimental alternate
+        # graph, not the production default (NFR-001 not yet measured).
         try:
             from app.core.config import ArgusConfig
-            enable_inter_reflection = ArgusConfig.load().enable_inter_reflection
+            _cfg = ArgusConfig.load()
+            enable_inter_reflection = _cfg.enable_inter_reflection
+            enable_multi_agent_roles = _cfg.enable_multi_agent_roles
         except Exception:
             enable_inter_reflection = True
+            enable_multi_agent_roles = False
 
         # build_workflow() would route here via _supports_tool_calls(llm) -
         # but ChatOllama (build_chat_llm()) reports True for tool-calling-
@@ -260,10 +266,17 @@ class ArgusBrain:
 
         last_error: Optional[Exception] = None
         for attempt in range(_MAX_INFRA_RETRIES + 1):
-            graph = _build_custom_workflow(
-                self.llm, self.tools, self.memory,
-                enable_inter_reflection=enable_inter_reflection,
-            )
+            if enable_multi_agent_roles:
+                from app.core.agent.brain_tools import partition_tools_by_role
+                graph = _build_multi_role_workflow(
+                    self.llm, partition_tools_by_role(self.tools), self.memory,
+                    enable_inter_reflection=enable_inter_reflection,
+                )
+            else:
+                graph = _build_custom_workflow(
+                    self.llm, self.tools, self.memory,
+                    enable_inter_reflection=enable_inter_reflection,
+                )
             initial_state = {
                 "messages": [HumanMessage(content=query)],
                 "target": target,
@@ -278,6 +291,8 @@ class ArgusBrain:
                 "tool_call_history": [],
                 "reflection_notes": [],
                 "phase56_nudged": False,
+                "current_role": "",
+                "role_history": [],
             }
             seen_messages = len(initial_state["messages"])
             final_state: Dict[str, Any] = initial_state
