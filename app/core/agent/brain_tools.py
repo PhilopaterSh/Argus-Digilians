@@ -116,7 +116,7 @@ def build_argus_tools(bridge: WSLBridgeTools) -> list[Tool]:
         Tool(
             name="Archive_Research_Subagent",
             func=bridge.archive_research_subagent,
-            description="Invoke the archived AI_Agents_Project for deep intelligence research (CVEs, Web Search, Historical Memory).",
+            description="Background/OSINT research beyond a quick search (company history, prior incidents, broader context). Currently a web-search-backed lookup - see SmartWebSearch.archive_research_subagent()'s docstring for what changed 2026-07-19.",
         ),
         Tool(
             name="Run_Kali_Command",

@@ -331,7 +331,7 @@ Each line: tool name -> when to use it -> a short example situation that calls f
 - Run_Nikto -> for a general vulnerability sweep of a confirmed-live web target. Example: right after confirming the site responds, to catch missing headers, exposed files, and common misconfigurations.
 - Run_FFUF -> to brute-force discover hidden paths/directories not visible from crawling. Example: Crawl_Target only found a handful of links -> search more aggressively for hidden ones.
 - System_Self_Heal -> ONLY when an Observation explicitly says a command was not found. Example: Observation says "subfinder: command not found" -> call this with "subfinder" as the input, then retry the tool that failed.
-- Archive_Research_Subagent -> for deeper background/OSINT research beyond a quick search - e.g. company history, prior incidents. Example: you want broader context on the organization behind this domain, not just CVEs.
+- Archive_Research_Subagent -> currently equivalent to Smart_Web_Search (see its docstring, 2026-07-19) - prefer Smart_Web_Search directly; this name is kept for compatibility.
 - Run_Kali_Command -> last resort only: for anything no other tool covers, or to run "--help" on a tool after a syntax error. Example: FFUF failed with "invalid option" -> run "ffuf -h" to see correct usage before retrying.
 
 ## AVAILABLE TOOLS (exact names and full descriptions)

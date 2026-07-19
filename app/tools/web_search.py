@@ -1,5 +1,3 @@
-import os
-import subprocess
 try:
     from ddgs import DDGS  # current package name
 except ImportError:
@@ -40,23 +38,19 @@ class SmartWebSearch:
             return f"Web Search Error: {e}"
 
     def archive_research_subagent(self, query):
-        """Invokes the archived AI_Agents_Project for deep research."""
-        print(f"[*] [Argus-Archive] Invoking research subagent for: {query}")
-        
-        project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
-        archive_script = os.path.join(project_root, "archive", "AI_Agents_Project", "smart_search_with_memory.py")
-        venv_python = os.path.join(project_root, "Argus_venv", "Scripts", "python.exe")
-        
-        if not os.path.exists(archive_script):
-            return "Error: Archive research script not found at the specified path."
+        """Deeper background/OSINT research beyond a quick search.
 
-        try:
-            cmd = [venv_python, archive_script, query]
-            result = subprocess.run(cmd, capture_output=True, text=True, encoding='utf-8', errors='ignore', timeout=300)
-
-            if result.returncode != 0:
-                return f"Archive Subagent Error: {result.stderr}"
-
-            return f"--- [BRAIN] ARCHIVE RESEARCH REPORT ---\n{result.stdout}"
-        except Exception as e:
-            return f"Failed to invoke archive subagent: {str(e)}"
+        Rewritten 2026-07-19: previously shelled out to a standalone script in
+        archive/AI_Agents_Project/ (the only subprocess-based tool in the
+        suite - fragile process/encoding handling, a hard dependency on a
+        local Ollama model with no guarantee it's running, Arabic-only
+        output). That script's own session log showed it failing on most
+        real invocations. Now delegates to smart_web_search() in-process -
+        strictly more reliable, though it no longer does LLM summarization or
+        keeps its own session memory the old script did. Kept as a distinct
+        tool name (not merged into Smart_Web_Search) since it is already
+        registered and referenced by name in app/core/prompts.py's tool
+        guide and covered by tests/test_agent/test_brain_tools.py's expected
+        tool-name set.
+        """
+        return self.smart_web_search(query)
