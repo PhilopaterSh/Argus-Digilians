@@ -107,8 +107,6 @@ Argus-Digilians/
 +-- tests/                          # Test suites
 +-- data/                           # Data & databases
 +-- logs/                           # Installer & runtime logs
-+-- archive/                        # Retained old/unrelated code (see archive/AI_Agents_Project -
-|                                    # a standalone prototype, not superseded Argus code)
 ```
 
 ---
