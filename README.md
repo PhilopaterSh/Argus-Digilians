@@ -98,24 +98,21 @@ remote_Argus_PhilopaterSh/
 +-- Setup/                          # Legacy installation scripts (manual fallback)
 |   +-- Step_1_Core_Foundation.bat
 |   +-- Step_2_AI_Python_Env.bat
-|   +-- Step_3_Kali_Tools_Setup.bat
-|   +-- check_and_install.sh        # Kali tools installer (run inside WSL)
 |   +-- requirements.txt            # Python dependencies
 |   +-- README.md                   # Legacy setup guide
 |
 +-- app/                            # Main application
 |   +-- GUI/                        # Streamlit web UI
-|   +-- core/                       # AI brain, config
+|   +-- core/                       # AI brain, config, agent, memory, RAG
 |   +-- tools/                      # Security tool modules
 |   +-- modules/                    # Specialized exploit scripts
 |
++-- specs/                          # Spec-kit feature specs (spec/plan/tasks per feature)
 +-- docs/                           # Technical documentation
 +-- tests/                          # Test suites
 +-- data/                           # Data & databases
 +-- logs/                           # Installer & runtime logs
-+-- bin/                            # Executables
-+-- archive/                        # Deprecated code
-+-- Plan md/                        # Implementation plans
++-- archive/                        # Deprecated/superseded code, retained for reference
 ```
 
 ---
