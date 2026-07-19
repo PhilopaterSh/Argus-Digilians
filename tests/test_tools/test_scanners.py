@@ -14,6 +14,11 @@ def service(tmp_path, monkeypatch):
 
 class TestRunNikto:
     def test_success_on_first_scheme_does_not_retry(self, service):
+        """Verify Success on first scheme does not retry.
+        
+        Args:
+            service: pytest fixture (see the module's @pytest.fixture definitions).
+        """
         svc, runner, _ = service
         runner.run.return_value = "+ Server: Apache\n+ /admin/: found"
 
@@ -26,7 +31,11 @@ class TestRunNikto:
         with https:// while Nmap had already shown only port 80/http was
         open (443 was closed) - Nikto silently failed to connect and the
         agent had no way to tell the difference from a clean empty scan.
-        Nikto itself should try the other scheme before giving up."""
+        Nikto itself should try the other scheme before giving up.
+        
+        Args:
+            service: pytest fixture (see the module's @pytest.fixture definitions).
+        """
         svc, runner, _ = service
         runner.run.side_effect = [
             "+ [FAIL] Unable to connect to example.com:443.",
@@ -42,6 +51,11 @@ class TestRunNikto:
         assert "/admin/: found" in result
 
     def test_returns_original_failure_when_both_schemes_fail(self, service):
+        """Verify Returns original failure when both schemes fail.
+        
+        Args:
+            service: pytest fixture (see the module's @pytest.fixture definitions).
+        """
         svc, runner, _ = service
         runner.run.side_effect = [
             "+ [FAIL] Unable to connect to example.com:443.",
@@ -54,6 +68,11 @@ class TestRunNikto:
         assert "443" in result
 
     def test_no_fallback_without_a_recognised_scheme(self, service):
+        """Verify No fallback without a recognised scheme.
+        
+        Args:
+            service: pytest fixture (see the module's @pytest.fixture definitions).
+        """
         svc, runner, _ = service
         runner.run.return_value = "+ [FAIL] Unable to connect."
 
@@ -67,7 +86,11 @@ class TestRunNikto:
         already-`.txt`-suffixed path produced real `.txt.txt` files on disk
         (confirmed in reports/nikto/) while the returned message kept citing
         the un-suffixed (wrong) path. The `-o` flag's argument must have no
-        extension; the returned message's cited path must have exactly one."""
+        extension; the returned message's cited path must have exactly one.
+        
+        Args:
+            service: pytest fixture (see the module's @pytest.fixture definitions).
+        """
         svc, runner, _ = service
         runner.run.return_value = "+ Server: Apache"
 
@@ -82,6 +105,11 @@ class TestRunNikto:
 
 class TestRunFfufDiscovery:
     def test_success_on_first_scheme_does_not_retry(self, service):
+        """Verify Success on first scheme does not retry.
+        
+        Args:
+            service: pytest fixture (see the module's @pytest.fixture definitions).
+        """
         svc, runner, _ = service
         runner.run.return_value = "http://example.com/admin [Status: 200]"
 
@@ -90,6 +118,11 @@ class TestRunFfufDiscovery:
         assert runner.run.call_count == 1
 
     def test_retries_with_http_when_https_finds_nothing(self, service):
+        """Verify Retries with http when https finds nothing.
+        
+        Args:
+            service: pytest fixture (see the module's @pytest.fixture definitions).
+        """
         svc, runner, _ = service
         runner.run.side_effect = [
             "",
@@ -104,6 +137,11 @@ class TestRunFfufDiscovery:
         assert "admin" in result
 
     def test_reports_no_paths_when_both_schemes_empty(self, service):
+        """Verify Reports no paths when both schemes empty.
+        
+        Args:
+            service: pytest fixture (see the module's @pytest.fixture definitions).
+        """
         svc, runner, _ = service
         runner.run.side_effect = ["", ""]
 

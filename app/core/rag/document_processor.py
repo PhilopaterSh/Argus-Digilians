@@ -11,6 +11,7 @@ class DocumentProcessor:
     SUPPORTED_EXTENSIONS = {".txt", ".md", ".pdf", ".json", ".csv", ".html", ".yaml", ".yml", ".xml"}
 
     def __init__(self, config: Optional[RAGConfig] = None):
+        """Init  ."""
         self.config = config or RAGConfig.from_central()
 
     def load_from_directory(self, directory: Optional[str] = None) -> List[Document]:
@@ -44,6 +45,7 @@ class DocumentProcessor:
         return self._load_single(file_path, ext)
 
     def _load_single(self, fpath: str, ext: str) -> List[Document]:
+        """Load single."""
         if ext == ".csv":
             return self._load_csv(fpath)
         elif ext == ".json":

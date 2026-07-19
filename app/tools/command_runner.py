@@ -73,6 +73,7 @@ class CommandRunner:
         return path_prefix + command
 
     def _run_direct_wsl(self, command: str, show_prompt: bool = False, timeout: int = DEFAULT_COMMAND_TIMEOUT) -> str:
+        """Run direct wsl."""
         try:
             full_command = self._with_safe_path(command)
 

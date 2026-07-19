@@ -14,8 +14,10 @@ class BaseToolService(ABC):
     @property
     @abstractmethod
     def metadata(self) -> ToolMetadata:
+        """Metadata."""
         ...
 
     @abstractmethod
     def execute(self, **kwargs) -> Any:
+        """Execute."""
         ...

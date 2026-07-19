@@ -69,11 +69,13 @@ class StructuredMockLLM:
 
         class _Bound:
             def invoke(self, messages):
+                """Invoke."""
                 return response
 
         return _Bound()
 
     def invoke(self, messages, **kwargs):
+        """Invoke."""
         return AIMessage(content="Thought: fallback path used.\nFinal Answer: fallback report")
 
 
@@ -257,42 +259,50 @@ def test_custom_graph_duplicate_call_loop_respects_max_iterations():
 
 
 def test_check_early_termination_detects_flag():
+    """Verify Check early termination detects flag."""
     assert _check_early_termination("here is the flag{abc123} you wanted") == "flag{abc123}"
     print("  [PASS] test_check_early_termination_detects_flag")
 
 
 def test_check_early_termination_no_match_returns_none():
+    """Verify Check early termination no match returns none."""
     assert _check_early_termination("no flag here, just a normal result") is None
     print("  [PASS] test_check_early_termination_no_match_returns_none")
 
 
 def test_build_reflection_note_blocked_response_suggests_bypass():
+    """Verify Build reflection note blocked response suggests bypass."""
     note = _build_reflection_note("Advanced_Evasion_Probe::x", "HTTP 403 Forbidden - blocked by WAF")
     assert "bypass" in note.lower() or "encoding" in note.lower()
     print("  [PASS] test_build_reflection_note_blocked_response_suggests_bypass")
 
 
 def test_build_reflection_note_generic_response_suggests_different_input():
+    """Verify Build reflection note generic response suggests different input."""
     note = _build_reflection_note("mock_scan::x", "some ordinary, unremarkable output")
     assert "genuinely different" in note.lower()
     print("  [PASS] test_build_reflection_note_generic_response_suggests_different_input")
 
 
 def test_inter_reflect_majority_yes():
+    """Verify Inter reflect majority yes."""
     llm = ReflectionAwareMockLLM([], vote_responses=["yes", "no", "yes"])
     assert _inter_reflect(llm, "Run_Nikto::x", "some result") is True
     print("  [PASS] test_inter_reflect_majority_yes")
 
 
 def test_inter_reflect_majority_no():
+    """Verify Inter reflect majority no."""
     llm = ReflectionAwareMockLLM([], vote_responses=["no", "no", "yes"])
     assert _inter_reflect(llm, "Run_Nikto::x", "some result") is False
     print("  [PASS] test_inter_reflect_majority_no")
 
 
 def test_inter_reflect_returns_none_when_all_calls_fail():
+    """Verify Inter reflect returns none when all calls fail."""
     class _FailingLLM:
         def invoke(self, messages, **kwargs):
+            """Invoke."""
             raise RuntimeError("unreachable")
     assert _inter_reflect(_FailingLLM(), "Run_Nikto::x", "result") is None
     print("  [PASS] test_inter_reflect_returns_none_when_all_calls_fail")
@@ -324,6 +334,7 @@ def test_duplicate_call_reflection_note_is_response_aware():
 
 
 def test_inter_reflection_majority_success_appends_note():
+    """Verify Inter reflection majority success appends note."""
     llm = ReflectionAwareMockLLM(
         react_responses=[
             "Thought: scan.\nAction: Run_Nikto\nAction Input: https://test.com",
@@ -342,6 +353,7 @@ def test_inter_reflection_majority_success_appends_note():
 
 
 def test_inter_reflection_majority_inconclusive_appends_note():
+    """Verify Inter reflection majority inconclusive appends note."""
     llm = ReflectionAwareMockLLM(
         react_responses=[
             "Thought: scan.\nAction: Run_Nikto\nAction Input: https://test.com",
@@ -378,6 +390,7 @@ def test_inter_reflection_disabled_skips_majority_vote():
 
 
 def test_early_termination_flag_detection_adds_nudge():
+    """Verify Early termination flag detection adds nudge."""
     llm = MockLLM([
         "Thought: read file.\nAction: mock_flag_tool\nAction Input: https://test.com",
         "Thought: done.\nFinal Answer: flag{argus_test_flag_123}",
@@ -416,6 +429,7 @@ def test_final_answer_without_phase56_tool_gets_nudged_once_then_accepted():
 
 
 def test_final_answer_with_phase56_tool_is_not_nudged():
+    """Verify Final answer with phase56 tool is not nudged."""
     llm = MockLLM([
         "Thought: scan.\nAction: Run_Nikto\nAction Input: https://test.com",
         "Thought: done.\nFinal Answer: report after nikto",
@@ -567,6 +581,7 @@ def test_structured_action_produces_tool_call():
 
 
 def test_structured_action_produces_final_answer():
+    """Verify Structured action produces final answer."""
     llm = StructuredMockLLM(_ArgusAction(thought="Done.", final_answer="Security report here."))
     content = _try_structured_action(llm, "system prompt", [HumanMessage(content="go")])
     assert content == "Thought: Done.\nFinal Answer: Security report here."
@@ -619,6 +634,7 @@ def test_custom_graph_format_error_loop_respects_max_iterations():
 
 
 def test_structured_final_answer_extracts_security_report():
+    """Verify Structured final answer extracts security report."""
     from app.core.schemas import SecurityReport
     report = SecurityReport(
         summary="ok", attack_surface_stats="1 host", findings=[],
@@ -634,12 +650,14 @@ def test_structured_final_answer_extracts_security_report():
 
 
 def test_structured_final_answer_falls_back_when_unsupported():
+    """Verify Structured final answer falls back when unsupported."""
     llm = MockLLM(["plain text"])
     assert _try_structured_final_answer(llm, "raw text") is None
     print("  [PASS] test_structured_final_answer_falls_back_when_unsupported")
 
 
 def test_structured_final_answer_falls_back_on_exception():
+    """Verify Structured final answer falls back on exception."""
     llm = StructuredMockLLM(raise_on_structured=True)
     assert _try_structured_final_answer(llm, "raw text") is None
     print("  [PASS] test_structured_final_answer_falls_back_on_exception")

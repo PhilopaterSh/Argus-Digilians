@@ -23,10 +23,12 @@ class VectorStore:
         self._ensure_store_dir()
 
     def _ensure_store_dir(self):
+        """Ensure store dir."""
         os.makedirs(self.config.vector_store_dir, exist_ok=True)
 
     @property
     def _index_path(self):
+        """Index path."""
         return os.path.join(self.config.vector_store_dir, 'index.faiss')
 
     def build_index(self, chunks: List[Document]) -> int:
@@ -117,6 +119,7 @@ class VectorStore:
 
     @property
     def is_loaded(self) -> bool:
+        """Is loaded."""
         return self._store is not None
 
     @property

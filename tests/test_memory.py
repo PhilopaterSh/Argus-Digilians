@@ -22,6 +22,11 @@ def mem(db_path):
 
 class TestArgusMemory:
     def test_init_creates_tables(self, db_path):
+        """Verify Init creates tables.
+        
+        Args:
+            db_path: pytest fixture (see the module's @pytest.fixture definitions).
+        """
         m = ArgusMemory(db_path=db_path)
         with m._get_conn() as conn:
             tables = {
@@ -37,12 +42,22 @@ class TestArgusMemory:
         assert "global_state" in tables
 
     def test_upsert_target_new(self, mem):
+        """Verify Upsert target new.
+        
+        Args:
+            mem: pytest fixture (see the module's @pytest.fixture definitions).
+        """
         mem.upsert_target("example.com")
         mem.add_finding("example.com", "test", "check", "ok", "verified")
         summary = json.loads(mem.get_blackboard_summary())
         assert "example.com" in summary
 
     def test_upsert_target_update_priority(self, mem):
+        """Verify Upsert target update priority.
+        
+        Args:
+            mem: pytest fixture (see the module's @pytest.fixture definitions).
+        """
         mem.upsert_target("example.com", priority=1)
         mem.upsert_target("example.com", priority=5)
         with mem._get_conn() as conn:
@@ -52,12 +67,22 @@ class TestArgusMemory:
         assert row["priority"] == 5
 
     def test_add_finding_auto_upserts_target(self, mem):
+        """Verify Add finding auto upserts target.
+        
+        Args:
+            mem: pytest fixture (see the module's @pytest.fixture definitions).
+        """
         mem.add_finding("newdomain.com", "nmap", "ports", "80/tcp", "HTTP")
         summary = json.loads(mem.get_blackboard_summary())
         assert "newdomain.com" in summary
         assert summary["newdomain.com"]["ports"] == "HTTP"
 
     def test_add_finding_multiple_types(self, mem):
+        """Verify Add finding multiple types.
+        
+        Args:
+            mem: pytest fixture (see the module's @pytest.fixture definitions).
+        """
         mem.add_finding("x.com", "nmap", "ports", "80/tcp", "HTTP")
         mem.add_finding("x.com", "whatweb", "tech", "nginx", "Nginx 1.24")
         summary = json.loads(mem.get_blackboard_summary())
@@ -65,15 +90,30 @@ class TestArgusMemory:
         assert summary["x.com"]["tech"] == "Nginx 1.24"
 
     def test_upsert_entity_new(self, mem):
+        """Verify Upsert entity new.
+        
+        Args:
+            mem: pytest fixture (see the module's @pytest.fixture definitions).
+        """
         eid = mem.upsert_entity("ip", "10.0.0.1")
         assert eid > 0
 
     def test_upsert_entity_duplicate(self, mem):
+        """Verify Upsert entity duplicate.
+        
+        Args:
+            mem: pytest fixture (see the module's @pytest.fixture definitions).
+        """
         eid1 = mem.upsert_entity("ip", "10.0.0.1")
         eid2 = mem.upsert_entity("ip", "10.0.0.1", {"region": "us-east"})
         assert eid1 == eid2
 
     def test_upsert_entity_with_metadata(self, mem):
+        """Verify Upsert entity with metadata.
+        
+        Args:
+            mem: pytest fixture (see the module's @pytest.fixture definitions).
+        """
         mem.upsert_entity("tech", "nginx", {"version": "1.24", "cve": "CVE-2024-1234"})
         with mem._get_conn() as conn:
             row = conn.execute(
@@ -83,6 +123,11 @@ class TestArgusMemory:
         assert meta["version"] == "1.24"
 
     def test_add_relation(self, mem):
+        """Verify Add relation.
+        
+        Args:
+            mem: pytest fixture (see the module's @pytest.fixture definitions).
+        """
         mem.upsert_entity("ip", "10.0.0.1")
         mem.upsert_entity("tech", "nginx")
         mem.add_relation("10.0.0.1", "nginx", "USES_TECH")
@@ -90,21 +135,38 @@ class TestArgusMemory:
         assert "(10.0.0.1) --[USES_TECH]--> (nginx)" in insights
 
     def test_add_relation_missing_entities(self, mem):
+        """Verify Add relation missing entities.
+        
+        Args:
+            mem: pytest fixture (see the module's @pytest.fixture definitions).
+        """
         mem.add_relation("ghost-a", "ghost-b", "LINKED_TO")
         assert mem.get_graph_insights() == ""
 
     def test_get_graph_insights_empty(self, mem):
+        """Verify Get graph insights empty."""
         assert mem.get_graph_insights() == ""
 
     def test_get_blackboard_summary_empty(self, mem):
+        """Verify Get blackboard summary empty."""
         assert mem.get_blackboard_summary() == "{}"
 
     def test_clear_memory(self, mem):
+        """Verify Clear memory.
+        
+        Args:
+            mem: pytest fixture (see the module's @pytest.fixture definitions).
+        """
         mem.upsert_target("example.com")
         mem.clear_memory()
         assert mem.get_blackboard_summary() == "{}"
 
     def test_clear_memory_then_reuse(self, mem):
+        """Verify Clear memory then reuse.
+        
+        Args:
+            mem: pytest fixture (see the module's @pytest.fixture definitions).
+        """
         mem.upsert_target("example.com")
         mem.add_finding("example.com", "test", "check", "ok", "old")
         mem.clear_memory()
@@ -115,6 +177,11 @@ class TestArgusMemory:
         assert "example.com" not in summary
 
     def test_multiple_targets_blackboard(self, mem):
+        """Verify Multiple targets blackboard.
+        
+        Args:
+            mem: pytest fixture (see the module's @pytest.fixture definitions).
+        """
         mem.upsert_target("a.com", priority=1)
         mem.upsert_target("b.com", priority=5)
         mem.add_finding("a.com", "tool", "type1", "raw", "sum_a")
@@ -125,6 +192,11 @@ class TestArgusMemory:
 
     @pytest.mark.slow
     def test_large_insert_performance(self, db_path):
+        """Verify Large insert performance.
+        
+        Args:
+            db_path: pytest fixture (see the module's @pytest.fixture definitions).
+        """
         m = ArgusMemory(db_path=db_path)
         for i in range(1000):
             m.upsert_target(f"target{i}.com", priority=i % 10)
@@ -155,11 +227,16 @@ class TestArgusMemory:
         assert len(json.loads(full_summary)) == 1000
 
     def test_summarize_for_planning_empty(self, mem):
+        """Verify Summarize for planning empty."""
         assert mem.summarize_for_planning() == "No shared memory available."
 
     def test_summarize_for_planning_bounds_per_source_not_globally(self, mem):
         """specs/019 SC-003: 3 sources x 5 findings each -> exactly the last
-        k=3 per (domain, tool_name) group, not the last 9 overall."""
+        k=3 per (domain, tool_name) group, not the last 9 overall.
+        
+        Args:
+            mem: pytest fixture (see the module's @pytest.fixture definitions).
+        """
         mem.upsert_target("x.com")
         for source in ("nmap", "whatweb", "nikto"):
             for i in range(5):
@@ -175,12 +252,22 @@ class TestArgusMemory:
             assert kept_indices == {2, 3, 4}, f"{source} kept the wrong findings: {kept_indices}"
 
     def test_summarize_for_planning_formats_with_source_prefix(self, mem):
+        """Verify Summarize for planning formats with source prefix.
+        
+        Args:
+            mem: pytest fixture (see the module's @pytest.fixture definitions).
+        """
         mem.upsert_target("y.com")
         mem.add_finding("y.com", "nikto", "vuln", "raw", "found XSS")
         summary = mem.summarize_for_planning()
         assert summary == "[nikto] y.com vuln: found XSS"
 
     def test_summarize_for_planning_respects_max_chars(self, mem):
+        """Verify Summarize for planning respects max chars.
+        
+        Args:
+            mem: pytest fixture (see the module's @pytest.fixture definitions).
+        """
         mem.upsert_target("z.com")
         for i in range(50):
             mem.add_finding("z.com", f"tool{i}", "type1", "raw", "x" * 100)
@@ -190,7 +277,11 @@ class TestArgusMemory:
     def test_get_blackboard_summary_unaffected_by_summarize_for_planning(self, mem):
         """specs/019: the new method is additive - get_blackboard_summary()'s
         existing domain->data_type shape (relied on by test_add_finding_multiple_types
-        et al.) must be completely unchanged."""
+        et al.) must be completely unchanged.
+        
+        Args:
+            mem: pytest fixture (see the module's @pytest.fixture definitions).
+        """
         mem.add_finding("x.com", "nmap", "ports", "80/tcp", "HTTP")
         mem.add_finding("x.com", "whatweb", "tech", "nginx", "Nginx 1.24")
         summary = json.loads(mem.get_blackboard_summary())
@@ -198,6 +289,11 @@ class TestArgusMemory:
         assert summary["x.com"]["tech"] == "Nginx 1.24"
 
     def test_upsert_target_null_parent(self, mem):
+        """Verify Upsert target null parent.
+        
+        Args:
+            mem: pytest fixture (see the module's @pytest.fixture definitions).
+        """
         mem.upsert_target("root.com")
         mem.upsert_target("sub.root.com", parent_domain="root.com")
         with mem._get_conn() as conn:
@@ -208,20 +304,40 @@ class TestArgusMemory:
         assert row["parent_domain"] == "root.com"
 
     def test_entity_returns_negative_on_failure(self, mem):
+        """Verify Entity returns negative on failure.
+        
+        Args:
+            mem: pytest fixture (see the module's @pytest.fixture definitions).
+        """
         eid = mem.upsert_entity("", None)
         assert eid == -1
 
     def test_unicode_finding(self, mem):
+        """Verify Unicode finding.
+        
+        Args:
+            mem: pytest fixture (see the module's @pytest.fixture definitions).
+        """
         mem.add_finding("\u043f\u0440\u0438\u043c\u0435\u0440.\u0440\u0444", "tool", "test", "raw", "unicode \u0442\u0435\u0441\u0442")
         summary = json.loads(mem.get_blackboard_summary())
         assert "\u043f\u0440\u0438\u043c\u0435\u0440.\u0440\u0444" in summary
 
     def test_schema_version(self, db_path):
+        """Verify Schema version.
+        
+        Args:
+            db_path: pytest fixture (see the module's @pytest.fixture definitions).
+        """
         m = ArgusMemory(db_path=db_path)
         version = m._get_schema_version()
         assert version > 0
 
     def test_log_and_get_scan_history(self, mem):
+        """Verify Log and get scan history.
+        
+        Args:
+            mem: pytest fixture (see the module's @pytest.fixture definitions).
+        """
         mem.log_scan_session(
             "example.com", "active", "2026-07-18T10:00:00", "2026-07-18T10:05:00",
             findings_count=3, risk_score=7, report_path="reports/example.json",
@@ -233,21 +349,37 @@ class TestArgusMemory:
         assert history[0]["report"] == "reports/example.json"
 
     def test_get_scan_history_orders_most_recent_first(self, mem):
+        """Verify Get scan history orders most recent first.
+        
+        Args:
+            mem: pytest fixture (see the module's @pytest.fixture definitions).
+        """
         mem.log_scan_session("older.com", "active", "2026-07-01T00:00:00")
         mem.log_scan_session("newer.com", "active", "2026-07-18T00:00:00")
         history = mem.get_scan_history(limit=10)
         assert [h["target"] for h in history] == ["newer.com", "older.com"]
 
     def test_get_scan_history_empty(self, mem):
+        """Verify Get scan history empty."""
         assert mem.get_scan_history() == []
 
     def test_get_priority_targets_ranks_by_priority(self, mem):
+        """Verify Get priority targets ranks by priority.
+        
+        Args:
+            mem: pytest fixture (see the module's @pytest.fixture definitions).
+        """
         mem.upsert_target("low.example.com", priority=1)
         mem.upsert_target("high.example.com", priority=10)
         result = mem.get_priority_targets(limit=5)
         assert result.index("high.example.com") < result.index("low.example.com")
 
     def test_get_priority_targets_filters_garbage(self, mem):
+        """Verify Get priority targets filters garbage.
+        
+        Args:
+            mem: pytest fixture (see the module's @pytest.fixture definitions).
+        """
         mem.upsert_target("real-target.example.com", priority=5)
         mem.upsert_target("error: not found", priority=99)
         result = mem.get_priority_targets(limit=5)
@@ -255,9 +387,15 @@ class TestArgusMemory:
         assert "error: not found" not in result
 
     def test_get_priority_targets_empty(self, mem):
+        """Verify Get priority targets empty."""
         assert mem.get_priority_targets() == "No prioritized targets in memory yet."
 
     def test_corrupt_db_is_detected_and_rebuilt(self, db_path):
+        """Verify Corrupt db is detected and rebuilt.
+        
+        Args:
+            db_path: pytest fixture (see the module's @pytest.fixture definitions).
+        """
         with open(db_path, "wb") as f:
             f.write(b"not a real sqlite database")
         m = ArgusMemory(db_path=db_path)

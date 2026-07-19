@@ -22,15 +22,19 @@ def _reset_embedding_factory():
 
 class _FakeVectorStore:
     def __init__(self, results):
+        """Init  ."""
         self._results = results
 
     def load_index(self):
+        """Load index."""
         return True
 
     def similarity_search(self, query, k=None):
+        """Similarity search."""
         return [doc for doc, _ in self._results]
 
     def similarity_search_with_score(self, query, k=None):
+        """Similarity search with score."""
         return self._results
 
 
@@ -48,6 +52,11 @@ def _make_engine(tmp_path, results, similarity_threshold=0.5):
 
 
 def test_query_filters_by_similarity_threshold(tmp_path):
+    """Verify Query filters by similarity threshold.
+    
+    Args:
+        tmp_path: pytest fixture (see the module's @pytest.fixture definitions).
+    """
     good = Document(page_content="relevant chunk", metadata={"source": "a.md"})
     bad = Document(page_content="irrelevant chunk", metadata={"source": "b.md"})
     engine = _make_engine(tmp_path, [(good, 0.2), (bad, 0.9)])
@@ -60,6 +69,11 @@ def test_query_filters_by_similarity_threshold(tmp_path):
 
 
 def test_query_returns_no_results_message_when_nothing_passes_threshold(tmp_path):
+    """Verify Query returns no results message when nothing passes threshold.
+    
+    Args:
+        tmp_path: pytest fixture (see the module's @pytest.fixture definitions).
+    """
     bad = Document(page_content="irrelevant", metadata={})
     engine = _make_engine(tmp_path, [(bad, 0.9)])
 
@@ -70,6 +84,11 @@ def test_query_returns_no_results_message_when_nothing_passes_threshold(tmp_path
 
 
 def test_format_combined_context_merges_rag_and_blackboard(tmp_path):
+    """Verify Format combined context merges rag and blackboard.
+    
+    Args:
+        tmp_path: pytest fixture (see the module's @pytest.fixture definitions).
+    """
     doc = Document(page_content="rag chunk", metadata={"source": "a.md"})
     engine = _make_engine(tmp_path, [(doc, 0.1)])
 
@@ -82,6 +101,11 @@ def test_format_combined_context_merges_rag_and_blackboard(tmp_path):
 
 
 def test_format_combined_context_blackboard_only_when_no_rag_matches(tmp_path):
+    """Verify Format combined context blackboard only when no rag matches.
+    
+    Args:
+        tmp_path: pytest fixture (see the module's @pytest.fixture definitions).
+    """
     bad = Document(page_content="irrelevant", metadata={})
     engine = _make_engine(tmp_path, [(bad, 0.9)])
 

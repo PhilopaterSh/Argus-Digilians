@@ -208,6 +208,7 @@ class ArgusPipeline:
             return None
 
     def _http_get(self, url: str):
+        """Http get."""
         try:
             return requests.get(url, timeout=TIMEOUT, verify=False,
                                 headers={"User-Agent": "Mozilla/5.0 ArgusScanner/2.0"})

@@ -6,6 +6,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..",
 
 
 def test_dashboard_imports():
+    """Verify Dashboard imports."""
     try:
         import app.GUI.dashboard
         assert app.GUI.dashboard is not None
@@ -14,6 +15,7 @@ def test_dashboard_imports():
 
 
 def test_pages_imports():
+    """Verify Pages imports."""
     from app.GUI.tabs.overview import render_dashboard as render_overview
     from app.GUI.tabs.targets import render_targets
     from app.GUI.tabs.agent import render_agent
@@ -29,6 +31,7 @@ def test_pages_imports():
 
 
 def test_components_imports():
+    """Verify Components imports."""
     from app.GUI.components.status_bar import render_status_bar, check_ollama_status, check_ssh_status
     from app.GUI.components.session_manager import save_session, load_session, list_sessions, delete_session
     from app.GUI.components.export import generate_html_report, generate_markdown_report, generate_json_report
@@ -41,6 +44,7 @@ def test_components_imports():
 
 
 def test_utils_imports():
+    """Verify Utils imports."""
     from app.GUI.utils.blackboard import load_targets, save_target, build_graph_data, init_gui_tables
     from app.GUI.utils.agent_controller import AgentController
     assert callable(load_targets)
@@ -54,6 +58,7 @@ def test_utils_imports():
 
 
 def test_export_html_report():
+    """Verify Export html report."""
     from app.GUI.components.export import generate_html_report
     findings = [
         {"severity": "critical", "type": "SQL Injection", "summary": "SQLi found in login"},
@@ -68,6 +73,7 @@ def test_export_html_report():
 
 
 def test_export_markdown_report():
+    """Verify Export markdown report."""
     from app.GUI.components.export import generate_markdown_report
     findings = [
         {"severity": "high", "type": "XSS", "summary": "Reflected XSS"},
@@ -78,6 +84,7 @@ def test_export_markdown_report():
 
 
 def test_export_json_report():
+    """Verify Export json report."""
     from app.GUI.components.export import generate_json_report
     findings = [
         {"severity": "low", "type": "Info", "summary": "Test finding"},
@@ -90,6 +97,7 @@ def test_export_json_report():
 
 
 def test_agent_controller_state():
+    """Verify Agent controller state."""
     from app.GUI.utils.agent_controller import AgentController
     import tempfile
     import os
@@ -102,6 +110,7 @@ def test_agent_controller_state():
 
 
 def test_session_manager_functions():
+    """Verify Session manager functions."""
     from app.GUI.components.session_manager import save_session, list_sessions, delete_session
     from app.GUI.utils.blackboard import init_gui_tables
 

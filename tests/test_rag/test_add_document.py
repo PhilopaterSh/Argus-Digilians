@@ -30,6 +30,7 @@ class _FakeVectorStore:
     """Captures what add_document() passes to build_index(), without
     needing a real FAISS index/embedding backend."""
     def __init__(self):
+        """Init  ."""
         self.build_index_calls = []
 
     def build_index(self, chunks):
@@ -51,6 +52,11 @@ def _make_engine(tmp_path):
 
 
 def test_add_document_ingests_a_real_markdown_file_without_crashing(tmp_path):
+    """Verify Add document ingests a real markdown file without crashing.
+    
+    Args:
+        tmp_path: pytest fixture (see the module's @pytest.fixture definitions).
+    """
     doc_path = tmp_path / "sample.md"
     doc_path.write_text("# Heading\n\nSome real content for the RAG smoke test.\n", encoding="utf-8")
 
@@ -72,7 +78,11 @@ def test_add_document_ingests_a_real_markdown_file_without_crashing(tmp_path):
 def test_add_document_handles_a_file_that_splits_into_multiple_documents(tmp_path):
     """CSV loading produces one Document per row - a single input file
     legitimately producing >1 Document is exactly the shape that exposed
-    the original bug (a single `doc` was never a bare Document)."""
+    the original bug (a single `doc` was never a bare Document).
+    
+    Args:
+        tmp_path: pytest fixture (see the module's @pytest.fixture definitions).
+    """
     csv_path = tmp_path / "sample.csv"
     csv_path.write_text("name,note\nrow1,first note\nrow2,second note\n", encoding="utf-8")
 
@@ -85,6 +95,11 @@ def test_add_document_handles_a_file_that_splits_into_multiple_documents(tmp_pat
 
 
 def test_add_document_returns_false_for_unsupported_extension(tmp_path):
+    """Verify Add document returns false for unsupported extension.
+    
+    Args:
+        tmp_path: pytest fixture (see the module's @pytest.fixture definitions).
+    """
     bad_path = tmp_path / "sample.exe"
     bad_path.write_bytes(b"not a real document")
 
@@ -96,6 +111,11 @@ def test_add_document_returns_false_for_unsupported_extension(tmp_path):
 
 
 def test_add_document_returns_false_for_missing_file(tmp_path):
+    """Verify Add document returns false for missing file.
+    
+    Args:
+        tmp_path: pytest fixture (see the module's @pytest.fixture definitions).
+    """
     engine = _make_engine(tmp_path)
     result = engine.add_document(str(tmp_path / "does_not_exist.md"))
 

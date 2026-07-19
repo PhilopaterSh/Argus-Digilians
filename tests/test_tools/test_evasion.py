@@ -30,6 +30,11 @@ def _make_runner(response_map: dict, default: str = ""):
 class TestAdvancedVulnProbe:
     @patch("app.tools.evasion.time.sleep")
     def test_bounds_every_curl_call_with_a_timeout(self, _mock_sleep):
+        """Verify Bounds every curl call with a timeout.
+        
+        Args:
+            _mock_sleep: pytest fixture (see the module's @pytest.fixture definitions).
+        """
         runner = _make_runner({})
         memory = MagicMock()
         svc = EvasionService(runner, memory)
@@ -44,6 +49,11 @@ class TestAdvancedVulnProbe:
 
     @patch("app.tools.evasion.time.sleep")
     def test_reports_clean_when_no_indicators_found(self, _mock_sleep):
+        """Verify Reports clean when no indicators found.
+        
+        Args:
+            _mock_sleep: pytest fixture (see the module's @pytest.fixture definitions).
+        """
         runner = _make_runner({}, default="<html>Not Found</html>")
         memory = MagicMock()
         svc = EvasionService(runner, memory)
@@ -59,7 +69,11 @@ class TestAdvancedVulnProbe:
         only looked at HTTP status (200 = success) - real content proof of a
         genuine /etc/passwd read (the payload most real-world and
         training-lab traversal vulnerabilities, e.g. PortSwigger's, actually
-        test for) was never checked."""
+        test for) was never checked.
+        
+        Args:
+            _mock_sleep: pytest fixture (see the module's @pytest.fixture definitions).
+        """
         runner = _make_runner({
             "etc/passwd": "root:x:0:0:root:/root:/bin/bash\ndaemon:x:1:1:...",
         }, default="<html>Not Found</html>")
@@ -78,6 +92,11 @@ class TestAdvancedVulnProbe:
 
     @patch("app.tools.evasion.time.sleep")
     def test_tries_linux_traversal_payloads_not_only_windows(self, _mock_sleep):
+        """Verify Tries linux traversal payloads not only windows.
+        
+        Args:
+            _mock_sleep: pytest fixture (see the module's @pytest.fixture definitions).
+        """
         runner = _make_runner({})
         memory = MagicMock()
         svc = EvasionService(runner, memory)
@@ -90,6 +109,11 @@ class TestAdvancedVulnProbe:
 
     @patch("app.tools.evasion.time.sleep")
     def test_detects_sqli_via_500_status(self, _mock_sleep):
+        """Verify Detects sqli via 500 status.
+        
+        Args:
+            _mock_sleep: pytest fixture (see the module's @pytest.fixture definitions).
+        """
         runner = _make_runner({
             "1%20OR%201=1": "\n500",
         }, default="<html>OK</html>\n200")
@@ -109,7 +133,11 @@ class TestAdvancedVulnProbe:
     def test_detects_sqli_via_body_error_signature_without_500(self, _mock_sleep):
         """New capability: a target that returns 200 with a visible DB error
         in the body (instead of a 500) is now caught too - the original
-        check only ever looked at the HTTP status code."""
+        check only ever looked at the HTTP status code.
+        
+        Args:
+            _mock_sleep: pytest fixture (see the module's @pytest.fixture definitions).
+        """
         runner = _make_runner({
             "1%20OR%201=1": "You have an error in your SQL syntax; check the manual\n200",
         }, default="<html>OK</html>\n200")
@@ -127,7 +155,11 @@ class TestAdvancedVulnProbe:
         small static list - it samples a few real payloads from the local
         PayloadsAllTheThings mirror's Intruder/ wordlist (see
         app/tools/payloads.py::fetch_intruder_payloads) and probes those
-        too."""
+        too.
+        
+        Args:
+            _mock_sleep: pytest fixture (see the module's @pytest.fixture definitions).
+        """
         runner = _make_runner({
             "shuf -n 4": "custom/traversal/payload\n",
             "custom/traversal/payload": "root:x:0:0:root:/root:/bin/bash",

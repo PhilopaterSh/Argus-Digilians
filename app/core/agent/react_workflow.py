@@ -604,6 +604,7 @@ def _build_custom_workflow(
 
     # -- Conditional routers ----------------------------
     def route_after_agent(state: ArgusAgentState) -> str:
+        """Route after agent."""
         return "parse"
 
     def route_after_parse(state: ArgusAgentState) -> str:

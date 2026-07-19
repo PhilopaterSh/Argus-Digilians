@@ -16,6 +16,11 @@ def setup_gui_tables():
 
 
 def test_session_save_and_load_roundtrip(setup_gui_tables):
+    """Verify Session save and load roundtrip.
+    
+    Args:
+        setup_gui_tables: pytest fixture (see the module's @pytest.fixture definitions).
+    """
     from app.GUI.components.session_manager import save_session, load_session, list_sessions, delete_session
 
     targets = [
@@ -45,6 +50,11 @@ def test_session_save_and_load_roundtrip(setup_gui_tables):
 
 
 def test_multiple_sessions(setup_gui_tables):
+    """Verify Multiple sessions.
+    
+    Args:
+        setup_gui_tables: pytest fixture (see the module's @pytest.fixture definitions).
+    """
     from app.GUI.components.session_manager import save_session, list_sessions, delete_session
 
     sid1 = save_session("session_a", [], {})
@@ -62,6 +72,11 @@ def test_multiple_sessions(setup_gui_tables):
 
 
 def test_session_with_empty_targets(setup_gui_tables):
+    """Verify Session with empty targets.
+    
+    Args:
+        setup_gui_tables: pytest fixture (see the module's @pytest.fixture definitions).
+    """
     from app.GUI.components.session_manager import save_session, load_session, delete_session
 
     sid = save_session("empty_test", [], {"key": "val"})
@@ -72,6 +87,11 @@ def test_session_with_empty_targets(setup_gui_tables):
 
 
 def test_session_update(setup_gui_tables):
+    """Verify Session update.
+    
+    Args:
+        setup_gui_tables: pytest fixture (see the module's @pytest.fixture definitions).
+    """
     from app.GUI.components.session_manager import save_session, load_session, update_session, delete_session
 
     sid = save_session("update_test", [{"url": "https://initial.com"}], {})

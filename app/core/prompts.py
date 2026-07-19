@@ -392,6 +392,7 @@ Thought: {agent_scratchpad}"""
 
 
 def get_argus_adaptive_prompt():
+    """Get argus adaptive prompt."""
     return PromptTemplate(
         template=ARGUS_ADAPTIVE_AGENT_TEMPLATE,
         input_variables=["input", "tools", "tool_names", "agent_scratchpad"],

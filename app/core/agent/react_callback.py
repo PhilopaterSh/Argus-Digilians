@@ -108,6 +108,7 @@ class ConsoleTraceCallbackHandler:
     """
 
     def __init__(self):
+        """Init  ."""
         self._step = 0
 
     def on_graph_event(self, status: str, detail: str) -> None:

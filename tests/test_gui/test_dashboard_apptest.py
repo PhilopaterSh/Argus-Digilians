@@ -10,6 +10,7 @@ PAGES = ["Dashboard", "Targets", "Agent", "Knowledge Graph", "Reports", "Setting
 
 
 def test_dashboard_loads_without_exception():
+    """Verify Dashboard loads without exception."""
     at = AppTest.from_file("app/GUI/dashboard.py")
     at.run(timeout=30)
     assert not at.exception
@@ -17,6 +18,11 @@ def test_dashboard_loads_without_exception():
 
 @pytest.mark.parametrize("page", PAGES)
 def test_dashboard_page_renders_without_exception(page):
+    """Verify Dashboard page renders without exception.
+    
+    Args:
+        page: pytest fixture (see the module's @pytest.fixture definitions).
+    """
     at = AppTest.from_file("app/GUI/dashboard.py")
     at.run(timeout=30)
     at.radio(key="nav_radio").set_value(page).run(timeout=30)

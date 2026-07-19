@@ -150,6 +150,7 @@ class ArgusMemory:
     # Integrity check
     # ------------------------------------------------------------------
     def _verify_integrity(self) -> None:
+        """Verify integrity."""
         try:
             with self._get_conn() as conn:
                 row = conn.execute("PRAGMA integrity_check").fetchone()
@@ -162,6 +163,7 @@ class ArgusMemory:
     # Schema versioning
     # ------------------------------------------------------------------
     def _get_schema_version(self) -> int:
+        """Get schema version."""
         try:
             with self._get_conn() as conn:
                 row = conn.execute("PRAGMA user_version").fetchone()
@@ -170,6 +172,7 @@ class ArgusMemory:
             return 0
 
     def _set_schema_version(self, version: int) -> None:
+        """Set schema version."""
         try:
             with self._get_conn() as conn:
                 conn.execute(f"PRAGMA user_version = {version}")
@@ -180,6 +183,7 @@ class ArgusMemory:
     # Database initialization
     # ------------------------------------------------------------------
     def _init_db(self) -> None:
+        """Init db."""
         try:
             with self._get_conn() as conn:
                 conn.execute("""
@@ -289,6 +293,7 @@ class ArgusMemory:
     # CRUD: Entities (Knowledge Graph nodes)
     # ------------------------------------------------------------------
     def upsert_entity(self, entity_type: str, value: str, metadata: Optional[dict] = None) -> int:
+        """Upsert entity."""
         try:
             with self._get_conn() as conn:
                 meta_json = json.dumps(metadata) if metadata else None
@@ -310,6 +315,7 @@ class ArgusMemory:
     # CRUD: Relations (Knowledge Graph edges)
     # ------------------------------------------------------------------
     def add_relation(self, source_val: str, target_val: str, rel_type: str, strength: float = 1.0) -> None:
+        """Add relation."""
         try:
             with self._get_conn() as conn:
                 s_row = conn.execute("SELECT id FROM entities WHERE value = ?", (source_val,)).fetchone()
@@ -331,6 +337,7 @@ class ArgusMemory:
     # CRUD: Graph insights
     # ------------------------------------------------------------------
     def get_graph_insights(self) -> str:
+        """Get graph insights."""
         try:
             with self._get_conn() as conn:
                 rows = conn.execute(
@@ -350,6 +357,7 @@ class ArgusMemory:
     # CRUD: Targets
     # ------------------------------------------------------------------
     def upsert_target(self, domain: str, parent_domain: Optional[str] = None, priority: int = 0) -> None:
+        """Upsert target."""
         try:
             with self._get_conn() as conn:
                 now = datetime.now().isoformat()
@@ -371,6 +379,7 @@ class ArgusMemory:
         self, domain: str, tool_name: str, data_type: str, raw_data: str, summary: str,
         severity: str = "Info",
     ) -> None:
+        """Add finding."""
         try:
             with self._get_conn() as conn:
                 row = conn.execute("SELECT id FROM targets WHERE domain = ?", (domain,)).fetchone()
@@ -631,6 +640,7 @@ class ArgusMemory:
         self, target: str, mode: str, started_at: str, completed_at: Optional[str] = None,
         findings_count: int = 0, risk_score: int = 0, report_path: Optional[str] = None,
     ) -> None:
+        """Log scan session."""
         try:
             with self._get_conn() as conn:
                 conn.execute(

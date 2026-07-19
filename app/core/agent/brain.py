@@ -263,6 +263,7 @@ class ArgusBrain:
             self._blackboard_context = ""
 
     def refresh_blackboard(self):
+        """Refresh blackboard."""
         self._refresh_blackboard()
 
     def _enrich_with_rag(self, query: str, callbacks=None) -> str:
@@ -922,8 +923,10 @@ class ArgusBrain:
         return tool.func(**kwargs)
 
     def get_available_tools(self):
+        """Get available tools."""
         return list(self.tools)
 
     def get_tool_names(self):
+        """Get tool names."""
         return list(self.tool_map.keys())
 

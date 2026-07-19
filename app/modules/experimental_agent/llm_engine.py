@@ -277,6 +277,7 @@ class OllamaEngine:
             return False, f"Pull error: {e}"
 
     def _start_ollama(self) -> bool:
+        """Start ollama."""
         try:
             subprocess.Popen(
                 ["ollama", "serve"],

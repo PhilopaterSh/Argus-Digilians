@@ -34,18 +34,26 @@ def _make_config(tmp_path, embedding_model="nomic-embed-text"):
 
 class _FakeIndex:
     def __init__(self, dim):
+        """Init  ."""
         self.index = MagicMock(d=dim)
 
     def save_local(self, path):
+        """Save local."""
         pass
 
 
 def _make_store(config):
+    """Make store."""
     with patch.object(EmbeddingFactory, "get_embeddings", return_value=MagicMock()):
         return VectorStore(config)
 
 
 def test_build_index_writes_manifest(tmp_path):
+    """Verify Build index writes manifest.
+    
+    Args:
+        tmp_path: pytest fixture (see the module's @pytest.fixture definitions).
+    """
     config = _make_config(tmp_path)
     EmbeddingFactory._provider = "ollama"
     EmbeddingFactory._model_name = "nomic-embed-text"
@@ -63,6 +71,11 @@ def test_build_index_writes_manifest(tmp_path):
 
 
 def test_load_index_proceeds_when_manifest_matches(tmp_path):
+    """Verify Load index proceeds when manifest matches.
+    
+    Args:
+        tmp_path: pytest fixture (see the module's @pytest.fixture definitions).
+    """
     config = _make_config(tmp_path)
     rag_manifest.write_manifest(
         config.vector_store_dir, "nomic-embed-text", "ollama", 768, config.knowledge_base_dir
@@ -82,7 +95,11 @@ def test_load_index_proceeds_when_manifest_matches(tmp_path):
 def test_load_index_skips_when_provider_falls_back(tmp_path):
     """Ollama was used to build the index, but Ollama is now down and
     EmbeddingFactory silently fell back to HuggingFace: must not load the
-    (now dimension-mismatched) stale index."""
+    (now dimension-mismatched) stale index.
+    
+    Args:
+        tmp_path: pytest fixture (see the module's @pytest.fixture definitions).
+    """
     config = _make_config(tmp_path)
     rag_manifest.write_manifest(
         config.vector_store_dir, "nomic-embed-text", "ollama", 768, config.knowledge_base_dir
@@ -100,6 +117,11 @@ def test_load_index_skips_when_provider_falls_back(tmp_path):
 
 
 def test_load_index_skips_when_knowledge_base_changed(tmp_path):
+    """Verify Load index skips when knowledge base changed.
+    
+    Args:
+        tmp_path: pytest fixture (see the module's @pytest.fixture definitions).
+    """
     config = _make_config(tmp_path)
     rag_manifest.write_manifest(
         config.vector_store_dir, "nomic-embed-text", "ollama", 768, config.knowledge_base_dir
@@ -121,6 +143,11 @@ def test_load_index_skips_when_knowledge_base_changed(tmp_path):
 
 
 def test_load_index_returns_false_when_no_index_file(tmp_path):
+    """Verify Load index returns false when no index file.
+    
+    Args:
+        tmp_path: pytest fixture (see the module's @pytest.fixture definitions).
+    """
     config = _make_config(tmp_path)
     store = _make_store(config)
     assert store.load_index() is False

@@ -23,16 +23,19 @@ def _make_state(**overrides):
 
 
 def test_terminates_on_exploit_success():
+    """Verify Terminates on exploit success."""
     state = _make_state(exploit_success=True)
     assert should_continue(state) == "post_exploit"
 
 
 def test_routes_to_self_heal_on_dependency_error_within_retry_budget():
+    """Verify Routes to self heal on dependency error within retry budget."""
     state = _make_state(error_log=["nmap: command not found"], retry_count=0)
     assert should_continue(state) == "self_heal"
 
 
 def test_terminates_when_retry_budget_exhausted_despite_dependency_error():
+    """Verify Terminates when retry budget exhausted despite dependency error."""
     state = _make_state(error_log=["nmap: command not found"], retry_count=3)
     with patch("app.core.agent.graph.save_entry") as mock_save:
         result = should_continue(state)
@@ -42,6 +45,7 @@ def test_terminates_when_retry_budget_exhausted_despite_dependency_error():
 
 
 def test_terminates_when_retry_count_reaches_max_retries():
+    """Verify Terminates when retry count reaches max retries."""
     state = _make_state(retry_count=3)
     with patch("app.core.agent.graph.save_entry") as mock_save:
         result = should_continue(state)
@@ -50,6 +54,7 @@ def test_terminates_when_retry_count_reaches_max_retries():
 
 
 def test_terminates_when_no_current_payload():
+    """Verify Terminates when no current payload."""
     state = _make_state(current_payload=None, retry_count=0)
     with patch("app.core.agent.graph.save_entry") as mock_save:
         result = should_continue(state)
@@ -58,12 +63,17 @@ def test_terminates_when_no_current_payload():
 
 
 def test_routes_to_reflective_when_still_within_budget_with_payload():
+    """Verify Routes to reflective when still within budget with payload."""
     state = _make_state(retry_count=1, current_payload="payload.py", error_log=[])
     assert should_continue(state) == "reflective"
 
 
 def test_retry_budget_is_config_driven_not_hardcoded(monkeypatch):
-    """A custom max_retries must be honored, proving the bound isn't hardcoded."""
+    """A custom max_retries must be honored, proving the bound isn't hardcoded.
+    
+    Args:
+        monkeypatch: pytest fixture (see the module's @pytest.fixture definitions).
+    """
     from app.core.config import ArgusConfig
 
     class _FakeConfig:

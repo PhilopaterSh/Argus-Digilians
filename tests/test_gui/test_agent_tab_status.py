@@ -28,6 +28,7 @@ def test_failed_run_is_not_reported_as_running():
 
 
 def test_completed_run_is_not_reported_as_running():
+    """Verify Completed run is not reported as running."""
     controller = _make_controller(is_running=False, status={"status": "completed"})
 
     new_running, current_state = _reconcile_agent_running_state(True, controller)
@@ -37,6 +38,7 @@ def test_completed_run_is_not_reported_as_running():
 
 
 def test_genuinely_running_process_stays_running():
+    """Verify Genuinely running process stays running."""
     controller = _make_controller(is_running=True, status={"status": "running"})
 
     new_running, current_state = _reconcile_agent_running_state(True, controller)
@@ -46,6 +48,7 @@ def test_genuinely_running_process_stays_running():
 
 
 def test_idle_session_stays_idle_without_polling_controller_status_change():
+    """Verify Idle session stays idle without polling controller status change."""
     controller = _make_controller(is_running=False, status={"status": "idle"})
 
     new_running, current_state = _reconcile_agent_running_state(False, controller)
@@ -55,6 +58,7 @@ def test_idle_session_stays_idle_without_polling_controller_status_change():
 
 
 def test_no_controller_returns_session_flag_unchanged_and_empty_state():
+    """Verify No controller returns session flag unchanged and empty state."""
     new_running, current_state = _reconcile_agent_running_state(True, None)
 
     assert new_running is True

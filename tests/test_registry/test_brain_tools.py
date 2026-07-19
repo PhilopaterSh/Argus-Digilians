@@ -18,12 +18,14 @@ EXPECTED_TOOL_NAMES = {
 
 
 def test_build_argus_tools_returns_expected_tool_set():
+    """Verify Build argus tools returns expected tool set."""
     tools = build_argus_tools(MagicMock())
     assert {t.name for t in tools} == EXPECTED_TOOL_NAMES
     assert len(tools) == 17
 
 
 def test_each_tool_has_a_description_and_is_callable():
+    """Verify Each tool has a description and is callable."""
     tools = build_argus_tools(MagicMock())
     for tool in tools:
         assert tool.description, f"{tool.name} has no description"
@@ -31,6 +33,7 @@ def test_each_tool_has_a_description_and_is_callable():
 
 
 def test_tool_func_delegates_to_the_bound_bridge_method():
+    """Verify Tool func delegates to the bound bridge method."""
     bridge = MagicMock()
     bridge.run_nikto.return_value = "nikto output"
     tools = build_argus_tools(bridge)
@@ -43,6 +46,7 @@ def test_tool_func_delegates_to_the_bound_bridge_method():
 
 
 def test_new_chk090_tools_delegate_to_the_correct_bridge_methods():
+    """Verify New chk090 tools delegate to the correct bridge methods."""
     bridge = MagicMock()
     tools = build_argus_tools(bridge)
     tool_by_name = {t.name: t for t in tools}

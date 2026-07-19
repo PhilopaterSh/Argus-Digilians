@@ -101,9 +101,11 @@ class ArgusConfig:
 
     @classmethod
     def reset(cls):
+        """Reset."""
         cls._instance = None
 
     def _apply(self, raw: dict):
+        """Apply."""
         for key, value in raw.items():
             if key == "rag" and isinstance(value, dict):
                 for k, v in value.items():
@@ -129,9 +131,11 @@ class ArgusConfig:
 
     @staticmethod
     def _snake(name: str) -> str:
+        """Snake."""
         return name.replace("-", "_").lower()
 
     def to_rag_dict(self) -> dict:
+        """To rag dict."""
         return {
             "enabled": self.rag.enabled,
             "embedding_model": self.rag.embedding_model,

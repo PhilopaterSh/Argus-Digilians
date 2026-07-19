@@ -17,6 +17,7 @@ from scripts.run_agent import _build_final_state
 
 
 def test_build_final_state_with_valid_structured_report():
+    """Verify Build final state with valid structured report."""
     result = {
         "output": {
             "summary": "ok", "attack_surface_stats": "1 host",
@@ -36,6 +37,7 @@ def test_build_final_state_with_valid_structured_report():
 
 
 def test_build_final_state_with_unparsed_raw_string_flags_a_warning_not_a_fabricated_report():
+    """Verify Build final state with unparsed raw string flags a warning not a fabricated report."""
     result = {"output": "the LLM just rambled, no JSON here"}
 
     final_state = _build_final_state(result, "production", "https://example.com")
@@ -47,6 +49,7 @@ def test_build_final_state_with_unparsed_raw_string_flags_a_warning_not_a_fabric
 
 
 def test_build_final_state_with_error_dict_flags_a_warning():
+    """Verify Build final state with error dict flags a warning."""
     result = {"output": {"error": "executor_unavailable", "message": "boom"}}
 
     final_state = _build_final_state(result, "production", "https://example.com")
@@ -56,6 +59,7 @@ def test_build_final_state_with_error_dict_flags_a_warning():
 
 
 def test_build_final_state_with_non_dict_result_does_not_raise():
+    """Verify Build final state with non dict result does not raise."""
     final_state = _build_final_state(None, "production", "https://example.com")
 
     assert final_state["overall_risk_score"] is None
@@ -63,6 +67,7 @@ def test_build_final_state_with_non_dict_result_does_not_raise():
 
 
 def _fake_run_brain_analysis(target, run_id, mode, state_file, result_box):
+    """Fake run brain analysis."""
     result_box["result"] = {"output": {"summary": "ok", "findings": [], "overall_risk_score": 1, "next_steps": [], "output": "done"}}
 
 
@@ -75,6 +80,11 @@ class TestRunIdPassthrough:
     gap; main() must use it verbatim, not generate its own."""
 
     def test_main_uses_the_provided_run_id_verbatim(self, tmp_path):
+        """Verify Main uses the provided run id verbatim.
+        
+        Args:
+            tmp_path: pytest fixture (see the module's @pytest.fixture definitions).
+        """
         state_file = tmp_path / "agent_test.json"
         with patch.object(run_agent_module, "run_brain_analysis", _fake_run_brain_analysis), \
              patch.object(sys, "argv", [
@@ -89,6 +99,11 @@ class TestRunIdPassthrough:
         assert written["run_id"] == "caller-issued-run-id"
 
     def test_main_falls_back_to_a_generated_run_id_when_not_provided(self, tmp_path):
+        """Verify Main falls back to a generated run id when not provided.
+        
+        Args:
+            tmp_path: pytest fixture (see the module's @pytest.fixture definitions).
+        """
         state_file = tmp_path / "agent_test.json"
         with patch.object(run_agent_module, "run_brain_analysis", _fake_run_brain_analysis), \
              patch.object(sys, "argv", [

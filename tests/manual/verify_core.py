@@ -15,6 +15,7 @@ from app.tools.tool_registry import WSLBridgeTools
 
 
 def test_integration():
+    """Verify Integration."""
     bridge = WSLBridgeTools()
     target = "http://testasp.vulnweb.com"
     

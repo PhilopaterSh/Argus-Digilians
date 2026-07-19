@@ -109,6 +109,7 @@ class Verifier:
     # -- Internal helpers --------------------------------------------------
 
     def _get(self, url: str, timeout: int = 12) -> requests.Response | None:
+        """Get."""
         try:
             return self._session.get(url, timeout=timeout, allow_redirects=True)
         except Exception:

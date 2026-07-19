@@ -31,4 +31,5 @@ def run_all(target: str) -> dict[str, str]:
 
 
 def list_modules() -> list[tuple[str, str]]:
+    """List modules."""
     return [(m.name, m.description) for m in _modules.values()]

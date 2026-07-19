@@ -19,17 +19,24 @@ MODULES = [
 
 @pytest.mark.parametrize("module_path", MODULES)
 def test_module_imports(module_path):
+    """Verify Module imports.
+    
+    Args:
+        module_path: pytest fixture (see the module's @pytest.fixture definitions).
+    """
     mod = importlib.import_module(module_path)
     assert mod is not None
 
 
 def test_base_tactical_module_abc():
+    """Verify Base tactical module abc."""
     from app.modules.base import BaseTacticalModule
     with pytest.raises(TypeError):
         BaseTacticalModule()
 
 
 def test_modules_registry():
+    """Verify Modules registry."""
     from app.modules import register, run_module, run_all, list_modules
     assert callable(register)
     assert callable(run_module)

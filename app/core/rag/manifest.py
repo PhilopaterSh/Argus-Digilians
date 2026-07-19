@@ -39,10 +39,12 @@ class EmbeddingManifest:
     schema_version: int = SCHEMA_VERSION
 
     def to_dict(self) -> dict:
+        """To dict."""
         return asdict(self)
 
     @classmethod
     def from_dict(cls, data: dict) -> "EmbeddingManifest":
+        """From dict."""
         return cls(
             embedder_name=str(data["embedder_name"]),
             embedder_provider=str(data["embedder_provider"]),
@@ -83,6 +85,7 @@ def compute_kb_hash(knowledge_base_dir: str) -> str:
 
 
 def manifest_path(store_dir: str) -> str:
+    """Manifest path."""
     return os.path.join(store_dir, MANIFEST_FILENAME)
 
 

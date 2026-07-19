@@ -21,6 +21,7 @@ FULL_REPORT_JSON = (
 
 
 def _make_tool():
+    """Make tool."""
     return Tool(name="fake", description="A fake tool", func=lambda x="": f"executed:{x}")
 
 
@@ -42,10 +43,12 @@ class _RepeatingMalformedLLM:
         return AIMessage(content=self._content)
 
     def bind_tools(self, tools):
+        """Bind tools."""
         raise NotImplementedError("force the custom (non-prebuilt) graph mode")
 
 
 def test_ask_returns_parsed_output_via_structured_graph():
+    """Verify Ask returns parsed output via structured graph."""
     llm = FakeListLLM(responses=[f"Final Answer: {FULL_REPORT_JSON}"])
     brain = ArgusBrain("test-model", [_make_tool()], rag_config={"enabled": False}, llm=llm)
 
@@ -74,6 +77,7 @@ def test_ask_terminates_within_max_iterations_on_repeated_malformed_output():
 
 
 def test_ask_streams_live_feed_events_via_on_graph_event():
+    """Verify Ask streams live feed events via on graph event."""
     responses = [
         'Thought: checking.\nAction: {"name": "fake", "input": "x"}',
         f'Thought: done.\nFinal Answer: {FULL_REPORT_JSON}',
@@ -81,6 +85,7 @@ def test_ask_streams_live_feed_events_via_on_graph_event():
 
     class _ScriptedLLM:
         def __init__(self):
+            """Init  ."""
             self.i = 0
 
         def invoke(self, messages, **kwargs):
@@ -89,13 +94,16 @@ def test_ask_streams_live_feed_events_via_on_graph_event():
             return AIMessage(content=r)
 
         def bind_tools(self, tools):
+            """Bind tools."""
             raise NotImplementedError
 
     class _RecordingCallback:
         def __init__(self):
+            """Init  ."""
             self.events = []
 
         def on_graph_event(self, status, detail):
+            """On graph event."""
             self.events.append((status, detail))
 
     cb = _RecordingCallback()
@@ -114,9 +122,11 @@ class _FakeRagEngine:
     FAISS index/embedding backend to test source-attribution capture."""
 
     def __init__(self, combined_text):
+        """Init  ."""
         self._combined_text = combined_text
 
     def format_combined_context(self, query, blackboard_context=""):
+        """Format combined context."""
         return self._combined_text
 
 
@@ -153,6 +163,7 @@ def test_ask_attaches_rag_sources_actually_used_to_the_final_report():
 
 
 def test_ask_dedupes_repeated_sources_preserving_order():
+    """Verify Ask dedupes repeated sources preserving order."""
     combined = (
         "[Source: a.md]\nchunk1\n\n---\n\n"
         "[Source: b.md]\nchunk2\n\n---\n\n"
@@ -167,6 +178,7 @@ def test_ask_dedupes_repeated_sources_preserving_order():
 
 
 def test_ask_omits_sources_used_when_rag_retrieved_nothing():
+    """Verify Ask omits sources used when rag retrieved nothing."""
     llm = FakeListLLM(responses=[f"Final Answer: {FULL_REPORT_JSON}"])
     brain = ArgusBrain("test-model", [_make_tool()], rag_config={"enabled": False}, llm=llm)
 
@@ -179,15 +191,18 @@ def test_ask_omits_sources_used_when_rag_retrieved_nothing():
 
 
 def test_ask_streams_rag_source_retrieval_as_a_reflection_event():
+    """Verify Ask streams rag source retrieval as a reflection event."""
     combined = "[Source: argus_security_knowledge.md]\nsome chunk"
     llm = FakeListLLM(responses=[f"Final Answer: {FULL_REPORT_JSON}"])
     brain = _make_brain_with_fake_rag(llm, combined)
 
     class _RecordingCallback:
         def __init__(self):
+            """Init  ."""
             self.events = []
 
         def on_graph_event(self, status, detail):
+            """On graph event."""
             self.events.append((status, detail))
 
     cb = _RecordingCallback()
@@ -199,6 +214,7 @@ def test_ask_streams_rag_source_retrieval_as_a_reflection_event():
 
 
 def test_ask_falls_back_to_raw_output_on_unparseable_final_answer():
+    """Verify Ask falls back to raw output on unparseable final answer."""
     llm = FakeListLLM(responses=["Final Answer: not json at all"])
     brain = ArgusBrain("test-model", [_make_tool()], rag_config={"enabled": False}, llm=llm)
 
@@ -209,6 +225,7 @@ def test_ask_falls_back_to_raw_output_on_unparseable_final_answer():
 
 
 def test_ask_enriches_query_with_blackboard_context():
+    """Verify Ask enriches query with blackboard context."""
     memory = MagicMock()
     memory.get_blackboard_summary.return_value = '{"target": "example.com"}'
     memory.get_graph_insights.return_value = ""
@@ -223,6 +240,7 @@ def test_ask_enriches_query_with_blackboard_context():
 
 
 def test_ask_without_memory_or_rag_passes_query_through():
+    """Verify Ask without memory or rag passes query through."""
     llm = FakeListLLM(responses=[f"Final Answer: {FULL_REPORT_JSON}"])
     brain = ArgusBrain("test-model", [_make_tool()], rag_config={"enabled": False}, llm=llm)
 
@@ -230,6 +248,7 @@ def test_ask_without_memory_or_rag_passes_query_through():
 
 
 def test_simple_ask_uses_injected_llm_directly():
+    """Verify Simple ask uses injected llm directly."""
     llm = FakeListLLM(responses=["direct response"])
     brain = ArgusBrain("test-model", [], rag_config={"enabled": False}, llm=llm)
 
@@ -282,6 +301,7 @@ class _CrashOnceThenSucceedLLM:
     so one retry is a reasonable, pragmatic mitigation."""
 
     def __init__(self):
+        """Init  ."""
         self.call_count = 0
 
     def invoke(self, messages, **kwargs):
@@ -294,10 +314,12 @@ class _CrashOnceThenSucceedLLM:
         return AIMessage(content=f"Thought: done.\nFinal Answer: {FULL_REPORT_JSON}")
 
     def bind_tools(self, tools):
+        """Bind tools."""
         raise NotImplementedError
 
 
 def test_ask_retries_once_on_transient_ollama_cuda_crash():
+    """Verify Ask retries once on transient ollama cuda crash."""
     llm = _CrashOnceThenSucceedLLM()
     brain = ArgusBrain("test-model", [_make_tool()], rag_config={"enabled": False}, llm=llm)
 
@@ -309,6 +331,7 @@ def test_ask_retries_once_on_transient_ollama_cuda_crash():
 
 class _PersistentErrorLLM:
     def __init__(self):
+        """Init  ."""
         self.call_count = 0
 
     def invoke(self, messages, **kwargs):
@@ -316,6 +339,7 @@ class _PersistentErrorLLM:
         raise ValueError("some unrelated persistent bug")
 
     def bind_tools(self, tools):
+        """Bind tools."""
         raise NotImplementedError
 
 

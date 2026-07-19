@@ -23,6 +23,7 @@ from langchain_core.tools import Tool
 PORT = 8888
 class MockVulnerableServer(http.server.SimpleHTTPRequestHandler):
     def do_GET(self):
+        """Do GET."""
         # REAL FINDINGS (True Positives)
         if self.path == "/.env":
             self.send_response(200)
@@ -52,9 +53,11 @@ class MockVulnerableServer(http.server.SimpleHTTPRequestHandler):
             self.wfile.write(b"Welcome to the Benchmark Target")
 
     def log_message(self, format, *args):
+        """Log message."""
         return # Silence logging
 
 def start_server():
+    """Start server."""
     with socketserver.TCPServer(("", PORT), MockVulnerableServer) as httpd:
         print(f"[*] Mock Server started on port {PORT}")
         httpd.serve_forever()

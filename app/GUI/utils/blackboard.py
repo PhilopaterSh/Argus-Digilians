@@ -28,22 +28,27 @@ def save_target(url, target_type="url", status="pending", tags=None):
 
 
 def load_findings(target_id=None):
+    """Load findings."""
     return _get_memory().get_blackboard_summary()
 
 
 def load_entities():
+    """Load entities."""
     return []
 
 
 def load_relations():
+    """Load relations."""
     return []
 
 
 def get_blackboard_summary():
+    """Get blackboard summary."""
     return _get_memory().get_blackboard_summary()
 
 
 def get_blackboard_counts():
+    """Get blackboard counts."""
     return _get_memory().get_blackboard_counts()
 
 

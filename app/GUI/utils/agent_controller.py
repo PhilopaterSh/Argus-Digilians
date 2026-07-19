@@ -116,6 +116,7 @@ class AgentController:
         return False
 
     def _close_log(self):
+        """Close log."""
         if self.log_file and not self.log_file.closed:
             self.log_file.close()
 

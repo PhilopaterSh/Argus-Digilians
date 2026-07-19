@@ -9,6 +9,11 @@ from app.core.agent.contracts import (
 
 
 def test_build_initial_agent_state_includes_runtime_fields(tmp_path):
+    """Verify Build initial agent state includes runtime fields.
+    
+    Args:
+        tmp_path: pytest fixture (see the module's @pytest.fixture definitions).
+    """
     state_file = tmp_path / "agent_state.json"
 
     state = build_initial_agent_state("https://example.com", "run-123", "production", str(state_file))
@@ -22,6 +27,11 @@ def test_build_initial_agent_state_includes_runtime_fields(tmp_path):
 
 
 def test_record_state_event_appends_to_state_and_file(tmp_path):
+    """Verify Record state event appends to state and file.
+    
+    Args:
+        tmp_path: pytest fixture (see the module's @pytest.fixture definitions).
+    """
     state_file = tmp_path / "agent_state.json"
     state = build_initial_agent_state("target.local", "run-456", "test", str(state_file))
 
@@ -40,6 +50,11 @@ def test_record_state_event_appends_to_state_and_file(tmp_path):
 
 
 def test_persist_run_snapshot_round_trips_events(tmp_path):
+    """Verify Persist run snapshot round trips events.
+    
+    Args:
+        tmp_path: pytest fixture (see the module's @pytest.fixture definitions).
+    """
     state_file = tmp_path / "snapshot.json"
     events: list[AgentRunEvent] = [
         {

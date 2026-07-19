@@ -30,6 +30,7 @@ class _ToolServiceAdapter(BaseToolService):
 
     @property
     def metadata(self) -> ToolMetadata:
+        """Metadata."""
         return self._meta
 
     def execute(self, **kwargs) -> Any:
@@ -177,12 +178,15 @@ class WSLBridgeTools:
         return self.self_heal.system_self_heal(tool_info)
 
     def verify_command(self, command):
+        """Verify command."""
         return self.verifier.pre_execute_verify(command)
 
     def verify_output(self, url, command, raw_output):
+        """Verify output."""
         return self.verifier.post_execute_verify(url, command, raw_output)
 
     def assess_difficulty(self, targets):
+        """Assess difficulty."""
         return self.verifier.task_difficulty_assessment(targets)
 
     def get_intelligence_summary(self, _=None):

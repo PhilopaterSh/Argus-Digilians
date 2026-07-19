@@ -22,6 +22,7 @@ class TestCrawlTarget:
         assert "--connect-timeout" in cmd
 
     def test_parses_discovered_links(self):
+        """Verify Parses discovered links."""
         # runner.run() returns the full shell pipeline's output (after
         # `cut -d'"' -f2`), i.e. bare URLs - not the raw `href="..."`
         # matches grep alone would produce.
@@ -37,6 +38,7 @@ class TestCrawlTarget:
         assert "javascript:void(0)" not in result
 
     def test_empty_response_reports_zero_links(self):
+        """Verify Empty response reports zero links."""
         runner = MagicMock()
         runner.run.return_value = ""
         memory = MagicMock()

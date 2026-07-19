@@ -28,6 +28,7 @@ class SelfHealingService(BaseToolService):
 
     @property
     def metadata(self) -> ToolMetadata:
+        """Metadata."""
         return ToolMetadata(
             name="self_heal",
             description="Autonomously install missing Python libraries or Kali system tools",
@@ -62,6 +63,7 @@ class SelfHealingService(BaseToolService):
         return f"Self-heal failed for {tool_info}. Please check logs or install manually."
 
     def health_check(self) -> dict:
+        """Health check."""
         return {
             "wsl": self._check_wsl(),
             "ollama": self._check_ollama(),
@@ -69,6 +71,7 @@ class SelfHealingService(BaseToolService):
         }
 
     def _check_wsl(self) -> str:
+        """Check wsl."""
         try:
             # wsl.exe writes UTF-16LE to stdout/stderr; text=True decodes with the
             # default locale, which turns it into a null-byte-interleaved mess
@@ -91,6 +94,7 @@ class SelfHealingService(BaseToolService):
             return f"failed: {e}"
 
     def _check_ollama(self) -> str:
+        """Check ollama."""
         try:
             req = urllib.request.Request(OLLAMA_URL)
             with urllib.request.urlopen(req, timeout=OLLAMA_HEALTH_TIMEOUT) as resp:
@@ -103,6 +107,7 @@ class SelfHealingService(BaseToolService):
             return f"failed: {e}"
 
     def _check_python(self) -> str:
+        """Check python."""
         try:
             ver = sys.version.split()[0]
             venv = sys.prefix
@@ -139,6 +144,7 @@ class SelfHealingService(BaseToolService):
             return f"Failed to restart Ollama: {e}"
 
     def _restart_wsl(self) -> str:
+        """Restart wsl."""
         try:
             subprocess.run(
                 ["wsl", "--terminate", "kali-linux"],

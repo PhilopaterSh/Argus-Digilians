@@ -18,7 +18,11 @@ class TestCheckReachability:
         service not known" regardless of whether the host is actually up -
         `ping` needs a bare host, not a scheme-qualified URL. This misled the
         agent into reporting a live target as DOWN right before a real nmap
-        scan (via Recon_Suite) found it up with open ports."""
+        scan (via Recon_Suite) found it up with open ports.
+        
+        Args:
+            service: pytest fixture (see the module's @pytest.fixture definitions).
+        """
         svc, runner, _ = service
         runner.run.return_value = "4 received"
 
@@ -27,6 +31,11 @@ class TestCheckReachability:
         runner.run.assert_called_once_with("ping -c 4 scanme.nmap.org")
 
     def test_strips_port_before_pinging(self, service):
+        """Verify Strips port before pinging.
+        
+        Args:
+            service: pytest fixture (see the module's @pytest.fixture definitions).
+        """
         svc, runner, _ = service
         runner.run.return_value = "4 received"
 
@@ -35,6 +44,11 @@ class TestCheckReachability:
         runner.run.assert_called_once_with("ping -c 4 example.com")
 
     def test_bare_domain_unchanged(self, service):
+        """Verify Bare domain unchanged.
+        
+        Args:
+            service: pytest fixture (see the module's @pytest.fixture definitions).
+        """
         svc, runner, _ = service
         runner.run.return_value = "4 received"
 
@@ -43,6 +57,11 @@ class TestCheckReachability:
         runner.run.assert_called_once_with("ping -c 4 example.com")
 
     def test_reachable_upserts_original_target_to_memory(self, service):
+        """Verify Reachable upserts original target to memory.
+        
+        Args:
+            service: pytest fixture (see the module's @pytest.fixture definitions).
+        """
         svc, runner, memory = service
         runner.run.return_value = "4 received"
 
@@ -52,6 +71,11 @@ class TestCheckReachability:
         assert "REACHABLE" in result
 
     def test_unreachable_does_not_upsert(self, service):
+        """Verify Unreachable does not upsert.
+        
+        Args:
+            service: pytest fixture (see the module's @pytest.fixture definitions).
+        """
         svc, runner, memory = service
         runner.run.return_value = "0 received"
 

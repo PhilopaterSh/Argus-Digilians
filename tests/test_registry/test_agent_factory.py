@@ -12,10 +12,12 @@ from app.core.prompts import get_argus_prompt
 
 
 def _make_tools():
+    """Make tools."""
     return [Tool(name="fake", description="A fake tool", func=lambda x="": f"executed:{x}")]
 
 
 def test_build_agent_executor_returns_agent_executor():
+    """Verify Build agent executor returns agent executor."""
     llm = FakeListLLM(responses=["Final Answer: done"])
     executor = build_agent_executor(llm=llm, tools=_make_tools(), prompt=get_argus_prompt())
     assert isinstance(executor, AgentExecutor)
@@ -23,6 +25,7 @@ def test_build_agent_executor_returns_agent_executor():
 
 
 def test_build_agent_executor_respects_max_iterations():
+    """Verify Build agent executor respects max iterations."""
     llm = FakeListLLM(responses=["Final Answer: done"])
     executor = build_agent_executor(
         llm=llm, tools=_make_tools(), prompt=get_argus_prompt(), max_iterations=5
@@ -31,6 +34,7 @@ def test_build_agent_executor_respects_max_iterations():
 
 
 def test_build_agent_executor_handles_parsing_errors():
+    """Verify Build agent executor handles parsing errors."""
     llm = FakeListLLM(responses=["Final Answer: done"])
     executor = build_agent_executor(llm=llm, tools=_make_tools(), prompt=get_argus_prompt())
     assert executor.handle_parsing_errors is True

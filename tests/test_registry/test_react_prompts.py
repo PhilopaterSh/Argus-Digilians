@@ -19,6 +19,7 @@ def _make_state(**overrides):
 
 class TestBuildReactSystemPrompt:
     def test_includes_phase_progression_guidance(self):
+        """Verify Includes phase progression guidance."""
         prompt = build_react_system_prompt(_make_state())
         assert "PHASE 1" in prompt
         assert "PHASE 8" in prompt
@@ -46,19 +47,23 @@ class TestBuildReactSystemPrompt:
             assert tool_name in prompt, f"{tool_name} not mentioned in phase guidance"
 
     def test_includes_thoroughness_rule(self):
+        """Verify Includes thoroughness rule."""
         prompt = build_react_system_prompt(_make_state())
         assert "Reconnaissance alone" in prompt
         assert "NOT a complete analysis" in prompt
 
     def test_includes_risk_score_consistency_rule(self):
+        """Verify Includes risk score consistency rule."""
         prompt = build_react_system_prompt(_make_state())
         assert "overall_risk_score MUST match" in prompt
 
     def test_shows_no_calls_yet_when_history_empty(self):
+        """Verify Shows no calls yet when history empty."""
         prompt = build_react_system_prompt(_make_state(tool_call_history=[]))
         assert "(none yet)" in prompt
 
     def test_shows_prior_calls_in_history_block(self):
+        """Verify Shows prior calls in history block."""
         prompt = build_react_system_prompt(
             _make_state(tool_call_history=["Check_Reachability::https://example.com"])
         )

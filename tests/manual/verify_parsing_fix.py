@@ -41,6 +41,7 @@ def test_brain_initialization():
     
     # Create a dummy tool
     def dummy_func(x):
+        """Dummy func."""
         return f"Result: {x}"
     
     tools = [Tool(name="Dummy", func=dummy_func, description="Test tool")]
@@ -69,6 +70,7 @@ def test_output_format():
     
     # Create mock LLM that returns proper JSON for analysis
     def mock_llm_invoke(prompt):
+        """Mock llm invoke."""
         if "intent" in prompt and "tool" in prompt:
             # Analysis step - return JSON
             return json.dumps({
@@ -86,6 +88,7 @@ def test_output_format():
     
     # Create test tool
     def test_tool(x):
+        """Verify Tool."""
         return "Test tool security output"
     
     tools = [Tool(name="TestTool", func=test_tool, description="Test tool")]

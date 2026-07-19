@@ -61,6 +61,7 @@ class EmbeddingFactory:
 
     @classmethod
     def _try_ollama(cls, config: RAGConfig):
+        """Try ollama."""
         try:
             from langchain_ollama import OllamaEmbeddings
             model = config.embedding_model
@@ -75,6 +76,7 @@ class EmbeddingFactory:
 
     @classmethod
     def _try_huggingface(cls, config: RAGConfig):
+        """Try huggingface."""
         try:
             from langchain_huggingface import HuggingFaceEmbeddings
             fallback = "all-MiniLM-L6-v2"
@@ -89,6 +91,7 @@ class EmbeddingFactory:
 
     @classmethod
     def _try_openai(cls):
+        """Try openai."""
         try:
             from langchain_openai import OpenAIEmbeddings
             print("[RAG] Using OpenAI embeddings: text-embedding-3-small")

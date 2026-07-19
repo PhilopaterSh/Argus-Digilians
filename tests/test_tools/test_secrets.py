@@ -20,6 +20,7 @@ class TestAnalyzeSecrets:
         assert "--connect-timeout" in cmd
 
     def test_reports_clean_when_no_secrets_found(self):
+        """Verify Reports clean when no secrets found."""
         runner = MagicMock()
         runner.run.return_value = "<html><body>Hello world</body></html>"
         memory = MagicMock()
@@ -31,6 +32,7 @@ class TestAnalyzeSecrets:
         memory.add_finding.assert_not_called()
 
     def test_detects_aws_access_key(self):
+        """Verify Detects aws access key."""
         # Plain (not "key: '...'"-wrapped) so only the AWS-specific pattern
         # matches, not also the Generic API Key pattern.
         runner = MagicMock()

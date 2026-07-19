@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 
 
 def _get_max_retries() -> int:
+    """Get max retries."""
     try:
         return ArgusConfig.load().max_retries
     except Exception:

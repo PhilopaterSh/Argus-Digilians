@@ -42,6 +42,7 @@ class AgentRunSnapshot(TypedDict):
 
 
 def utc_now_iso() -> str:
+    """Utc now iso."""
     return datetime.now(timezone.utc).isoformat()
 
 
@@ -158,4 +159,5 @@ def record_state_event(state: Dict[str, Any], node: str, status: str, detail: st
 
 
 def persist_run_snapshot(state_file: str, snapshot: AgentRunSnapshot) -> None:
+    """Persist run snapshot."""
     write_json_file(state_file, snapshot)

@@ -44,10 +44,12 @@ except Exception:
 
 
 def _sanitize_filename(s: str) -> str:
+    """Sanitize filename."""
     return ''.join(c for c in s if c.isalnum() or c in '-_.').rstrip()
 
 
 def _write_progress(target_url: str, message: str):
+    """Write progress."""
     try:
         reports_dir = pathlib.Path(PROJECT_ROOT) / "reports"
         reports_dir.mkdir(parents=True, exist_ok=True)

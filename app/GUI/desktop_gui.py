@@ -115,6 +115,7 @@ class DesktopArgusGUI:
             self.status_var.set(" Analysis failed.")
 
     def run(self):
+        """Run."""
         self.root.mainloop()
 
 
