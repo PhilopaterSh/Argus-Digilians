@@ -6,7 +6,15 @@
 
 **Created**: 2026-07-10
 
-**Status**: Proposed — spec kit only, not yet implemented. Awaiting prioritization.
+**Status**: Implemented (tasks T001-T014, 14/14 complete; verified 2026-07-10 - see
+`tasks.md`). `ArgusMemory.summarize_for_planning()`, `_build_reflection_note()`, and
+`_inter_reflect()` are live in `app/core/memory/memory_service.py` /
+`app/core/agent/react_workflow.py`; see `docs/ARGUS_FRAMEWORK_ARCHITECTURE_v2.md` ADR-19 for
+measured performance numbers. This line was stale until 2026-07-23 (a Constitution IX/VII
+single-source-of-truth gap found by cross-referencing this file against `tasks.md`, the
+codebase, and ADR-19, which had already agreed this spec was done) - corrected here rather
+than left silently inconsistent, matching the same tracking-hygiene `checklist.md` already
+applies to `011`'s "code-complete but tracking-stale" status.
 
 **Input**: Gap analysis of `docs/history/2603.27127v1.pdf` ("Red-MIRROR: Agentic LLM-based
 Autonomous Penetration Testing with Reflective Verification and Knowledge-augmented

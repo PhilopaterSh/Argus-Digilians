@@ -591,6 +591,13 @@ FR-001 single-model design, 2026-07-11):
 - [Top 10 Agentic AI Penetration Testing Tools in 2026 (zerothreat.ai)](https://zerothreat.ai/blog/top-10-agentic-ai-penetration-testing-tools)
 - [autopentest-ai (GitHub)](https://github.com/bhavsec/autopentest-ai)
 
+**AI-agent exploit-development capability benchmarking** (grounding `021`/`023`'s exploitation-
+toolkit and CVE-PoC-retrieval specs against an external, measured capability yardstick rather than
+projection alone - full detail in both specs' `research.md` addenda, 2026-07-23):
+- [ExploitGym (GitHub, sunblaze-ucb)](https://github.com/sunblaze-ucb/exploitgym)
+- [ExploitGym: Can AI Agents Turn Security Vulnerabilities into Real Attacks? (arXiv:2605.11086)](https://arxiv.org/abs/2605.11086)
+- [cybergym.io](https://cybergym.io)
+
 **Playwright's own documentation** (grounding `022`'s locator-priority correction, 2026-07-10):
 - `playwright.dev/docs/locators` (cited via `docs/history/2603.27127v1.pdf` reference [39], and
   independently checked against current Playwright documentation during `022`'s research pass).
