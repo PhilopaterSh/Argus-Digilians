@@ -2,6 +2,42 @@
 
 All notable changes to this project will be documented in this file.
 
+## Implemented specs/025 (subtask-level benchmark suite: SR/SCR/TTE + ablation) - found and fixed a real WSL-networking bug live (2026-07-23)
+
+Implemented `specs/025-subtask-benchmark-suite` T001-T004/T006-T008/T010: `benchmarks/fixture_base.py`
+(shared 4-file fixture contract), `benchmarks/runner.py` (`run_fixture()`/`run_suite()`,
+SR/SCR/TTE scoring via a `TraceCaptureCallback` on `ArgusBrain.ask()`'s `on_graph_event` seam -
+not `tool_call_history`, which the return value does not expose, a real gap in `plan.md`'s
+original design found by reading `brain.py` directly), 4 fixtures (`info_disclosure_env_leak`
+migrated from `tests/manual/ai_benchmark.py`'s scenario, fixing its hand-picked 2-tool-subset
+gap with the real 17-tool `build_argus_tools()`; new `xss_reflected`/`idor_object_access`/
+`ssti_template_injection`, all real in-process vulnerable logic - genuine
+`jinja2.Template(...).render()` for SSTI, no Docker/`subprocess` needed), `benchmarks/tests/test_runner.py`
+(10 unit tests, fake-LLM-via-`ArgusBrain`'s-own-`llm=`-seam convention, no live Ollama needed),
+`benchmarks/README.md`.
+
+A bounded live sanity run (real Ollama + WSL) found a real, previously-undiscovered bug shared
+with the original `ai_benchmark.py`: fixture servers bound to `127.0.0.1` on the Windows host
+are unreachable from inside the WSL/Kali guest where Argus's tools actually execute (confirmed
+via `wsl -d kali-linux -- curl 127.0.0.1:<port>/.env` -> curl exit code 7, "failed to connect").
+Fixed via `fixture_base.py`'s new `_wsl_reachable_host()` (resolves WSL's own default-gateway
+IP live via `ip route show default` inside the guest, cached per-process, `127.0.0.1` fallback
+if WSL is unavailable) plus rebinding all four fixture servers to `0.0.0.0`. A second live run
+confirmed the fix: the agent reached the target via the resolved gateway IP, used real tools
+(Nikto, subdomain enumeration, secrets analysis), and produced partial credit (SCR 0.33, found
+`/.env`) - a genuine baseline data point about this model's behavior, not a wiring failure
+(Constitution VIII: reported honestly, not smoothed over).
+
+`tests/manual/ai_benchmark.py` removed (T008) once the migrated fixture's wiring was confirmed
+correct end-to-end; its `tests/manual/README.md` entry removed with it.
+
+T005 (full 4-fixture baseline) and T009 (ablation once `enable_inter_reflection` is toggled)
+are unblocked but intentionally left for a human-scheduled run (`python benchmarks/runner.py`),
+each being a 15-30 minute live-Ollama run per fixture per configuration.
+
+Verified: `pytest benchmarks/tests/` 10/10 passing (no live Ollama needed); two live sanity
+runs against real Ollama/WSL, both completed without crash/hang/timeout.
+
 ## Fixed the mypy errors surfaced by merging specs/020's core-agent code onto current main (2026-07-19)
 
 Merging `specs/020` (below) into today's `main` required rebasing every touched file onto

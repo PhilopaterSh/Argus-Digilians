@@ -4,3 +4,7 @@ ruff
 mypy
 pytest
 pytest-cov
+
+# benchmarks/fixtures/ssti_template_injection (specs/025) - already present transitively via
+# langchain, pinned explicitly since the benchmark suite imports it directly.
+jinja2

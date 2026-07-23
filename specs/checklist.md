@@ -2,10 +2,13 @@
 
 **Purpose**: Verify all implementation phases meet spec requirements
 **Created**: 2026-06-29
-**Updated**: 2026-07-10 — extended to cover Phases 010-014 (previously untracked here; each
-phase's own `specs/<phase>/tasks.md` remains the source of truth for individual task items).
-See also the "Backlog — Proposed Future Phases" section near the end of this file for
-`019`-`026` (spec-kit-only, not yet implemented).
+**Updated**: 2026-07-23 — corrected the line below, which had gone stale after `019` shipped
+(2026-07-10) and `020` landed as an experimental, flagged-off path (2026-07-11); the backlog
+table's own per-row status further down this file was already correct, this summary line was
+not (each phase's own `specs/<phase>/tasks.md` remains the source of truth for individual task
+items). See the "Backlog — Proposed Future Phases" section near the end of this file:
+`019` is implemented, `020` is an experimental feature-flagged-off path, and `021`-`026` plus
+`028` remain spec-kit-only (not yet implemented).
 
 ---
 
@@ -678,6 +681,38 @@ above. Full detail in `specs/019-shared-memory-reflection-upgrade/{spec,research
     amortize the routing overhead - not implemented in this v1, flagged as a deliberate,
     documented scope decision, not an oversight) or a team decision to accept the overhead
     anyway for a measured capability gain once `025` (benchmark suite) exists.
+- [x] CHK113 (DONE 2026-07-23) Implemented `025-subtask-benchmark-suite` T001-T004/T006-T008/T010
+  (this session's own recommendation above - `025` was next-most-valuable since it's what lets
+  `020`'s "measure before committing further" recommendation be acted on with real numbers):
+  - `benchmarks/fixture_base.py` (shared 4-file fixture contract: `server.py`/`query.txt`/
+    `flag.txt`/`subtasks.yaml`), `benchmarks/runner.py` (`run_fixture()`/`run_suite()`, SR/SCR/TTE
+    scoring via a `TraceCaptureCallback` on `ArgusBrain.ask()`'s `on_graph_event` seam - not
+    `tool_call_history`, which the return value does not expose, a real gap in `plan.md`'s
+    original design found by reading `brain.py` directly before implementing).
+  - 4 fixtures: `info_disclosure_env_leak` (migrated from `tests/manual/ai_benchmark.py`,
+    fixing its hand-picked 2-tool-subset gap with the real 17-tool `build_argus_tools()`),
+    `xss_reflected`/`idor_object_access`/`ssti_template_injection` (new, user-scoped down from
+    the spec's 5-9 to 3 fixtures for this pass - real in-process vulnerable logic, genuine
+    `jinja2.Template(...).render()` for SSTI, no Docker/`subprocess`).
+  - `benchmarks/tests/test_runner.py`: 10 unit tests, fake-LLM-via-`ArgusBrain`'s-own-`llm=`-seam
+    convention (never mocks `ArgusBrain` itself, matching `test_brain_ask.py`/
+    `test_langgraph_workflow.py`), no live Ollama needed - 10/10 passing.
+  - **Real bug found and fixed live, not assumed**: a bounded live sanity run (real Ollama+WSL)
+    initially found `info_disclosure_env_leak` scoring SR=False/SCR=0.0 with zero tool activity.
+    Root-caused via `wsl -d kali-linux -- curl 127.0.0.1:<port>/.env` -> curl exit code 7
+    ("failed to connect"): fixture servers bound to `127.0.0.1` on the Windows host are
+    unreachable from inside the WSL/Kali guest where Argus's tools actually execute - a latent
+    bug shared with the original `ai_benchmark.py`, not a regression from this migration. Fixed
+    via `fixture_base.py`'s new `_wsl_reachable_host()` (resolves WSL's own default-gateway IP
+    live, cached per-process, `127.0.0.1` fallback) plus rebinding all four fixture servers to
+    `0.0.0.0`. A second live run confirmed the fix: real tool execution (Nikto, subdomain
+    enumeration, secrets analysis) against the resolved gateway IP, partial credit (SCR 0.33,
+    found `/.env`) - a genuine baseline result, not a wiring failure (Constitution VIII).
+  - `tests/manual/ai_benchmark.py` removed (T008) once the migration's wiring was confirmed
+    correct end-to-end; its `tests/manual/README.md` entry removed with it.
+  - T005 (full 4-fixture baseline) and T009 (ablation once `enable_inter_reflection` is
+    toggled) are unblocked but intentionally left for a human-scheduled live run rather than
+    triggered unattended (each is 15-30 min of live-Ollama time per fixture per configuration).
 
 ---
 
@@ -792,14 +827,15 @@ should be revisited whenever new capability is considered, not treated as closed
 | 022 | Browser automation via Playwright | Proposed | none | Medium — new Kali-side runtime dependency |
 | 023 | CVE intelligence & PoC retrieval | Proposed | none | Low-Medium — new external API dependency |
 | 024 | LoRA fine-tuning pipeline | Proposed | none (offline pipeline) | Medium — needs training-capable hardware not guaranteed on target machines |
-| 025 | Subtask-level benchmark suite (SR/SCR/TTE + ablation) | Proposed | none (needed to *measure* 019/020) | Low |
+| 025 | Subtask-level benchmark suite (SR/SCR/TTE + ablation) | **Implemented 2026-07-23** (CHK113) — T005/T009 (full baseline/ablation live runs) unblocked, left for the user to schedule | none (needed to *measure* 019/020) | Low |
 | 026 | Ethical safeguards (auth gate, audit log, watermarking, RAG gating) | Proposed | none | Low |
 | 028 | Human-in-the-loop escalation on detected stuck loops | Proposed | 019 (done) | Low - complements, not replaces, 019's existing structural duplicate-call guard |
 
-Recommended sequencing per each phase's own spec.md: `019` is done; `025` (benchmark suite) is
-next-most-valuable since it's what lets `020`'s "measure 019's residual gap before committing"
-recommendation actually be acted on with real numbers instead of guesses. `021`-`024`/`026` are
-independent and can proceed in any order the team prioritizes.
+Recommended sequencing per each phase's own spec.md: `019` and `025` (benchmark suite) are both
+done - `025`'s harness is what lets `020`'s "measure 019's residual gap before committing"
+recommendation actually be acted on with real numbers instead of guesses, once T005/T009's live
+runs are scheduled. `021`-`024`/`026`/`028` are independent and can proceed in any order the
+team prioritizes.
 
 ---
 

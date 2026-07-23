@@ -30,14 +30,6 @@ Argus_venv\Scripts\python.exe tests\manual\check_integration.py
   was broken (`ModuleNotFoundError: No module named 'core'`) - fixed 2026-07-10 to
   `from app.tools.tool_registry import WSLBridgeTools`.
 
-- **`ai_benchmark.py`** - Starts a local mock HTTP server (true/false-positive info-disclosure
-  scenario) and runs a real `ArgusBrain.ask()` against it, scoring precision/recall/hallucination
-  rate. No external network needed (mock server is `localhost`-only), but does need live
-  Ollama. **Known limitation**: calls `ArgusBrain` with a hand-picked 2-tool list
-  (`Run_FFUF`, `Run_Kali_Command`), not production's real `build_argus_tools()` 17-tool list -
-  `specs/025-subtask-benchmark-suite/tasks.md` T001 plans to migrate this exact scenario into a
-  proper fixture that fixes that gap; this file is superseded once that lands, not before.
-
 - **`exploit_test.py`** - Manual SQLi/path-traversal probe against a real external site
   (`testasp.vulnweb.com`, a known intentionally-vulnerable test target). Needs live network. No
   Argus imports at all - pure `requests`-based scratch script.
