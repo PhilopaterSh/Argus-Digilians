@@ -80,6 +80,9 @@ app/core/rag/store/
 .coverage
 htmlcov/
 
+# graphify (generated knowledge graph, regenerate with `graphify extract .`)
+graphify-out/
+
 # Node (opencode tooling)
 node_modules/
 .opencode/node_modules/

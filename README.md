@@ -95,7 +95,7 @@ Argus-Digilians/
 |   +-- run_argus_cli.py             # CLI entry point
 |   +-- README.md                   # Scripts usage guide
 |
-+-- config/                         # config.yaml, requirements.txt, requirements-dev.txt
++-- config/                         # config.yaml, requirements.txt, requirements-dev.txt, requirements-graphify.txt (optional)
 +-- app/                            # Main application
 |   +-- GUI/                        # Streamlit web UI
 |   +-- core/                       # AI brain, config, agent, memory, RAG
