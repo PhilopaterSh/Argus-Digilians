@@ -1,7 +1,90 @@
 <!--
 Sync Impact Report
 ==================
-Version change: 1.3.0 -> 1.4.0 (MINOR: additive research-provenance principle)
+Version change: 1.4.0 -> 1.6.0 (MINOR: additive graph-verified-structure principle;
+PATCH: descriptive project-phase note; MINOR: broadened commit-discipline trigger scope)
+
+Amendment 2026-07-23c (specs/025 benchmark-suite implementation session):
+Extended principle (no principle added/removed, existing NON-NEGOTIABLE principle's scope
+broadened):
+- X. Traceable Commit Discipline - trigger widened from "resolved defect or completed fix"
+  to "any completed and verified unit of work" (a shipped feature/task, a tooling/dependency
+  integration, a documentation/research pass, a spec-kit governance amendment), with an
+  explicit "verified working, not just written" gate and an explicit note that one session
+  covering several unrelated units of work produces several commits, not one.
+Rationale: this session completed several large, unrelated, individually-verified units of
+work in sequence (the graphify integration, the ExploitGym research documentation, the `019`
+status-desync fix, and the full `specs/025` benchmark-suite implementation including a
+live-verified WSL-networking bug fix) with nothing committed yet by the time this amendment
+was requested. The user explicitly asked for a standing rule that a successful, complete, and
+organized step MUST be followed by a git commit with a descriptive name/message, and for
+that rule to live in spec-kit governance, not only in conversation. Principle X already
+existed and already carries the correct non-negotiable weight and human-confirmation
+safeguard, but its literal wording ("resolved defect or completed fix") is narrower than what
+actually happened this session - none of the four items above are "fixes" in the literal
+sense. Broadening the trigger wording closes that gap without re-litigating the
+already-settled human-approval gate or duplicating a second principle for the same concern
+(Constitution IX's own single-source-of-truth discipline applied to the Constitution itself).
+Templates requiring updates:
+- .specify/templates/plan-template.md        -> no change (Constitution Check gate already generic)
+- .specify/templates/spec-template.md        -> no change
+- .specify/templates/tasks-template.md       -> no change
+- .opencode/commands/speckit.constitution.md -> no change (agent-neutral)
+Follow-up TODOs: none - this session's own accumulated uncommitted work (see above) is the
+first case meant to be committed under the broadened wording, pending the user's per-commit
+confirmation per Principle X's existing human-approval gate.
+
+Amendment 2026-07-23b (graphify integration session, continued):
+Extended section (no principle added/removed):
+- "Security & Operational Constraints" -> added project-phase status note
+Rationale: while reviewing the graphify/installer boundary decision, the user noted that
+Argus is still in active development and has not yet reached a general end-user release -
+this project-phase fact is *why* Principle II's installer boundary and Principle XII's
+dev-only graphify placement matter now even though most current work is dev-facing, not
+end-user-facing. Recording it here keeps that context durable rather than living only in
+this session's conversation, per the same provenance discipline Principle XI already
+requires for research findings.
+Templates requiring updates: none.
+Follow-up TODOs: revisit/update this status note when the project reaches a
+general-release milestone.
+
+Amendment 2026-07-23 (graphify integration session):
+Added principle (additive only; no existing principle redefined or removed):
+- XII. Graph-Verified Structure (NON-NEGOTIABLE)
+Extended section:
+- "Development Workflow & Quality Gates" -> added Structure gate
+New dependency:
+- `graphifyy` added to a new, standalone `config/requirements-graphify.txt` (PyPI package
+  name; CLI command is `graphify`) - deliberately NOT added to `config/requirements.txt`,
+  `config/requirements-dev.txt`, or `scripts/ARGUS_INSTALLER.ps1`'s embedded requirements,
+  so the graph is reproducible on demand (`pip install -r
+  config/requirements-graphify.txt`) without being pulled into every CI job (`ci.yml`
+  installs `requirements-dev.txt` in 4 uncached jobs; `graphify` and its ~30 tree-sitter
+  packages are never invoked there) or into the single-source end-user installer, which
+  Principle II requires to stay self-contained with only the runtime deps Argus itself
+  needs.
+Rationale: this session installed `graphify` (local AST + optional-LLM knowledge-graph
+extraction) and produced the repository's first full structural map (1929 nodes, 3566
+edges, 168 labeled communities), which surfaced real architectural hubs
+(`WSLBridgeTools`, `ArgusBrain`, `ArgusMemory`, ...) and existing groupings that would
+otherwise have to be rediscovered by inspection every time. The user explicitly asked
+for this to become a standing reference consulted before adding new files or
+reorganizing existing ones - "every time," not a one-off exercise - which is the same
+durable-artifact requirement Principle IX already applies to duplication checks and
+Principle XI already applies to research findings. Left undocumented, the graph would
+have the same fate research findings had before XI: useful once, in conversation, then
+unrecoverable. `graphifyy` was initially placed in `config/requirements-dev.txt`; moved
+to its own file the same session after review showed that file is installed by 4 CI jobs
+with no pip cache, which would have added real, repeated, functionally-useless install
+cost to every push - the same "don't add what a step will never use" discipline
+Principle II already applies to the installer.
+Templates requiring updates:
+- .specify/templates/plan-template.md        -> no change (Constitution Check gate already generic)
+- .specify/templates/spec-template.md        -> no change
+- .specify/templates/tasks-template.md       -> no change
+- .opencode/commands/speckit.constitution.md -> no change (agent-neutral)
+Follow-up TODOs: none - `graphify-out/` already added to `.gitignore` and `graphifyy`
+already isolated in `config/requirements-graphify.txt` this same session.
 
 Amendment 2026-07-13 (multi-agent/browser-automation research session, fix/copy-setup-to-scripts):
 Added principle (additive only; no existing principle redefined or removed):
@@ -272,31 +355,40 @@ next person to touch either has no way to know the other exists.
 
 ### X. Traceable Commit Discipline (NON-NEGOTIABLE)
 
-Every resolved defect or completed fix MUST end in a git commit that records it.
-Work that is fixed but never committed does not exist as far as the project's
-audit trail is concerned, and defeats the observability this Constitution
-otherwise requires.
+Every resolved defect, completed fix, or other completed and verified unit of
+work - a shipped feature/task, a tooling or dependency integration, a
+documentation/research pass, a spec-kit governance amendment - MUST end in a
+git commit that records it. Work that is finished but never committed does
+not exist as far as the project's audit trail is concerned, and defeats the
+observability this Constitution otherwise requires.
 
 Rules:
-- Once a fix is verified working, it MUST be committed - not left staged
-  indefinitely across unrelated further work, and not silently dropped.
+- Once a unit of work is verified working and organized (tests pass, and
+  live-verified where the work claims a live-environment result), it MUST be
+  committed - not left staged indefinitely across unrelated further work, and
+  not silently dropped. "Verified working" is the trigger, not "written" -
+  half-finished or not-yet-checked work is not yet a commit candidate.
 - Each commit MUST correspond to one coherent, reviewable unit of resolved
   work; unrelated fixes MUST NOT be squashed into a single commit (this
   project's own history - e.g. splitting the WAF/CDN pipeline fix, the
   containerized-lab feature, and the installer hardening into three separate
-  commits in one session - is the standard to follow, not the exception).
+  commits in one session - is the standard to follow, not the exception). A
+  single working session commonly produces several such commits, not one big
+  one, when it covers several unrelated units of work (e.g. a tooling
+  integration, a documentation pass, and a feature implementation in the same
+  session are three commits, not one).
 - Commit messages MUST state why the change was needed, not merely what
   changed - restating the diff in prose is not sufficient.
-- Where a fix resolves a tracked item (a `specs/*/tasks.md` task or a
+- Where a commit resolves a tracked item (a `specs/*/tasks.md` task or a
   `specs/checklist.md` CHK id), the commit message SHOULD reference it, so
   git history and Spec-Kit tracking stay cross-referenced.
 - This principle governs the required END STATE - a clean, descriptive commit
-  must eventually exist for every resolved fix. It does NOT authorize an AI
-  coding assistant to execute `git commit` without the human operator's
-  explicit, per-instance confirmation; that human-approval gate is a separate,
-  standing operational control this Constitution does not override. An
-  assistant operating under this principle MUST still stage/prepare commits
-  and request confirmation before writing them.
+  must eventually exist for every completed unit of work. It does NOT
+  authorize an AI coding assistant to execute `git commit` without the human
+  operator's explicit, per-instance confirmation; that human-approval gate is
+  a separate, standing operational control this Constitution does not
+  override. An assistant operating under this principle MUST still
+  stage/prepare commits and request confirmation before writing them.
 
 Rationale: mid-session, fixes are routinely kept staged-but-uncommitted while
 work continues - correct for reversibility, but if a session ends without
@@ -333,6 +425,43 @@ and Principle X already closed for uncommitted fixes. Undocumented research rots
 undocumented code duplication (Principle IX): the reasoning behind a decision becomes
 unrecoverable once the conversation that produced it is gone.
 
+### XII. Graph-Verified Structure (NON-NEGOTIABLE)
+
+A generated dependency/structure graph MUST be the reference consulted before adding a
+new file or deciding how to reorganize existing ones - not memory, naming convention, or
+a directory listing alone.
+
+Rules:
+- The graph MUST be produced by `graphify extract .` (local AST parsing; `--code-only`
+  requires no API key or LLM backend) and, when a backend is available, enriched with
+  `graphify label . --backend=<backend>` for human-readable community names. `graphify
+  update .` refreshes it incrementally after code changes at no API cost.
+- Before adding a new file, an author (human or AI assistant) MUST check the graph for an
+  existing node or community already covering the same responsibility - via `graphify
+  query "<question>"`, `graphify explain "<Name>"`, or the `graphify-out/graph.html`
+  visualization - before deciding where the new file belongs. This is the structural
+  counterpart to Principle IX's duplication check, applied before the fact rather than
+  after.
+- Before any reorganization pass, `graphify god-nodes` (architectural hubs) and the
+  community list in `graphify-out/GRAPH_REPORT.md` MUST be reviewed so the new placement
+  respects existing groupings instead of splitting one community across unrelated
+  directories.
+- `graphify-out/` is generated build output, not source: it MUST NOT be hand-edited, MUST
+  stay out of version control, and MUST be regenerated - never manually reconciled - after
+  structural changes so it cannot silently go stale.
+- A graph built from a commit other than the current `HEAD` (see `GRAPH_REPORT.md`'s
+  "Graph Freshness" section) MUST be treated as advisory only, not authoritative, until
+  refreshed.
+
+Rationale: this session used `graphify` to produce the repository's first full structural
+map and found it materially useful for locating where a responsibility already lives
+before adding to it. The user explicitly requested this become a standing reference
+consulted every time for new files and reorganization decisions, not a one-off exercise -
+the same durable-reference intent Principle IX already applies to duplication and
+Principle XI already applies to research findings. Without this principle, the map
+degrades into an unreferenced one-time artifact the same way ad-hoc research and ad-hoc
+duplication checks did before being codified.
+
 ## Security & Operational Constraints
 
 - **Target platform:** Windows 10 (build 19041+) or Windows 11, with WSL2 and a
@@ -348,6 +477,13 @@ unrecoverable once the conversation that produced it is gone.
   network download and clearly reports what the operator must provision manually.
 - **Virtual environment:** Python dependencies MUST live in the isolated
   `Argus_venv/` at the project root; the system Python MUST NOT be polluted.
+- **Project phase:** Argus is currently in active development (pre general-release); most
+  work targets the development/contributor experience, not yet a polished general
+  end-user release. This is part of why the installer boundary (Principle II) and the
+  dev-only placement of tooling like `graphify` (Principle XII) matter now:
+  `scripts/ARGUS_INSTALLER.ps1`'s embedded requirements target the eventual end-user
+  install, while dev-only tooling stays outside it. Update this note when the project
+  reaches a general-release milestone.
 
 ## Development Workflow & Quality Gates
 
@@ -380,6 +516,10 @@ unrecoverable once the conversation that produced it is gone.
   be considered done while its findings/sources exist only in conversation; the relevant
   `specs/<phase>/research.md` addendum or `docs/ARGUS_FRAMEWORK_ARCHITECTURE_v2.md` §10
   entry MUST exist before the decision is treated as settled.
+- **Structure gate:** Per Principle XII, `graphify-out/graph.html` and
+  `graphify-out/GRAPH_REPORT.md` MUST be regenerated (`graphify update .` or `graphify
+  extract .`) and consulted before a PR/session that adds new files or reorganizes
+  existing ones is considered done.
 
 ## Governance
 
@@ -398,4 +538,4 @@ Compliance review: every `/speckit.plan` invocation runs a Constitution Check ga
 violations MUST be either resolved or explicitly justified in the plan's Complexity
 Tracking table before implementation begins.
 
-**Version**: 1.4.0 | **Ratified**: 2026-06-27 | **Last Amended**: 2026-07-13
+**Version**: 1.6.0 | **Ratified**: 2026-06-27 | **Last Amended**: 2026-07-23
