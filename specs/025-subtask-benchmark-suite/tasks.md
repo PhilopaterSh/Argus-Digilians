@@ -2,9 +2,8 @@
 
 **Feature**: `025-subtask-benchmark-suite`
 
-**Status**: Implemented 2026-07-23 (T001-T004, T006-T008 complete; T005/T009 unblocked and
-left for the user to run on their own schedule - each is a 15-30 min live-Ollama run per
-fixture per configuration, not something to trigger unattended).
+**Status**: Fully implemented and live-verified 2026-07-23 (T001-T010 all complete, including
+T005/T009's live baseline and ablation runs).
 
 - [x] T001 `benchmarks/fixtures/info_disclosure_env_leak/` — migrated `tests/manual/ai_benchmark.py`'s
   scenario (moved 2026-07-10, not `tests/ai_benchmark.py`) into the fixture format
@@ -16,8 +15,12 @@ fixture per configuration, not something to trigger unattended).
 - [x] T004 Unit tests for the scoring/config-merge/report logic with a fake LLM injected via
   `ArgusBrain`'s real `llm=` seam (never mocks `ArgusBrain` itself) —
   `benchmarks/tests/test_runner.py`, 10/10 passing, no live Ollama/WSL needed
-- [ ] T005 SC-001: full baseline report across all 4 fixtures against current, unmodified
-  production Argus — unblocked, left for the user to run (`python benchmarks/runner.py`)
+- [x] T005 SC-001: full baseline report across all 4 fixtures, `benchmarks/results/20260723T143037Z_report.md`.
+  SR 0/4, mean SCR 0.33 - every fixture's discovery-endpoint subtask matched (the agent
+  consistently finds the right endpoint via recon tools) but no fixture's follow-through/
+  extraction subtasks matched and no flag was reported. A genuine, honest baseline: this
+  model is currently stronger at initial discovery than at confirm-and-extract follow-through
+  on these fixtures, not a wiring problem (the same harness is what produced this data).
 - [x] T006 Authored 3 new fixtures (`xss_reflected`, `idor_object_access`,
   `ssti_template_injection` — user-scoped down from the spec's 5-9 to 3 for this pass; Auth and
   Command Injection left for a later pass, consistent with the spec's own "grows over time"
@@ -34,9 +37,15 @@ fixture per configuration, not something to trigger unattended).
   wiring failure - the agent used broad recon tools (Nikto, subdomain enum) rather than
   directly requesting the known `/.env`/`/config.php.bak` paths. This is exactly the kind of
   result this benchmark suite exists to surface, not a defect to hide (Constitution VIII).
-- [ ] T009 (depends on `019`) SC-002: run the ablation comparison once `enable_inter_reflection`
-  exists (it already does) — unblocked, left for the user to run
-  (`python benchmarks/runner.py --configs-json '{"baseline": {}, "no_inter_reflection": {"enable_inter_reflection": false}}'`)
+- [x] T009 SC-002: ran the ablation comparison (`baseline` vs. `no_inter_reflection`),
+  `benchmarks/results/20260723T144350Z_report.md` - the project's first real Table-6-shaped
+  ablation result. `baseline` (mean SCR 0.33) outperformed `no_inter_reflection` (mean SCR
+  0.25) - directionally consistent with `019`'s intent, though SR was 0/4 both ways on this
+  4-fixture set and per-fixture SCR varied noticeably run-to-run (e.g. `xss_reflected` scored
+  0.67 in this run's baseline vs. 0.33 in T005's baseline) - a real characteristic of this
+  local 7B model's ReAct variance, not a scoring bug. A larger fixture set and repeated runs
+  (both explicitly out of this pass's 3-fixture scope) would be needed before treating this
+  gap as more than directional signal.
 - [x] T010 `CHANGELOG.md` entry + `specs/checklist.md` CHK113 +
   `docs/ARCHITECTURE_AUDIT_REPORT.md` traceability row
 

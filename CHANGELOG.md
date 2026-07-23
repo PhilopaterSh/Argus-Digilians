@@ -38,6 +38,17 @@ each being a 15-30 minute live-Ollama run per fixture per configuration.
 Verified: `pytest benchmarks/tests/` 10/10 passing (no live Ollama needed); two live sanity
 runs against real Ollama/WSL, both completed without crash/hang/timeout.
 
+**Update same day**: ran T005 (full 4-fixture baseline) and T009 (ablation) live.
+Baseline: SR 0/4, mean SCR 0.33 - the agent consistently found the right endpoint on every
+fixture but didn't complete extraction/reporting on any of them, a genuine capability gap
+this suite now makes visible rather than a harness defect. Ablation (`baseline` vs.
+`no_inter_reflection`): `019`'s reflection helped directionally (mean SCR 0.33 vs. 0.25) -
+the project's first real Table-6-shaped ablation result, though SR stayed 0/4 both ways and
+per-fixture SCR varied noticeably run-to-run (real local-7B-model ReAct variance, not a
+scoring bug) - treat as directional signal on this 3-new-fixture set, not a settled result.
+Reports: `benchmarks/results/20260723T143037Z_report.md`,
+`benchmarks/results/20260723T144350Z_report.md`.
+
 ## Fixed the mypy errors surfaced by merging specs/020's core-agent code onto current main (2026-07-19)
 
 Merging `specs/020` (below) into today's `main` required rebasing every touched file onto

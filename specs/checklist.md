@@ -710,9 +710,16 @@ above. Full detail in `specs/019-shared-memory-reflection-upgrade/{spec,research
     found `/.env`) - a genuine baseline result, not a wiring failure (Constitution VIII).
   - `tests/manual/ai_benchmark.py` removed (T008) once the migration's wiring was confirmed
     correct end-to-end; its `tests/manual/README.md` entry removed with it.
-  - T005 (full 4-fixture baseline) and T009 (ablation once `enable_inter_reflection` is
-    toggled) are unblocked but intentionally left for a human-scheduled live run rather than
-    triggered unattended (each is 15-30 min of live-Ollama time per fixture per configuration).
+  - **T005/T009 completed 2026-07-23 (live, real numbers, not projected)**: T005's baseline
+    (`benchmarks/results/20260723T143037Z_report.md`) scored SR 0/4, mean SCR 0.33 across all
+    4 fixtures - the agent consistently found the right endpoint but didn't complete
+    extraction/reporting on any fixture, a genuine capability gap this suite now makes
+    visible, not a harness defect. T009's ablation
+    (`benchmarks/results/20260723T144350Z_report.md`) is the project's first real
+    Table-6-shaped comparison: `baseline` (mean SCR 0.33) outperformed `no_inter_reflection`
+    (mean SCR 0.25) - directionally consistent with `019`'s intent, though SR stayed 0/4 both
+    ways and per-fixture SCR varied noticeably run-to-run (real local-7B-model ReAct
+    variance) - treat as directional signal on this 3-new-fixture set, not a settled result.
 
 ---
 
@@ -827,7 +834,7 @@ should be revisited whenever new capability is considered, not treated as closed
 | 022 | Browser automation via Playwright | Proposed | none | Medium — new Kali-side runtime dependency |
 | 023 | CVE intelligence & PoC retrieval | Proposed | none | Low-Medium — new external API dependency |
 | 024 | LoRA fine-tuning pipeline | Proposed | none (offline pipeline) | Medium — needs training-capable hardware not guaranteed on target machines |
-| 025 | Subtask-level benchmark suite (SR/SCR/TTE + ablation) | **Implemented 2026-07-23** (CHK113) — T005/T009 (full baseline/ablation live runs) unblocked, left for the user to schedule | none (needed to *measure* 019/020) | Low |
+| 025 | Subtask-level benchmark suite (SR/SCR/TTE + ablation) | **Implemented and live-verified 2026-07-23** (CHK113) — baseline SR 0/4, mean SCR 0.33; ablation shows `019`'s reflection helping directionally (0.33 vs 0.25) | none (needed to *measure* 019/020) | Low |
 | 026 | Ethical safeguards (auth gate, audit log, watermarking, RAG gating) | Proposed | none | Low |
 | 028 | Human-in-the-loop escalation on detected stuck loops | Proposed | 019 (done) | Low - complements, not replaces, 019's existing structural duplicate-call guard |
 
