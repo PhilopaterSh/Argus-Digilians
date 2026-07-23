@@ -711,15 +711,23 @@ above. Full detail in `specs/019-shared-memory-reflection-upgrade/{spec,research
   - `tests/manual/ai_benchmark.py` removed (T008) once the migration's wiring was confirmed
     correct end-to-end; its `tests/manual/README.md` entry removed with it.
   - **T005/T009 completed 2026-07-23 (live, real numbers, not projected)**: T005's baseline
-    (`benchmarks/results/20260723T143037Z_report.md`) scored SR 0/4, mean SCR 0.33 across all
-    4 fixtures - the agent consistently found the right endpoint but didn't complete
+    (`benchmarks/results/20260723T143037Z_report.md`) scored SR 0/4, mean SCR 0.33 across the
+    original 4 fixtures - the agent consistently found the right endpoint but didn't complete
     extraction/reporting on any fixture, a genuine capability gap this suite now makes
     visible, not a harness defect. T009's ablation
-    (`benchmarks/results/20260723T144350Z_report.md`) is the project's first real
+    (`benchmarks/results/20260723T144350Z_report.md`) was the project's first real
     Table-6-shaped comparison: `baseline` (mean SCR 0.33) outperformed `no_inter_reflection`
-    (mean SCR 0.25) - directionally consistent with `019`'s intent, though SR stayed 0/4 both
-    ways and per-fixture SCR varied noticeably run-to-run (real local-7B-model ReAct
-    variance) - treat as directional signal on this 3-new-fixture set, not a settled result.
+    (mean SCR 0.25).
+  - **Re-run after adding a 5th fixture (`path_traversal_download`), same day**:
+    `benchmarks/results/20260723T150717Z_report.md` re-ran both configs across all 5 fixtures -
+    this time `baseline` and `no_inter_reflection` scored **identically** (SR 0/5, mean SCR
+    0.33 both). The earlier directional signal did NOT replicate - reported plainly rather than
+    keeping only the more flattering first result (Constitution VIII). Both reports are kept on
+    disk (FR-005: every run kept, not just the latest). Conclusion: at this suite's current
+    scale (5 fixtures, 3 subtasks each, single run per configuration), `enable_inter_reflection`'s
+    measured effect is not yet distinguishable from this local 7B model's own run-to-run ReAct
+    variance - settling it needs repeated runs per configuration, not a claim either existing
+    report supports alone.
 
 ---
 
@@ -834,7 +842,7 @@ should be revisited whenever new capability is considered, not treated as closed
 | 022 | Browser automation via Playwright | Proposed | none | Medium — new Kali-side runtime dependency |
 | 023 | CVE intelligence & PoC retrieval | Proposed | none | Low-Medium — new external API dependency |
 | 024 | LoRA fine-tuning pipeline | Proposed | none (offline pipeline) | Medium — needs training-capable hardware not guaranteed on target machines |
-| 025 | Subtask-level benchmark suite (SR/SCR/TTE + ablation) | **Implemented and live-verified 2026-07-23** (CHK113) — baseline SR 0/4, mean SCR 0.33; ablation shows `019`'s reflection helping directionally (0.33 vs 0.25) | none (needed to *measure* 019/020) | Low |
+| 025 | Subtask-level benchmark suite (SR/SCR/TTE + ablation) | **Implemented and live-verified 2026-07-23** (CHK113) — 5 fixtures, baseline SR 0/5, mean SCR 0.33; ablation result did not replicate across two runs (0.33 vs 0.25, then 0.33 vs 0.33) - effect not yet distinguishable from run-to-run variance at this scale | none (needed to *measure* 019/020) | Low |
 | 026 | Ethical safeguards (auth gate, audit log, watermarking, RAG gating) | Proposed | none | Low |
 | 028 | Human-in-the-loop escalation on detected stuck loops | Proposed | 019 (done) | Low - complements, not replaces, 019's existing structural duplicate-call guard |
 

@@ -49,6 +49,17 @@ scoring bug) - treat as directional signal on this 3-new-fixture set, not a sett
 Reports: `benchmarks/results/20260723T143037Z_report.md`,
 `benchmarks/results/20260723T144350Z_report.md`.
 
+**Second update same day**: added a 5th fixture (`path_traversal_download` - real
+filesystem-backed path traversal in a private temp sandbox, no simulation) and re-ran the full
+baseline+ablation suite across all 5 fixtures
+(`benchmarks/results/20260723T150717Z_report.md`). This time `baseline` and
+`no_inter_reflection` scored **identically** (SR 0/5, mean SCR 0.33 both) - the earlier
+ablation run's directional signal (0.33 vs. 0.25) did not replicate. Reported plainly rather
+than keeping only the more flattering first result (Constitution VIII): at this suite's
+current scale, `enable_inter_reflection`'s measured effect is not yet distinguishable from
+this local 7B model's own run-to-run ReAct variance. All three reports are kept on disk
+(FR-005 - every run kept, not just the latest).
+
 ## Fixed the mypy errors surfaced by merging specs/020's core-agent code onto current main (2026-07-19)
 
 Merging `specs/020` (below) into today's `main` required rebasing every touched file onto

@@ -60,8 +60,26 @@ fixture's own throwaway files - `public/welcome.txt` (safe) vs. `secret.txt` one
 (the flag), matching the same "real vulnerable logic, no simulation" bar as the SSTI/IDOR/XSS
 fixtures. Live-sanity-checked (real Ollama/WSL): no crash/timeout, SCR 0.33
 (`find_download_endpoint` matched, same discovery-not-extraction pattern as every other
-fixture in this suite's baseline) - a 5th real, working fixture, not yet included in T005/
-T009's already-recorded baseline/ablation reports (would need a re-run to include it).
+fixture in this suite's baseline) - a 5th real, working fixture.
+
+## Re-run with all 5 fixtures (2026-07-23, user requested)
+
+Re-ran the combined baseline + ablation suite (`benchmarks/results/20260723T150717Z_report.md`)
+across all 5 fixtures, superseding T005/T009's original 4-fixture reports (kept on disk, not
+deleted - every run is kept per FR-005). Result this time: **`baseline` and
+`no_inter_reflection` scored identically** - SR 0/5 and mean SCR 0.33 for both configurations,
+every fixture matching only its discovery-endpoint subtask in both configs.
+
+**This does not replicate T009's original directional signal** (`baseline` 0.33 vs.
+`no_inter_reflection` 0.25) - stated plainly rather than cherry-picking the earlier, more
+flattering run (Constitution VIII). Combined, the two ablation runs show: this suite's current
+3-subtask-per-fixture granularity and this local 7B model's real run-to-run ReAct variance are
+large enough that a single ablation pass is not reliable evidence either way about
+`enable_inter_reflection`'s effect - exactly the caution T009's original entry already flagged
+("treat as directional signal... not a settled result"), now confirmed empirically rather than
+just hedged. Settling this would need repeated runs per configuration (majority vote or a
+confidence interval across N runs), which is future scope, not implied by either existing
+report.
 
 ## Real bug found and fixed during implementation (not in the original plan)
 
