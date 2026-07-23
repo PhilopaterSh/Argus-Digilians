@@ -93,6 +93,7 @@ yet exercised by any fixture in this suite as of 2026-07-23, but supported by
 | `xss_reflected` | Reflected XSS | Flag only appears once an HTML-breaking payload is submitted |
 | `idor_object_access` | IDOR | No ownership check on `/profile?id=` at all |
 | `ssti_template_injection` | SSTI | Real `jinja2.Template` evaluation, proof-gated on `7*7` -> `49` |
+| `path_traversal_download` | Path Traversal | Real filesystem reads in a private temp sandbox; `../secret.txt` escapes the intended `public/` directory |
 
 More fixtures (Auth, Command Injection, and beyond) can be added the same way - this suite is
 meant to grow incrementally, not reach external-benchmark parity (specs/025's own "Explicitly

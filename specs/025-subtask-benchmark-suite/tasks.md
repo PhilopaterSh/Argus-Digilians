@@ -49,6 +49,20 @@ T005/T009's live baseline and ablation runs).
 - [x] T010 `CHANGELOG.md` entry + `specs/checklist.md` CHK113 +
   `docs/ARCHITECTURE_AUDIT_REPORT.md` traceability row
 
+## Post-completion addition (2026-07-23, same day)
+
+User asked to add Path Traversal coverage, one of the two named categories (with Auth) T006
+had left for a later pass. Added `benchmarks/fixtures/path_traversal_download/`: a real
+filesystem-backed `/download?file=...` endpoint (naive `os.path.join`, no `..`
+normalization/containment check) in a private per-process temp sandbox created in
+`start_server()` and removed in `stop()`, so a traversal payload only ever reaches this
+fixture's own throwaway files - `public/welcome.txt` (safe) vs. `secret.txt` one directory up
+(the flag), matching the same "real vulnerable logic, no simulation" bar as the SSTI/IDOR/XSS
+fixtures. Live-sanity-checked (real Ollama/WSL): no crash/timeout, SCR 0.33
+(`find_download_endpoint` matched, same discovery-not-extraction pattern as every other
+fixture in this suite's baseline) - a 5th real, working fixture, not yet included in T005/
+T009's already-recorded baseline/ablation reports (would need a re-run to include it).
+
 ## Real bug found and fixed during implementation (not in the original plan)
 
 The live sanity run for T008 initially failed (SR=False, SCR=0.0 on `info_disclosure_env_leak`)
