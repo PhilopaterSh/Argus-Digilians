@@ -56,7 +56,7 @@ try:
             kwargs["ping_timeout"] = 60
         return _orig_ws_init(self, *args, **kwargs)
 
-    WebSocketCommonProtocol.__init__ = _patched_ws_init
+    WebSocketCommonProtocol.__init__ = _patched_ws_init  # type: ignore[method-assign]
 except Exception:
     pass
 
