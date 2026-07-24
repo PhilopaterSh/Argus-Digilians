@@ -260,4 +260,4 @@ def record_state_event(state: AgentState, node: str, status: str, detail: str) -
 
 def persist_run_snapshot(state_file: str, snapshot: AgentRunSnapshot) -> None:
     """Persist run snapshot."""
-    write_json_file(state_file, snapshot)
+    write_json_file(state_file, dict(snapshot))
