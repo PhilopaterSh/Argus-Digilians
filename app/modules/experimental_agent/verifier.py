@@ -98,6 +98,8 @@ class Verifier:
     """
 
     def __init__(self):
+        """Set up the shared requests.Session (spoofed UA, TLS verification
+        off) and the per-origin soft-404 baseline cache."""
         self._session = requests.Session()
         self._session.headers["User-Agent"] = (
             "Mozilla/5.0 (compatible; ArgusSecurityScanner/2.0)"
@@ -116,7 +118,17 @@ class Verifier:
             return None
 
     def _soft_404_size(self, base_url: str) -> int | None:
-        """Returns response body length for a guaranteed-nonexistent path."""
+        """Returns response body length for a guaranteed-nonexistent path.
+
+        Args:
+            base_url (str): Origin to probe a random path under; results
+                are cached per (trailing-slash-stripped) `base_url`.
+
+        Returns:
+            int | None: The response body length if the random path
+            returned HTTP 200, else `None` (e.g. it 404'd normally, or
+            the request failed).
+        """
         key = base_url.rstrip("/")
         if key in self._baseline_cache:
             return self._baseline_cache[key]
@@ -131,6 +143,10 @@ class Verifier:
     def verify_file(self, base_url: str, path: str) -> dict:
         """
         Checks whether a sensitive file is genuinely exposed.
+
+        Args:
+            base_url (str): The site origin to probe under.
+            path (str): The candidate file path (e.g. ".env").
 
         Returns:
             {
@@ -189,7 +205,16 @@ class Verifier:
         """
         Injects a payload into a single parameter and checks for DB errors.
 
-        Returns {"confirmed": bool, "url": str, "error_match": str, "snippet": str}
+        Args:
+            url (str): The base URL to inject into (a `?`/`&` query
+                separator is added automatically).
+            param (str): The query parameter name to inject.
+            payload (str): The raw payload to URL-encode and send.
+
+        Returns:
+            dict: `{"confirmed": bool, "url": str, "error_match": str,
+            "snippet": str}` - `confirmed` is True only if one of
+            `SQL_ERRORS`' fingerprints appears in the response body.
         """
         sep      = "&" if "?" in url else "?"
         test_url = f"{url}{sep}{param}={requests.utils.quote(payload)}"
@@ -228,10 +253,19 @@ class Verifier:
         CONFIRMED if the unique marker appears UNENCODED in the response
         (i.e. not as &lt; / &gt; / &#x3c; etc.).
 
-        Returns {
-            "confirmed": bool, "url": str, "marker": str,
-            "snippet": str, "context": str, "reason": str
-        }
+        Args:
+            url (str): The base URL to inject into.
+            param (str): The query parameter name to inject.
+
+        Returns:
+            dict: `{"confirmed": bool, "url": str, "marker": str,
+            "snippet": str, "context": str, "reason": str}` - `confirmed`
+            is True only for the first payload whose unique marker
+            reflects unencoded, with `url` set to that specific payload's
+            request URL. If none do, `confirmed` is False, `url` is the
+            bare `{url}{sep}{param}=` (no payload appended, not any
+            individual attempt's URL), and `reason` is "no reflection"
+            unless an HTML-encoded reflection was seen on some attempt.
         """
         marker = XSS_MARKER_PREFIX + uuid.uuid4().hex[:8]
         sep    = "&" if "?" in url else "?"
@@ -291,6 +325,14 @@ class Verifier:
         """
         Returns only the Nikto lines that represent real findings.
         Strips informational noise, headers, and meta-lines.
+
+        Args:
+            raw_output (str): Raw Nikto stdout.
+
+        Returns:
+            list[str]: Lines starting with `+` that either match
+            `_NIKTO_SIGNAL` or look like a parameterized URL, excluding
+            any that match `_NIKTO_NOISE`.
         """
         findings = []
         for line in raw_output.splitlines():
@@ -309,6 +351,13 @@ class Verifier:
         """
         Returns confirmed secret matches as [(type, value), ...].
         Each match requires the value to have >= 12 chars to cut noise.
+
+        Args:
+            raw_html (str): Raw HTML/text to scan.
+
+        Returns:
+            list[tuple[str, str]]: Up to 10 deduplicated `(secret_type,
+            matched_value)` pairs.
         """
         patterns = {
             "Email":             r'[a-zA-Z0-9._%+-]{3,}@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}',

