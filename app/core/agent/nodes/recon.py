@@ -11,6 +11,15 @@ logger = logging.getLogger(__name__)
 
 
 def parse_nmap_ports(nmap_output: str) -> List[int]:
+    """Extract open TCP port numbers from raw nmap output.
+
+    Args:
+        nmap_output (str): Raw nmap stdout.
+
+    Returns:
+        List[int]: Every port number matched by `<port>/tcp open`, in the
+        order they appear; empty if `nmap_output` is empty/falsy.
+    """
     ports = []
     if not nmap_output:
         return ports
@@ -26,6 +35,14 @@ def _tech_probe_succeeded(tech_output: str) -> bool:
     A failed/timed-out command always surfaces as a string starting with
     "Error:"/"Error (" (see app/tools/command_runner.py); anything else
     means the HTTP request itself actually completed.
+
+    Args:
+        tech_output (str): The `whatweb` command's raw output.
+
+    Returns:
+        bool: True if `tech_output` looks like a real response rather
+        than a runner-level error string; False if it's empty/whitespace
+        or starts with "Error:"/"Error (".
     """
     if not tech_output or not tech_output.strip():
         return False
@@ -34,11 +51,36 @@ def _tech_probe_succeeded(tech_output: str) -> bool:
 
 
 def _infer_web_port_from_scheme(target: str) -> int:
+    """Guess the standard web port from a target's URL scheme.
+
+    Args:
+        target (str): A URL or bare host/domain; a missing scheme is
+            treated as `http://`.
+
+    Returns:
+        int: 443 if the (possibly assumed) scheme is https, else 80.
+    """
     parsed = urlparse(target if "://" in target else f"http://{target}")
     return 443 if parsed.scheme == "https" else 80
 
 
 def recon_node(state: AgentState) -> AgentState:
+    """Run the recon suite against the target and determine open ports.
+
+    Falls back to a fixed demo port (8080) in demo/test mode, or infers
+    the scheme's standard web port if nmap couldn't confirm any open port
+    but `whatweb` got a real response (likely a WAF/CDN blocking the port
+    scan specifically) - see `_infer_web_port_from_scheme`.
+
+    Args:
+        state (AgentState): Current graph state (`target_ip`, `mode` are read).
+
+    Returns:
+        AgentState: `state`, mutated in place with `open_ports` (real,
+        demo-fallback, or scheme-inferred), `extracted_data.recon_report`/
+        `raw_recon`, and `status` set to "running" (ports found) or
+        "failed" (none found).
+    """
     target = state["target_ip"]
     mode = state["mode"]
     logger.info("[Recon Node] Scanning target %s...", target)

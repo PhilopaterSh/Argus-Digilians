@@ -16,6 +16,17 @@ def build_agent_executor(
 ) -> AgentExecutor:
     """
     Build and configure a LangChain ReAct AgentExecutor.
+
+    Args:
+        llm (BaseLanguageModel): The LLM the agent reasons with.
+        tools (Sequence[BaseTool]): Tools available to the agent.
+        prompt (PromptTemplate): The ReAct prompt template.
+        verbose (bool): Passed through to `AgentExecutor`.
+        max_iterations (int): Max ReAct loop iterations before giving up.
+
+    Returns:
+        AgentExecutor: Configured with `handle_parsing_errors=True` and
+        `early_stopping_method="generate"`.
     """
     agent = create_react_agent(
         llm=llm,

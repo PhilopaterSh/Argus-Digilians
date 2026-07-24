@@ -9,6 +9,12 @@ DB_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../data
 _schema_ready = False
 
 def get_connection():
+    """Open a connection to the tactical-graph blackboard DB, initializing
+    its schema on first use.
+
+    Returns:
+        sqlite3.Connection: A new connection to `DB_PATH`.
+    """
     global _schema_ready
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
     if not _schema_ready:
@@ -19,6 +25,7 @@ def get_connection():
     return sqlite3.connect(DB_PATH)
 
 def init_schema():
+    """Create schema_info/blackboard_entries if missing, recording schema version 1."""
     conn = get_connection()
     cursor = conn.cursor()
     
@@ -53,6 +60,15 @@ def init_schema():
     conn.close()
 
 def save_entry(target: str, state_snapshot: Dict[str, Any], status: str):
+    """Insert one row recording a completed/failed tactical-graph run.
+
+    Args:
+        target (str): The target that was analyzed.
+        state_snapshot (Dict[str, Any]): The final agent state, JSON-
+            serialized with `default=str` so non-serializable values
+            (e.g. LangChain message objects) don't crash the insert.
+        status (str): e.g. "SUCCESS"/"FAILED".
+    """
     conn = get_connection()
     cursor = conn.cursor()
     

@@ -47,6 +47,15 @@ def utc_now_iso() -> str:
 
 
 def normalize_run_mode(value: Optional[str]) -> str:
+    """Normalize a run-mode string to one of the recognized constants.
+
+    Args:
+        value (str | None): Raw mode string (case/whitespace-insensitive).
+
+    Returns:
+        str: `value` lowercased/stripped if it matches production/demo/
+        test, else `DEFAULT_AGENT_RUN_MODE`.
+    """
     if not value:
         return DEFAULT_AGENT_RUN_MODE
     normalized = value.strip().lower()
@@ -56,6 +65,19 @@ def normalize_run_mode(value: Optional[str]) -> str:
 
 
 def build_run_event(node: str, status: str, detail: str, *, run_id: Optional[str] = None, target: Optional[str] = None, mode: Optional[str] = None) -> AgentRunEvent:
+    """Build one AgentRunEvent dict, timestamped now.
+
+    Args:
+        node (str): The graph node/agent step this event is from.
+        status (str): "running"/"completed"/"failed".
+        detail (str): Human-readable event text.
+        run_id (str | None): Included only if truthy.
+        target (str | None): Included only if truthy.
+        mode (str | None): Included only if truthy.
+
+    Returns:
+        AgentRunEvent: The event dict.
+    """
     event: AgentRunEvent = {"node": node, "status": status, "detail": detail, "timestamp": utc_now_iso()}
     if run_id:
         event["run_id"] = run_id
@@ -67,6 +89,24 @@ def build_run_event(node: str, status: str, detail: str, *, run_id: Optional[str
 
 
 def build_run_snapshot(run_id: str, target: str, mode: str, *, status: str = "starting", current_node: str = "init", progress_pct: int = 0, final_state: Optional[Dict[str, Any]] = None, error: Optional[str] = None, started_at: Optional[str] = None, updated_at: Optional[str] = None, events: Optional[List[AgentRunEvent]] = None) -> AgentRunSnapshot:
+    """Build a full AgentRunSnapshot dict, filling timestamps if omitted.
+
+    Args:
+        run_id (str): This run's id.
+        target (str): The target being analyzed.
+        mode (str): The run mode.
+        status (str): Run status.
+        current_node (str): Current graph node name.
+        progress_pct (int): Progress percentage (0-100).
+        final_state (dict | None): Final report data; `{}` if omitted.
+        error (str | None): Error message, if any.
+        started_at (str | None): Defaults to now if omitted.
+        updated_at (str | None): Defaults to now if omitted.
+        events (list[AgentRunEvent] | None): Defaults to `[]` if omitted.
+
+    Returns:
+        AgentRunSnapshot: The snapshot dict.
+    """
     now = utc_now_iso()
     return {
         "run_id": run_id,
@@ -84,6 +124,19 @@ def build_run_snapshot(run_id: str, target: str, mode: str, *, status: str = "st
 
 
 def build_initial_agent_state(target: str, run_id: str, mode: str, state_file: str) -> Dict[str, Any]:
+    """Build the fresh AgentState dict a new tactical-graph run starts from.
+
+    Args:
+        target (str): The target to analyze.
+        run_id (str): This run's id.
+        mode (str): The run mode.
+        state_file (str): Path the state file will be written to (stored
+            in the state itself for downstream reference).
+
+    Returns:
+        Dict[str, Any]: The initial state, with all counters/lists at
+        their zero values and a single seed `HumanMessage` in `messages`.
+    """
     now = utc_now_iso()
     return {
         "run_id": run_id,
@@ -112,6 +165,15 @@ def build_initial_agent_state(target: str, run_id: str, mode: str, state_file: s
 
 
 def load_json_file(path: str) -> Dict[str, Any]:
+    """Read and parse a JSON file, tolerating a missing or invalid file.
+
+    Args:
+        path (str): Path to the JSON file.
+
+    Returns:
+        Dict[str, Any]: The parsed content, or `{}` if the file doesn't
+        exist or fails to parse.
+    """
     file_path = Path(path)
     if not file_path.exists():
         return {}
@@ -122,12 +184,34 @@ def load_json_file(path: str) -> Dict[str, Any]:
 
 
 def write_json_file(path: str, payload: Dict[str, Any]) -> None:
+    """Write a dict to a JSON file, creating parent directories if needed.
+
+    Args:
+        path (str): Path to write to.
+        payload (Dict[str, Any]): Data to serialize (non-JSON-serializable
+            values are stringified via `default=str`).
+
+    Returns:
+        None
+    """
     file_path = Path(path)
     file_path.parent.mkdir(parents=True, exist_ok=True)
     file_path.write_text(json.dumps(payload, indent=2, default=str), encoding="utf-8")
 
 
 def append_run_event(state_file: str, event: AgentRunEvent) -> None:
+    """Append one event to a state file's event list and refresh its top-level fields.
+
+    Args:
+        state_file (str): Path to the state JSON file (loaded, updated,
+            and rewritten in place).
+        event (AgentRunEvent): The event to append; its `node`/`status`/
+            `timestamp` (and `run_id`/`target`/`mode` if present) also
+            overwrite the state's own top-level fields.
+
+    Returns:
+        None
+    """
     state = load_json_file(state_file)
     events = list(state.get("events", []))
     events.append(event)
@@ -145,6 +229,20 @@ def append_run_event(state_file: str, event: AgentRunEvent) -> None:
 
 
 def record_state_event(state: Dict[str, Any], node: str, status: str, detail: str) -> Dict[str, Any]:
+    """Append an event to an in-memory state dict and, if it names a
+    state_file, persist it there too via `append_run_event`.
+
+    Args:
+        state (Dict[str, Any]): The in-memory agent state to update.
+        node (str): The graph node/agent step this event is from.
+        status (str): "running"/"completed"/"failed".
+        detail (str): Human-readable event text.
+
+    Returns:
+        Dict[str, Any]: `state`, mutated in place (`events`,
+        `current_node`, `status`, `updated_at` updated) and returned for
+        convenience.
+    """
     event = build_run_event(node, status, detail, run_id=state.get("run_id"), target=state.get("target_ip"), mode=state.get("mode"))
     events = list(state.get("events", []))
     events.append(event)

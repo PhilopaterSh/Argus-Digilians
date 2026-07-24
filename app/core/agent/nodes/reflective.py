@@ -11,6 +11,22 @@ logger = logging.getLogger(__name__)
 
 
 def reflective_node(state: AgentState) -> AgentState:
+    """Analyze the last failed probe and pick the next payload category to try.
+
+    Verifies the previous attempt's output, then asks the LLM to suggest
+    the next probe category (sqli/path_traversal/generic_probe); falls
+    back to a fixed rotation if the LLM call fails or returns something
+    unrecognized.
+
+    Args:
+        state (AgentState): Current graph state (`failed_payloads`,
+            `last_probe_output`, `error_log`, `retry_count` are read).
+
+    Returns:
+        AgentState: `state`, mutated in place with `current_payload` set
+        to the next category (or `None` if the retry budget is now
+        exhausted, which also marks `status="failed"`).
+    """
     logger.info("[Reflective Node] Analyzing failed attempt and selecting the next probe...")
     record_state_event(state, "reflective", "running", "Analyzing failure context and selecting next payload")
     state["current_node"] = "reflective"

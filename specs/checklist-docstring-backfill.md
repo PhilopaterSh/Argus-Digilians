@@ -78,11 +78,15 @@ Auto-generated inventory of functions this PR's diff touches that need a real, h
 - [x] `build_graph_data` (line 50) - needs: Returns. **Done 2026-07-24**: Tier 3 batch (app/GUI/).
 - [x] `init_gui_tables` (line 78) - needs: summary. **Done 2026-07-24**: Tier 3 batch (app/GUI/).
 
+## `app/core/agent/agent_factory.py` (not previously tracked by this manifest)
+
+- [x] `build_agent_executor` (line 9) - needs: Args, Returns. **Done 2026-07-24**: Tier 4 batch (app/core/agent/, sub-batch 1 of 3 - smaller/lower-risk files first).
+
 ## `app/core/agent/blackboard.py`
 
-- [ ] `get_connection` (line 11) - needs: Returns
-- [ ] `init_schema` (line 21) - needs: summary
-- [ ] `save_entry` (line 55) - needs: Args
+- [x] `get_connection` (line 11) - needs: Returns. **Done 2026-07-24**: Tier 4 batch (app/core/agent/, sub-batch 1).
+- [x] `init_schema` (line 21) - needs: summary. **Done 2026-07-24**: Tier 4 batch (app/core/agent/, sub-batch 1).
+- [x] `save_entry` (line 55) - needs: Args. **Done 2026-07-24**: Tier 4 batch (app/core/agent/, sub-batch 1).
 
 ## `app/core/agent/brain.py`
 
@@ -114,41 +118,41 @@ Auto-generated inventory of functions this PR's diff touches that need a real, h
 
 ## `app/core/agent/contracts.py`
 
-- [ ] `normalize_run_mode` (line 48) - needs: Args, Returns
-- [ ] `build_run_event` (line 57) - needs: Args, Returns
-- [ ] `build_run_snapshot` (line 68) - needs: Args, Returns
-- [ ] `build_initial_agent_state` (line 85) - needs: Args, Returns
-- [ ] `load_json_file` (line 113) - needs: Args, Returns
-- [ ] `write_json_file` (line 123) - needs: Args, Returns
-- [ ] `append_run_event` (line 129) - needs: Args, Returns
-- [ ] `record_state_event` (line 146) - needs: Args, Returns
+- [x] `normalize_run_mode` (line 48) - needs: Args, Returns. **Done 2026-07-24**: Tier 4 batch (app/core/agent/, sub-batch 1).
+- [x] `build_run_event` (line 57) - needs: Args, Returns. **Done 2026-07-24**: Tier 4 batch (app/core/agent/, sub-batch 1).
+- [x] `build_run_snapshot` (line 68) - needs: Args, Returns. **Done 2026-07-24**: Tier 4 batch (app/core/agent/, sub-batch 1).
+- [x] `build_initial_agent_state` (line 85) - needs: Args, Returns. **Done 2026-07-24**: Tier 4 batch (app/core/agent/, sub-batch 1).
+- [x] `load_json_file` (line 113) - needs: Args, Returns. **Done 2026-07-24**: Tier 4 batch (app/core/agent/, sub-batch 1).
+- [x] `write_json_file` (line 123) - needs: Args, Returns. **Done 2026-07-24**: Tier 4 batch (app/core/agent/, sub-batch 1).
+- [x] `append_run_event` (line 129) - needs: Args, Returns. **Done 2026-07-24**: Tier 4 batch (app/core/agent/, sub-batch 1).
+- [x] `record_state_event` (line 146) - needs: Args, Returns. **Done 2026-07-24**: Tier 4 batch (app/core/agent/, sub-batch 1).
 
 ## `app/core/agent/graph.py`
 
-- [ ] `self_heal_node` (line 25) - needs: Args, Returns
-- [ ] `should_continue` (line 54) - needs: Args, Returns
-- [ ] `_route_after_reflective` (line 73) - needs: Args, Returns
-- [ ] `build_tactical_graph` (line 88) - needs: Returns
+- [x] `self_heal_node` (line 25) - needs: Args, Returns. **Done 2026-07-24**: Tier 4 batch (app/core/agent/, sub-batch 1).
+- [x] `should_continue` (line 54) - needs: Args, Returns. **Done 2026-07-24**: Tier 4 batch (app/core/agent/, sub-batch 1).
+- [x] `_route_after_reflective` (line 73) - needs: Args, Returns. **Done 2026-07-24**: Tier 4 batch (app/core/agent/, sub-batch 1) - caught and corrected a slipped edit (a stray placeholder line accidentally inserted after `should_continue` instead of a real docstring on this function) before verifying; re-checked with a syntax parse and a fresh gate scan afterward.
+- [x] `build_tactical_graph` (line 88) - needs: Returns. **Done 2026-07-24**: Tier 4 batch (app/core/agent/, sub-batch 1).
 
 ## `app/core/agent/nodes/post_exploit.py`
 
-- [ ] `post_exploit_node` (line 10) - needs: Args, Returns
+- [x] `post_exploit_node` (line 10) - needs: Args, Returns. **Done 2026-07-24**: Tier 4 batch (app/core/agent/, sub-batch 1).
 
 ## `app/core/agent/nodes/recon.py`
 
-- [ ] `parse_nmap_ports` (line 13) - needs: Args, Returns
-- [ ] `_tech_probe_succeeded` (line 23) - needs: Args, Returns
-- [ ] `_infer_web_port_from_scheme` (line 36) - needs: Args, Returns
-- [ ] `recon_node` (line 41) - needs: Args, Returns
+- [x] `parse_nmap_ports` (line 13) - needs: Args, Returns. **Done 2026-07-24**: Tier 4 batch (app/core/agent/, sub-batch 1).
+- [x] `_tech_probe_succeeded` (line 23) - needs: Args, Returns. **Done 2026-07-24**: Tier 4 batch (app/core/agent/, sub-batch 1) - caught and fixed an inaccurate first draft claiming empty input returns True; it actually returns False (verified against the real `if not tech_output...: return False` body) before committing.
+- [x] `_infer_web_port_from_scheme` (line 36) - needs: Args, Returns. **Done 2026-07-24**: Tier 4 batch (app/core/agent/, sub-batch 1).
+- [x] `recon_node` (line 41) - needs: Args, Returns. **Done 2026-07-24**: Tier 4 batch (app/core/agent/, sub-batch 1).
 
 ## `app/core/agent/nodes/reflective.py`
 
-- [ ] `reflective_node` (line 13) - needs: Args, Returns
+- [x] `reflective_node` (line 13) - needs: Args, Returns. **Done 2026-07-24**: Tier 4 batch (app/core/agent/, sub-batch 1).
 
 ## `app/core/agent/react_callback.py`
 
-- [ ] `_emit` (line 43) - needs: Args, Returns
-- [ ] `on_agent_action` (line 50) - needs: Args, Returns
+- [x] `_emit` (line 43) - needs: Args, Returns. **Done 2026-07-24**: Tier 4 batch (app/core/agent/, sub-batch 1).
+- [x] `on_agent_action` (line 50) - needs: Args, Returns. **Done 2026-07-24**: Tier 4 batch (app/core/agent/, sub-batch 1) - note: the gate's own AST logic treats an explicit `-> None` annotation as requiring a Returns section (a `None` annotation is an `ast.Constant`, not an `ast.Name`, so the gate's `getattr(func.returns, "id", None) != "None"` check doesn't recognize it) - documented as `Returns: None` to satisfy this, same quirk hit again on 3 functions in contracts.py/react_callback.py.
 
 ## `app/core/agent/react_workflow.py`
 

@@ -41,6 +41,16 @@ class LiveFeedCallbackHandler(BaseCallbackHandler):
         self.mode = mode
 
     def _emit(self, status: str, detail: str) -> None:
+        """Build and append one run event to the state file.
+
+        Args:
+            status (str): "running"/"completed"/"failed".
+            detail (str): Human-readable step text, truncated to
+                `_TRUNCATE_CHARS`.
+
+        Returns:
+            None
+        """
         event = build_run_event(
             "agent", status, detail[:_TRUNCATE_CHARS],
             run_id=self.run_id, target=self.target, mode=self.mode,
@@ -55,6 +65,9 @@ class LiveFeedCallbackHandler(BaseCallbackHandler):
                 raw LLM output for this step (includes the `Thought:` text
                 per app/core/prompts.py's required format), `action.tool`
                 and `action.tool_input` the parsed tool call.
+
+        Returns:
+            None
         """
         thought = action.log.strip() if action.log else f"Action: {action.tool}"
         self._emit("running", f"{thought}\nAction Input: {action.tool_input}")

@@ -35,6 +35,17 @@ def _get_max_retries() -> int:
 
 
 def self_heal_node(state: AgentState) -> AgentState:
+    """Attempt to auto-install a tool named in the error log via WSLBridgeTools.
+
+    Args:
+        state (AgentState): Current graph state; reads `error_log` to
+            guess the missing tool name (falls back to "nmap").
+
+    Returns:
+        AgentState: `state`, mutated in place with `extracted_data.
+        self_heal` and `last_error` set to the self-heal result (or the
+        exception message, if the attempt itself failed).
+    """
     error_context = "\n".join(state.get("error_log", []))
     logger.warning("[Self-Heal Node] Dependency error or tool failure detected: %s", error_context)
     record_state_event(state, "self_heal", "running", "Attempting self-heal for dependency errors")
@@ -64,6 +75,19 @@ def self_heal_node(state: AgentState) -> AgentState:
 
 
 def should_continue(state: AgentState):
+    """Decide the next node after an exploit attempt: succeed, retry, self-heal, or give up.
+
+    Args:
+        state (AgentState): Current graph state (`exploit_success`,
+            `error_log`, `retry_count`, `current_payload` are consulted).
+
+    Returns:
+        str: `"post_exploit"` on success, `"self_heal"` for a recoverable
+        dependency error within budget, `"reflective"` to try another
+        payload, or `langgraph.graph.END` if the retry budget is
+        exhausted or there's no payload left to try (also records a
+        FAILED blackboard entry in that case).
+    """
     if state.get("exploit_success"):
         return "post_exploit"
 
@@ -83,6 +107,18 @@ def should_continue(state: AgentState):
 
 
 def _route_after_reflective(state: AgentState):
+    """Route from the reflective node: retry the exploit, or give up if
+    reflective already exhausted the retry budget.
+
+    Args:
+        state (AgentState): Current graph state (`current_payload` is
+            consulted).
+
+    Returns:
+        str: `langgraph.graph.END` if `current_payload` is `None`
+        (retries exhausted; also records a FAILED blackboard entry),
+        else `"exploit"` to try the newly-selected payload.
+    """
     # reflective_node clears current_payload to None when it exhausts the
     # retry budget (see app/core/agent/nodes/reflective.py), but the old
     # unconditional edge to "exploit" still ran one more, guaranteed-to-fail
@@ -98,6 +134,13 @@ def _route_after_reflective(state: AgentState):
 
 
 def build_tactical_graph():
+    """Build and compile the legacy tactical LangGraph (recon -> scanner ->
+    exploit <-> reflective/self_heal -> post_exploit).
+
+    Returns:
+        A compiled LangGraph graph (`workflow.compile()`), runnable via
+        `.stream(initial_state)`.
+    """
     workflow = StateGraph(AgentState)
 
     workflow.add_node("recon", recon_node)
