@@ -161,6 +161,16 @@ def _load_seclists_file(dtype: str, max_lines: int = 30) -> list[str]:
     Try to load payloads from a local SecLists installation.
     Falls back to SECLISTS_EMBEDDED if not found.
     Returns up to max_lines non-empty, non-comment lines.
+
+    Args:
+        dtype (str): Data type key into `_SECLISTS_FILE_MAP` (e.g. "xss").
+        max_lines (int): Max lines to return.
+
+    Returns:
+        list[str]: Up to `max_lines` non-empty, non-comment lines, spread
+        across the file (every Nth line) if it has more than `max_lines`
+        entries; `[]` if `dtype` is unmapped or no installation path has
+        the file.
     """
     filename = _SECLISTS_FILE_MAP.get(dtype)
     if not filename:
@@ -189,6 +199,15 @@ def _get_reference_payloads(dtype: str) -> list[str]:
     """
     Return the best available reference payload list for a given data_type.
     Prefers local SecLists; falls back to embedded curated list.
+
+    Args:
+        dtype (str): Data type key into `_DTYPE_TO_SECLISTS`.
+
+    Returns:
+        list[str]: Up to 25 payloads from a local SecLists file if found
+        under `dtype`'s primary category; otherwise the combined
+        `SECLISTS_EMBEDDED` entries for all of `dtype`'s mapped
+        categories, or the embedded `'xss'` list if `dtype` is unmapped.
     """
     keys = _DTYPE_TO_SECLISTS.get(dtype, [])
     # Try local SecLists first (primary key only)
@@ -207,6 +226,12 @@ class OllamaEngine:
     """Thread-safe self-healing wrapper around a local Ollama model."""
 
     def __init__(self, model: str = MODEL_NAME, host: str = OLLAMA_HOST):
+        """Store the target model/host and set up the readiness lock.
+
+        Args:
+            model (str): Ollama model tag to use.
+            host (str): Ollama API base URL (trailing slash stripped).
+        """
         self.model  = model
         self.host   = host.rstrip("/")
         self._ready = False
@@ -236,7 +261,12 @@ class OllamaEngine:
         Full startup check:
           1. Is Ollama reachable?
           2. Is the model present?  If not, pull it.
-        Returns (ok, status_message).
+
+        Returns:
+            tuple[bool, str]: `(ok, status_message)` - True once the model
+            is confirmed loaded (pulling it or starting Ollama first if
+            needed); False with an explanatory message if Ollama can't be
+            reached/started or the pull fails.
         """
         ok, msg = self.health_check()
         if ok:
@@ -259,6 +289,13 @@ class OllamaEngine:
         return False, f"Cannot start Ollama: {msg}"
 
     def _pull_model(self) -> tuple[bool, str]:
+        """Run `ollama pull <model>` synchronously (up to 10 minutes).
+
+        Returns:
+            tuple[bool, str]: `(True, "Pulled ... successfully")` on
+            success; `(False, <reason>)` if the `ollama` CLI is missing,
+            the pull times out, or it exits non-zero.
+        """
         print(f"[*] Pulling {self.model} (this may take a few minutes)...")
         try:
             result = subprocess.run(
@@ -300,6 +337,17 @@ class OllamaEngine:
         Run inference with self-healing retry logic.
         Returns (response_text, error_or_None).
         Caller always gets a string - never an exception.
+
+        Args:
+            prompt (str): The prompt to send to Ollama's `/api/generate`.
+            temperature (float): Sampling temperature.
+            max_tokens (int): Requested `num_predict`; halved on a timeout
+                retry (down to a floor of 256).
+
+        Returns:
+            tuple[str, str | None]: `(response_text, None)` on success;
+            `(fallback_message, last_error)` if all `MAX_RETRIES` attempts
+            fail - `response_text` is never empty/an exception.
         """
         last_error = "Unknown error"
         current_max = max_tokens
@@ -372,7 +420,15 @@ class OllamaEngine:
 
     @staticmethod
     def _simplify_prompt(prompt: str) -> str:
-        """Strip the long evidence block, keep only the questions."""
+        """Strip the long evidence block, keep only the questions.
+
+        Args:
+            prompt (str): The original (likely oversized) prompt.
+
+        Returns:
+            str: Everything from the first line starting with "Q1." onward,
+            or the last 800 chars of `prompt` if no such line is found.
+        """
         lines = prompt.split("\n")
         # Keep everything from Q1 onward
         for i, line in enumerate(lines):
@@ -393,6 +449,18 @@ class OllamaEngine:
         Anti-false-positive structured prompt.
         The LLM receives ONLY confirmed scanner evidence and is explicitly
         forbidden from inventing new findings.
+
+        Args:
+            target (str): The target being reported on.
+            confirmed_findings (list[dict]): Findings with `severity`/
+                `tool_name`/`data_type`/`summary` keys.
+            raw_evidence (str): Raw scanner output (first 2000 chars used).
+
+        Returns:
+            str: "No confirmed findings to analyse." if both inputs are
+            empty; otherwise the LLM's answer to the 5 structured
+            confidence-tiered questions (or `generate()`'s fallback
+            message if the call ultimately failed).
         """
         if not confirmed_findings and not raw_evidence.strip():
             return "No confirmed findings to analyse."
@@ -536,6 +604,16 @@ Payload:"""
         Lightweight single-call classifier.
         Returns {"is_fp": bool, "confidence": int, "reason": str}
         Used to gate individual scanner findings before storing to memory.
+
+        Args:
+            evidence_snippet (str): Raw evidence text to classify (first
+                600 chars used).
+
+        Returns:
+            dict: `{"is_fp": bool, "confidence": int, "reason": str}`
+            parsed from the LLM's JSON reply, or a fixed
+            `{"is_fp": False, "confidence": 50, "reason": "classifier
+            unavailable"}` if no JSON could be extracted/parsed.
         """
         prompt = f"""Classify this scanner finding as a true positive or false positive.
 

@@ -107,6 +107,19 @@ class AgentPayloadDecider:
         llm,                                    # OllamaEngine instance
         log_cb: Optional[Callable] = None,      # agent.py's self._log signature
     ) -> None:
+        """Store the LLM engine and logger, and create a PayloadEncoder for
+        applying any agent-requested encoding.
+
+        Args:
+            llm: An OllamaEngine-like instance exposing `.generate(prompt,
+                temperature=, max_tokens=)`.
+            log_cb (Callable | None): Optional `(msg, level="info")`
+                logger matching agent.py's `self._log` signature;
+                defaults to a no-op.
+
+        Returns:
+            None
+        """
         self.llm     = llm
         self._log    = log_cb or (lambda msg, level="info": None)
         self._encoder = PayloadEncoder()
@@ -126,6 +139,16 @@ class AgentPayloadDecider:
             waf_detected       str|None    WAF name or None
             findings_so_far    list[dict]  confirmed findings this session
             available_payloads list[str]   the SecLists pool for this step
+
+        Args:
+            context (dict): The scan-step context described above.
+
+        Returns:
+            DecisionResult: `source="agent"` with the LLM's prioritized
+            payload list if selection succeeded, or `source="fallback"`
+            (the full SecLists pool, unchanged) if the step is
+            unsupported, the pool is empty, the LLM call fails/errors, or
+            its response fails validation.
         """
         step = context.get("step", "")
         pool = context.get("available_payloads", [])
@@ -224,6 +247,13 @@ class AgentPayloadDecider:
         Keeps the prompt small and deterministic so the 7B model stays
         on task.  Payload text is truncated to 120 chars each to avoid
         a context overflow.
+
+        Args:
+            context (dict): The scan-step context (see `select_payloads`'s
+                docstring for its keys).
+
+        Returns:
+            str: The full prompt text to send to the LLM.
         """
         step     = context["step"]
         host     = context.get("host", "unknown")
@@ -345,12 +375,20 @@ class AgentPayloadDecider:
         """
         Parse and strictly validate the LLM response.
 
-        Returns
-        -------
-        (valid_indices, reasoning, confidence, fail_reason, encoding)
+        Args:
+            raw (str): The LLM's raw text response.
+            pool_size (int): Size of the available-payloads pool, used to
+                range-check selected indices.
 
-        On success  : valid_indices is a list[int], fail_reason is "", encoding may be "".
-        On failure  : valid_indices is None, encoding is "".
+        Returns:
+            tuple[list[int] | None, str, int, str, str]:
+            `(valid_indices, reasoning, confidence, fail_reason, encoding)`.
+            On success: `valid_indices` is a list[int] (deduplicated,
+            in-range, capped at `MAX_SELECTIONS`), `fail_reason` is `""`,
+            `encoding` may be `""`. On failure (no parseable JSON, `selected_
+            indices` not a list, or fewer than `MIN_SELECTIONS` valid
+            indices survive filtering): `valid_indices` is `None` and
+            `encoding` is `""`.
         """
         # 1. Extract the outermost JSON object using three strategies in order.
         #
@@ -469,6 +507,16 @@ class AgentPayloadDecider:
           3. Total capped at MAX_TOTAL_PAYLOADS.
 
         SecLists coverage is always fully preserved within the cap.
+
+        Args:
+            indices (list[int]): The agent's selected pool indices, in
+                preferred order.
+            pool (list[str]): The full SecLists payload pool.
+
+        Returns:
+            list[str]: `indices`' payloads first (in that order), then
+            remaining pool payloads in original order, capped at
+            `MAX_TOTAL_PAYLOADS` total.
         """
         selected_set = set(indices)
 
@@ -498,6 +546,20 @@ class AgentPayloadDecider:
 
         This path is guaranteed never to raise.  It is the safety net
         for every possible failure mode.
+
+        Args:
+            step (str): The scan step ("xss"/"sqli"), used only for the
+                log tag; may be "" if the step itself was unrecognized.
+            pool (list[str]): The full SecLists payload pool to return
+                unchanged.
+            elapsed_ms (int): Elapsed LLM-call time so far, carried into
+                the result for observability.
+            reason (str): Human-readable fallback reason, logged and
+                stored on the result.
+
+        Returns:
+            DecisionResult: `source="fallback"`, `payloads=pool` unchanged,
+            `confidence=0`, `selected_indices=[]`, `fallback_reason=reason`.
         """
         tag = f"[AgentDecider:{step.upper()}]" if step else "[AgentDecider]"
         self._log(
