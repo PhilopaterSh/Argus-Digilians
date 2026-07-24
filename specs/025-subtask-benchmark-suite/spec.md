@@ -6,7 +6,9 @@
 
 **Created**: 2026-07-10
 
-**Status**: Proposed — spec kit only, not yet implemented.
+**Status**: Implemented — fully implemented and live-verified 2026-07-23 (see tasks.md
+T001-T010; CHK113 in specs/checklist.md). This line went stale after implementation landed;
+corrected 2026-07-24 during a spec-kit accuracy review.
 
 **Input**: Gap analysis of `docs/history/2603.27127v1.pdf` against Argus's current codebase,
 requested by the user 2026-07-10.
@@ -125,7 +127,10 @@ design choice. Without an equivalent, every other proposed phase in this gap ana
 
 ## Artifact applicability
 
-- data-model.md: N/A — spec-kit-only, not yet implemented (per specs/checklist.md); no
-  persistent schema or data contract exists yet to document.
-- quickstart.md: N/A — spec-kit-only, not yet implemented; no runnable user/operator workflow
-  exists yet to document.
+- data-model.md: N/A — the suite's only persisted artifacts are timestamped Markdown reports
+  (`benchmarks/results/*.md`, human-readable prose, not a schema) and the fixture JSON files,
+  whose shape is already fully specified in this spec's own Functional Requirements; no
+  separate schema/data-contract exists to document.
+- quickstart.md: N/A — `benchmarks/README.md` (added per T007) already covers the
+  fixture-authoring contract, run instructions, and report format; a second quickstart would
+  duplicate it rather than document anything new.

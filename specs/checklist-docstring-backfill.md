@@ -2,13 +2,13 @@
 
 Auto-generated inventory of functions this PR's diff touches that need a real, human-reviewed docstring - NOT auto-applied, per FR-006 ("a docstring asserting an incorrect parameter, return type, or exception is worse than no docstring"). Track backfill progress here per module, same pattern as specs/checklist.md's CHK series.
 
-**Status 2026-07-24: BACKFILL COMPLETE.** `scripts/check_docstrings.py --all app scripts tests` reports **0 violations across all 918 scanned functions**, repo-wide. Done in 11 verified batches/commits (Tier 0 `scripts/`, unit-marker audits, Tier 1 `app/tools/`, Tier 2 `app/core/rag/`, Tier 3 `app/GUI/`, Tier 4 `app/core/agent/`, Tier 5 `app/modules/` incl. `experimental_agent/`, 5 previously-untracked `app/core/` files, and ~72 test-fixture functions across ~20 test files). Every batch was verified independently: the gate itself, `ruff`, CI's exact `mypy` file list where applicable, `validate_ascii.py`, and the full `pytest` suite (339/339 throughout).
+**Status 2026-07-24: BACKFILL COMPLETE.** `scripts/check_docstrings.py --all app scripts tests` reports **0 violations, repo-wide** (963 scanned functions as of this reconciliation pass - re-verified live, not carried over from an earlier count, since this number grows every time new functions are added and is not itself the thing being tracked). Done across the original 11 verified batches/commits (Tier 0 `scripts/`, unit-marker audits, Tier 1 `app/tools/`, Tier 2 `app/core/rag/`, Tier 3 `app/GUI/`, Tier 4 `app/core/agent/`, Tier 5 `app/modules/` incl. `experimental_agent/`, 5 previously-untracked `app/core/` files, and ~72 test-fixture functions across ~20 test files) plus a handful of later, untracked follow-up batches (`app/core/memory/memory_service.py`, `app/core/safety.py`, `app/core/config.py`, `app/core/registry/tool_registry.py`, `app/modules/__init__.py`/`argus_reasoning.py`, all of `app/modules/experimental_agent/`, and the remaining test-fixture functions below) whose checkboxes were never reconciled back into this file until now (2026-07-24 reconciliation pass) - `check_docstrings.py --all` was already returning 0 for all of them; only the tracking below was stale. Every batch was verified independently: the gate itself, `ruff`, CI's exact `mypy` file list where applicable, `validate_ascii.py`, and the full `pytest` suite.
 
 **Real gate quirk found and worked around, not fixed**: `scripts/check_docstrings.py`'s `walk_own_body()` does not exclude a nested `def`'s own top-level position when it is a direct statement in the outer function's body - it excludes further descent into an *already-nested* FunctionDef's children, but the nested FunctionDef itself still gets its children (including its own `return`) walked once popped from the stack. Net effect: an outer function containing an inline `def helper(): return x` gets a false "needs Returns" flag for a return statement that isn't actually its own. Hit repeatedly (`tests/manual/verify_parsing_fix.py`, `tests/test_tools/test_reachability.py`, others) - worked around by documenting the outer function's *real* return behavior (often `Returns: None`) rather than fixing the checker script itself (out of scope for a docstring-content task; changing shared CI enforcement logic wasn't authorized here).
 
 **Known gap, found 2026-07-24**: this manifest under-counts. `scripts/check_docstrings.py --all app/tools` reported 78 real violations before that directory's backfill batch, not the 28 tracked below for `app/tools/` - the manifest missed every `__init__`, property, and one-line delegator method across `command_runner.py`, `evasion.py`, `payloads.py`, `recon.py`, `self_heal.py`, `tool_registry.py` (17 of them alone), `web_search.py`, and `wsl_bridge.py` (a file this manifest doesn't mention at all). All 78 were fixed in the same batch as the 28 tracked items, verified via `check_docstrings.py --all` returning 0. This undercount pattern held for several other directories too (all now fixed regardless) - this file's per-directory line items should be read as a historical record of what was fixed, not as ground truth for what remains; `check_docstrings.py --all <path>` is now, and remains, the actual source of truth.
 
-**Known gap, found 2026-07-24**: this manifest under-counts. `scripts/check_docstrings.py --all app/tools` reported 78 real violations before that directory's backfill batch, not the 28 tracked below for `app/tools/` - the manifest missed every `__init__`, property, and one-line delegator method across `command_runner.py`, `evasion.py`, `payloads.py`, `recon.py`, `self_heal.py`, `tool_registry.py` (17 of them alone), `web_search.py`, and `wsl_bridge.py` (a file this manifest doesn't mention at all). All 78 were fixed in the same batch as the 28 tracked items, verified via `check_docstrings.py --all` returning 0. Other directories not yet backfilled may have the same undercount - re-run `check_docstrings.py --all <dir>` directly before trusting this file's per-directory counts, rather than treating the checked-off items below as the complete picture for that directory.
+**Reconciliation note, 2026-07-24**: this file also went stale in the opposite direction - real batches were done (`app/core/memory/`, `app/core/safety.py`, `app/core/config.py`, `app/core/registry/tool_registry.py`, `app/modules/__init__.py`/`argus_reasoning.py`, `app/modules/experimental_agent/`, remaining test fixtures) without their checkboxes ever being ticked here, so the file looked incomplete while the actual gate was already clean. All remaining `[ ]` items below have been re-verified via a live `check_docstrings.py --all` run and marked `[x]` accordingly. Two section headers also pointed at paths that no longer exist (`tests/test_langgraph_workflow.py` -> `tests/test_agent/test_langgraph_workflow.py`, `tests/test_memory.py` -> `tests/test_memory/test_memory_service.py`, both renamed in an unrelated earlier restructuring) - corrected below.
 
 ## `app/GUI/components/export.py`
 
@@ -180,21 +180,21 @@ Riskiest single file in the whole backlog (this project's own history: 2 mypy er
 
 ## `app/core/config.py`
 
-- [ ] `load` (line 83) - needs: Args, Returns
+- [x] `load` (line 83) - needs: Args, Returns **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
 
 ## `app/core/memory/memory_service.py`
 
-- [ ] `__init__` (line 19) - needs: Args, Returns
-- [ ] `_db_ok` (line 35) - needs: Returns
-- [ ] `_reset_corrupt_db` (line 54) - needs: Returns
-- [ ] `_get_conn` (line 80) - needs: Raises, Returns
-- [ ] `_migrate_from_root` (line 104) - needs: Returns
-- [ ] `get_detailed_findings` (line 399) - needs: Args, Returns
-- [ ] `_looks_like_garbage_domain` (line 586) - needs: Args, Returns
-- [ ] `purge_invalid_targets` (line 603) - needs: Returns
-- [ ] `get_scan_history` (line 645) - needs: Args, Returns
-- [ ] `get_priority_targets` (line 670) - needs: Args, Returns
-- [ ] `clear_memory` (line 702) - needs: Returns
+- [x] `__init__` (line 19) - needs: Args, Returns **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
+- [x] `_db_ok` (line 35) - needs: Returns **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
+- [x] `_reset_corrupt_db` (line 54) - needs: Returns **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
+- [x] `_get_conn` (line 80) - needs: Raises, Returns **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
+- [x] `_migrate_from_root` (line 104) - needs: Returns **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
+- [x] `get_detailed_findings` (line 399) - needs: Args, Returns **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
+- [x] `_looks_like_garbage_domain` (line 586) - needs: Args, Returns **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
+- [x] `purge_invalid_targets` (line 603) - needs: Returns **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
+- [x] `get_scan_history` (line 645) - needs: Args, Returns **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
+- [x] `get_priority_targets` (line 670) - needs: Args, Returns **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
+- [x] `clear_memory` (line 702) - needs: Returns **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
 
 ## `app/core/rag/config.py`
 
@@ -259,104 +259,104 @@ Riskiest single file in the whole backlog (this project's own history: 2 mypy er
 
 ## `app/core/registry/tool_registry.py`
 
-- [ ] `register` (line 13) - needs: Args, Raises, Returns
+- [x] `register` (line 13) - needs: Args, Raises, Returns **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
 
 ## `app/core/safety.py`
 
-- [ ] `__init__` (line 32) - needs: Args
-- [ ] `sanitize_input` (line 37) - needs: Args, Returns
-- [ ] `is_destructive_payload` (line 47) - needs: Args, Returns
-- [ ] `validate_target` (line 56) - needs: Args, Returns
-- [ ] `guard_command` (line 88) - needs: Args, Returns
-- [ ] `_log_block` (line 97) - needs: Args
+- [x] `__init__` (line 32) - needs: Args **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
+- [x] `sanitize_input` (line 37) - needs: Args, Returns **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
+- [x] `is_destructive_payload` (line 47) - needs: Args, Returns **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
+- [x] `validate_target` (line 56) - needs: Args, Returns **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
+- [x] `guard_command` (line 88) - needs: Args, Returns **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
+- [x] `_log_block` (line 97) - needs: Args **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
 
 ## `app/modules/__init__.py`
 
-- [ ] `register` (line 11) - needs: Args, Returns
-- [ ] `run_module` (line 16) - needs: Args, Raises, Returns
-- [ ] `run_all` (line 22) - needs: Args, Returns
+- [x] `register` (line 11) - needs: Args, Returns **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
+- [x] `run_module` (line 16) - needs: Args, Raises, Returns **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
+- [x] `run_all` (line 22) - needs: Args, Returns **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
 
 ## `app/modules/argus_reasoning.py`
 
-- [ ] `run_autonomous_reasoning` (line 7) - needs: summary
+- [x] `run_autonomous_reasoning` (line 7) - needs: summary **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
 
 ## `app/modules/experimental_agent/agent.py`
 
-- [ ] `__init__` (line 124) - needs: Args
-- [ ] `_log` (line 193) - needs: Args
-- [ ] `_safe_step` (line 197) - needs: Args, Returns
-- [ ] `_load_subdomain_wordlist` (line 219) - needs: Returns
-- [ ] `_crtsh_subdomains` (line 240) - needs: Args, Returns
-- [ ] `_wsl_subfinder` (line 264) - needs: Args, Returns
-- [ ] `_httpx_probe` (line 290) - needs: Args, Raises, Returns
-- [ ] `_probe_subdomain` (line 378) - needs: Args, Returns
-- [ ] `_scan_subdomain` (line 459) - needs: Args
-- [ ] `_load_dir_wordlist` (line 490) - needs: Returns
-- [ ] `_probe_path` (line 512) - needs: Args, Returns
-- [ ] `_enumerate_level` (line 530) - needs: Args, Returns
-- [ ] `_step_reachability` (line 646) - needs: Returns
-- [ ] `_step_fingerprint` (line 666) - needs: summary
-- [ ] `_step_fuzz_files` (line 804) - needs: summary
-- [ ] `_step_secrets` (line 839) - needs: summary
-- [ ] `_step_sqli` (line 858) - needs: summary
-- [ ] `_collect_xss_targets` (line 903) - needs: Args, Returns
-- [ ] `add` (line 916) - needs: Args
-- [ ] `_step_xss` (line 957) - needs: summary
-- [ ] `_build_decider_context` (line 1226) - needs: Args, Returns
-- [ ] `_adaptive_xss` (line 1345) - needs: Args
-- [ ] `_adaptive_sqli_blind` (line 1383) - needs: Args
-- [ ] `_adaptive_file_fuzz` (line 1416) - needs: Args
-- [ ] `_step_llm_analysis` (line 1449) - needs: Returns
-- [ ] `run` (line 1471) - needs: Returns
-- [ ] `_build_result` (line 1561) - needs: Args, Returns
+- [x] `__init__` (line 124) - needs: Args **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
+- [x] `_log` (line 193) - needs: Args **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
+- [x] `_safe_step` (line 197) - needs: Args, Returns **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
+- [x] `_load_subdomain_wordlist` (line 219) - needs: Returns **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
+- [x] `_crtsh_subdomains` (line 240) - needs: Args, Returns **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
+- [x] `_wsl_subfinder` (line 264) - needs: Args, Returns **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
+- [x] `_httpx_probe` (line 290) - needs: Args, Raises, Returns **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
+- [x] `_probe_subdomain` (line 378) - needs: Args, Returns **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
+- [x] `_scan_subdomain` (line 459) - needs: Args **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
+- [x] `_load_dir_wordlist` (line 490) - needs: Returns **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
+- [x] `_probe_path` (line 512) - needs: Args, Returns **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
+- [x] `_enumerate_level` (line 530) - needs: Args, Returns **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
+- [x] `_step_reachability` (line 646) - needs: Returns **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
+- [x] `_step_fingerprint` (line 666) - needs: summary **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
+- [x] `_step_fuzz_files` (line 804) - needs: summary **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
+- [x] `_step_secrets` (line 839) - needs: summary **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
+- [x] `_step_sqli` (line 858) - needs: summary **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
+- [x] `_collect_xss_targets` (line 903) - needs: Args, Returns **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
+- [x] `add` (line 916) - needs: Args **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
+- [x] `_step_xss` (line 957) - needs: summary **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
+- [x] `_build_decider_context` (line 1226) - needs: Args, Returns **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
+- [x] `_adaptive_xss` (line 1345) - needs: Args **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
+- [x] `_adaptive_sqli_blind` (line 1383) - needs: Args **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
+- [x] `_adaptive_file_fuzz` (line 1416) - needs: Args **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
+- [x] `_step_llm_analysis` (line 1449) - needs: Returns **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
+- [x] `run` (line 1471) - needs: Returns **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
+- [x] `_build_result` (line 1561) - needs: Args, Returns **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
 
 ## `app/modules/experimental_agent/agent_payload_decider.py`
 
-- [ ] `__init__` (line 105) - needs: Args, Returns
-- [ ] `select_payloads` (line 116) - needs: Args, Returns
-- [ ] `_build_prompt` (line 220) - needs: Args, Returns
-- [ ] `_validate` (line 340) - needs: Args, Returns
-- [ ] `_build_prepend_list` (line 464) - needs: Args, Returns
-- [ ] `_fallback` (line 489) - needs: Args, Returns
+- [x] `__init__` (line 105) - needs: Args, Returns **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
+- [x] `select_payloads` (line 116) - needs: Args, Returns **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
+- [x] `_build_prompt` (line 220) - needs: Args, Returns **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
+- [x] `_validate` (line 340) - needs: Args, Returns **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
+- [x] `_build_prepend_list` (line 464) - needs: Args, Returns **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
+- [x] `_fallback` (line 489) - needs: Args, Returns **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
 
 ## `app/modules/experimental_agent/llm_engine.py`
 
-- [ ] `_load_seclists_file` (line 159) - needs: Args, Returns
-- [ ] `_get_reference_payloads` (line 188) - needs: Args, Returns
-- [ ] `__init__` (line 209) - needs: Args
-- [ ] `ensure_ready` (line 234) - needs: Returns
-- [ ] `_pull_model` (line 261) - needs: Returns
-- [ ] `generate` (line 292) - needs: Args, Returns
-- [ ] `_simplify_prompt` (line 373) - needs: Args, Returns
-- [ ] `analyze_findings` (line 385) - needs: Args, Returns
-- [ ] `quick_classify` (line 533) - needs: Args, Returns
+- [x] `_load_seclists_file` (line 159) - needs: Args, Returns **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
+- [x] `_get_reference_payloads` (line 188) - needs: Args, Returns **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
+- [x] `__init__` (line 209) - needs: Args **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
+- [x] `ensure_ready` (line 234) - needs: Returns **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
+- [x] `_pull_model` (line 261) - needs: Returns **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
+- [x] `generate` (line 292) - needs: Args, Returns **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
+- [x] `_simplify_prompt` (line 373) - needs: Args, Returns **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
+- [x] `analyze_findings` (line 385) - needs: Args, Returns **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
+- [x] `quick_classify` (line 533) - needs: Args, Returns **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
 
 ## `app/modules/experimental_agent/payload_encoder.py`
 
-- [ ] `encode` (line 101) - needs: Args, Returns
-- [ ] `get_waf_tips` (line 143) - needs: Args, Returns
-- [ ] `apply_random_evasion` (line 151) - needs: Args, Returns
-- [ ] `_double_url_encode` (line 169) - needs: Args, Returns
-- [ ] `_triple_url_encode` (line 175) - needs: Args, Returns
-- [ ] `_hex_encode` (line 185) - needs: Args, Returns
-- [ ] `_char_encode` (line 191) - needs: Args, Returns
-- [ ] `_concat_bypass` (line 199) - needs: Args, Returns
-- [ ] `_mysql_version_comment` (line 206) - needs: Args, Returns
-- [ ] `_sql_comment_obfuscation` (line 227) - needs: Args, Returns
-- [ ] `_unicode_encode` (line 286) - needs: Args, Returns
-- [ ] `_html_entity_encode` (line 298) - needs: Args, Returns
-- [ ] `_null_byte_insertion` (line 314) - needs: Args, Returns
-- [ ] `_base64_wrapper` (line 325) - needs: Args, Returns
+- [x] `encode` (line 101) - needs: Args, Returns **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
+- [x] `get_waf_tips` (line 143) - needs: Args, Returns **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
+- [x] `apply_random_evasion` (line 151) - needs: Args, Returns **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
+- [x] `_double_url_encode` (line 169) - needs: Args, Returns **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
+- [x] `_triple_url_encode` (line 175) - needs: Args, Returns **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
+- [x] `_hex_encode` (line 185) - needs: Args, Returns **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
+- [x] `_char_encode` (line 191) - needs: Args, Returns **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
+- [x] `_concat_bypass` (line 199) - needs: Args, Returns **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
+- [x] `_mysql_version_comment` (line 206) - needs: Args, Returns **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
+- [x] `_sql_comment_obfuscation` (line 227) - needs: Args, Returns **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
+- [x] `_unicode_encode` (line 286) - needs: Args, Returns **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
+- [x] `_html_entity_encode` (line 298) - needs: Args, Returns **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
+- [x] `_null_byte_insertion` (line 314) - needs: Args, Returns **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
+- [x] `_base64_wrapper` (line 325) - needs: Args, Returns **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
 
 ## `app/modules/experimental_agent/verifier.py`
 
-- [ ] `__init__` (line 100) - needs: summary
-- [ ] `_soft_404_size` (line 117) - needs: Args, Returns
-- [ ] `verify_file` (line 130) - needs: Args, Returns
-- [ ] `verify_sqli` (line 187) - needs: Args, Returns
-- [ ] `verify_xss` (line 224) - needs: Args, Returns
-- [ ] `filter_nikto` (line 289) - needs: Args, Returns
-- [ ] `filter_secrets` (line 307) - needs: Args, Returns
+- [x] `__init__` (line 100) - needs: summary **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
+- [x] `_soft_404_size` (line 117) - needs: Args, Returns **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
+- [x] `verify_file` (line 130) - needs: Args, Returns **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
+- [x] `verify_sqli` (line 187) - needs: Args, Returns **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
+- [x] `verify_xss` (line 224) - needs: Args, Returns **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
+- [x] `filter_nikto` (line 289) - needs: Args, Returns **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
+- [x] `filter_secrets` (line 307) - needs: Args, Returns **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
 
 ## `app/tools/command_runner.py`
 
@@ -465,113 +465,113 @@ Riskiest single file in the whole backlog (this project's own history: 2 mypy er
 
 ## `tests/manual/ai_benchmark.py`
 
-- [ ] `run_benchmark` (line 63) - needs: summary
+- [x] `run_benchmark` (line 63) - needs: summary **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
 
 ## `tests/manual/verify_parsing_fix.py`
 
-- [ ] `test_brain_initialization` (line 33) - needs: Returns
-- [ ] `test_output_format` (line 59) - needs: Returns
-- [ ] `test_gui_output_handling` (line 156) - needs: Returns
-- [ ] `main` (line 207) - needs: Returns
+- [x] `test_brain_initialization` (line 33) - needs: Returns **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
+- [x] `test_output_format` (line 59) - needs: Returns **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
+- [x] `test_gui_output_handling` (line 156) - needs: Returns **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
+- [x] `main` (line 207) - needs: Returns **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
 
 ## `tests/test_gui/test_agent_tab_status.py`
 
-- [ ] `_make_controller` (line 12) - needs: Args, Returns
+- [x] `_make_controller` (line 12) - needs: Args, Returns **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
 
 ## `tests/test_gui/test_session.py`
 
-- [ ] `setup_gui_tables` (line 9) - needs: summary
+- [x] `setup_gui_tables` (line 9) - needs: summary **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
 
-## `tests/test_langgraph_workflow.py`
+## `tests/test_agent/test_langgraph_workflow.py` (renamed from `tests/test_langgraph_workflow.py` in an unrelated later restructuring)
 
-- [ ] `__init__` (line 34) - needs: Args
-- [ ] `invoke` (line 38) - needs: Args, Returns
-- [ ] `__init__` (line 61) - needs: Args
-- [ ] `with_structured_output` (line 65) - needs: Args, Raises, Returns
-- [ ] `__init__` (line 87) - needs: Args
-- [ ] `invoke` (line 93) - needs: Args, Returns
+- [x] `__init__` (line 34) - needs: Args **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
+- [x] `invoke` (line 38) - needs: Args, Returns **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
+- [x] `__init__` (line 61) - needs: Args **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
+- [x] `with_structured_output` (line 65) - needs: Args, Raises, Returns **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
+- [x] `__init__` (line 87) - needs: Args **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
+- [x] `invoke` (line 93) - needs: Args, Returns **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
 
-## `tests/test_memory.py`
+## `tests/test_memory/test_memory_service.py` (renamed from `tests/test_memory.py` in an unrelated later restructuring)
 
-- [ ] `db_path` (line 9) - needs: summary
-- [ ] `mem` (line 17) - needs: Args
+- [x] `db_path` (line 9) - needs: summary **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
+- [x] `mem` (line 17) - needs: Args **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
 
 ## `tests/test_modules/test_tactical_graph_termination.py`
 
-- [ ] `_make_state` (line 13) - needs: Args, Returns
+- [x] `_make_state` (line 13) - needs: Args, Returns **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
 
 ## `tests/test_ported_safety.py`
 
-- [ ] `db_path` (line 90) - needs: summary
-- [ ] `mem` (line 97) - needs: Args
+- [x] `db_path` (line 90) - needs: summary **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
+- [x] `mem` (line 97) - needs: Args **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
 
 ## `tests/test_rag/test_add_document.py`
 
-- [ ] `_reset_embedding_factory` (line 23) - needs: summary
-- [ ] `build_index` (line 35) - needs: Args, Returns
-- [ ] `_make_engine` (line 40) - needs: Args, Returns
+- [x] `_reset_embedding_factory` (line 23) - needs: summary **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
+- [x] `build_index` (line 35) - needs: Args, Returns **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
+- [x] `_make_engine` (line 40) - needs: Args, Returns **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
 
 ## `tests/test_rag/test_manifest.py`
 
-- [ ] `_make_kb` (line 27) - needs: Args, Returns
+- [x] `_make_kb` (line 27) - needs: Args, Returns **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
 
 ## `tests/test_rag/test_rag_engine_threshold.py`
 
-- [ ] `_reset_embedding_factory` (line 17) - needs: summary
-- [ ] `_make_engine` (line 37) - needs: Args, Returns
+- [x] `_reset_embedding_factory` (line 17) - needs: summary **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
+- [x] `_make_engine` (line 37) - needs: Args, Returns **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
 
 ## `tests/test_rag/test_vector_store_manifest.py`
 
-- [ ] `_reset_embedding_factory` (line 18) - needs: summary
-- [ ] `_make_config` (line 24) - needs: Args, Returns
+- [x] `_reset_embedding_factory` (line 18) - needs: summary **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
+- [x] `_make_config` (line 24) - needs: Args, Returns **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
 
 ## `tests/test_registry/test_brain.py`
 
-- [ ] `_make_brain` (line 12) - needs: Returns
+- [x] `_make_brain` (line 12) - needs: Returns **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
 
 ## `tests/test_registry/test_brain_ask.py`
 
-- [ ] `__init__` (line 36) - needs: Args
-- [ ] `invoke` (line 40) - needs: Args, Returns
-- [ ] `invoke` (line 86) - needs: Args, Returns
-- [ ] `_make_brain_with_fake_rag` (line 123) - needs: Args, Returns
-- [ ] `test_ask_extracts_target_before_blackboard_enrichment_not_after` (line 241) - needs: Returns
-- [ ] `fake_tool` (line 255) - needs: Args, Returns
-- [ ] `invoke` (line 287) - needs: Args, Raises, Returns
-- [ ] `invoke` (line 314) - needs: Args, Raises
+- [x] `__init__` (line 36) - needs: Args **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
+- [x] `invoke` (line 40) - needs: Args, Returns **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
+- [x] `invoke` (line 86) - needs: Args, Returns **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
+- [x] `_make_brain_with_fake_rag` (line 123) - needs: Args, Returns **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
+- [x] `test_ask_extracts_target_before_blackboard_enrichment_not_after` (line 241) - needs: Returns **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
+- [x] `fake_tool` (line 255) - needs: Args, Returns **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
+- [x] `invoke` (line 287) - needs: Args, Raises, Returns **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
+- [x] `invoke` (line 314) - needs: Args, Raises **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
 
 ## `tests/test_registry/test_react_prompts.py`
 
-- [ ] `_make_state` (line 4) - needs: Args, Returns
+- [x] `_make_state` (line 4) - needs: Args, Returns **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
 
 ## `tests/test_registry/test_tool_registry.py`
 
-- [ ] `_make_registry` (line 24) - needs: Returns
+- [x] `_make_registry` (line 24) - needs: Returns **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
 
 ## `tests/test_tools/test_evasion.py`
 
-- [ ] `_make_runner` (line 6) - needs: Args, Returns
-- [ ] `run` (line 17) - needs: Args, Returns
+- [x] `_make_runner` (line 6) - needs: Args, Returns **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
+- [x] `run` (line 17) - needs: Args, Returns **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
 
 ## `tests/test_tools/test_reachability.py`
 
-- [ ] `service` (line 8) - needs: Returns
-- [ ] `test_falls_back_to_http_when_icmp_is_blocked` (line 63) - needs: Args, Returns
-- [ ] `run` (line 73) - needs: Args, Returns
-- [ ] `test_tries_opposite_scheme_before_giving_up` (line 88) - needs: Args, Returns
-- [ ] `run` (line 91) - needs: Args, Returns
-- [ ] `test_still_reports_down_when_both_ping_and_http_fail` (line 107) - needs: Args, Returns
-- [ ] `run` (line 110) - needs: Args, Returns
+- [x] `service` (line 8) - needs: Returns **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
+- [x] `test_falls_back_to_http_when_icmp_is_blocked` (line 63) - needs: Args, Returns **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
+- [x] `run` (line 73) - needs: Args, Returns **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
+- [x] `test_tries_opposite_scheme_before_giving_up` (line 88) - needs: Args, Returns **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
+- [x] `run` (line 91) - needs: Args, Returns **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
+- [x] `test_still_reports_down_when_both_ping_and_http_fail` (line 107) - needs: Args, Returns **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
+- [x] `run` (line 110) - needs: Args, Returns **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
 
 ## `tests/test_tools/test_reflective_verification.py`
 
-- [ ] `verifier` (line 7) - needs: Returns
+- [x] `verifier` (line 7) - needs: Returns **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
 
 ## `tests/test_tools/test_scanners.py`
 
-- [ ] `service` (line 8) - needs: Args, Returns
+- [x] `service` (line 8) - needs: Args, Returns **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
 
 ## `tests/test_tools/test_self_heal.py`
 
-- [ ] `healer` (line 7) - needs: Returns
+- [x] `healer` (line 7) - needs: Returns **Done (verified 2026-07-24 reconciliation pass)**: `check_docstrings.py --all` confirms 0 violations for this file; the checkbox was simply never ticked when the actual fix landed in an untracked follow-up batch.
 

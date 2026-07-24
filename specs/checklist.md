@@ -2,13 +2,23 @@
 
 **Purpose**: Verify all implementation phases meet spec requirements
 **Created**: 2026-06-29
-**Updated**: 2026-07-23 — corrected the line below, which had gone stale after `019` shipped
-(2026-07-10) and `020` landed as an experimental, flagged-off path (2026-07-11); the backlog
-table's own per-row status further down this file was already correct, this summary line was
-not (each phase's own `specs/<phase>/tasks.md` remains the source of truth for individual task
-items). See the "Backlog — Proposed Future Phases" section near the end of this file:
-`019` is implemented, `020` is an experimental feature-flagged-off path, and `021`-`026` plus
-`028` remain spec-kit-only (not yet implemented).
+**Updated**: 2026-07-24 — corrected the line below again: it went stale a second time after `025`
+shipped (2026-07-23, CHK113) while this summary line still lumped it in with the untouched
+021-026/028 backlog; the backlog table's own per-row status further down this file was already
+correct, this summary line was not (each phase's own `specs/<phase>/tasks.md` remains the source
+of truth for individual task items). See the "Backlog — Proposed Future Phases" section near the
+end of this file: `019` is implemented, `020` is an experimental feature-flagged-off path, `025`
+is implemented and live-verified, and `021`-`024`, `026`, and `028` remain spec-kit-only (not yet
+implemented).
+
+**Path note (added 2026-07-24)**: entries below cite test file paths as they existed at the time
+each entry's work was done, not necessarily their current location - `tests/test_registry/` was
+partially renamed to `tests/test_agent/` (most files moved; `test_base_tool.py`/
+`test_tool_registry.py` are the only ones still actually under `test_registry/` today) and
+`tests/test_memory.py` became `tests/test_memory/test_memory_service.py`, both in an unrelated
+main-branch reorganization (`ac797c5`) before this checklist's later entries were written. If a
+cited path 404s, check `tests/test_agent/` and `tests/test_memory/` first before assuming the
+referenced test was removed.
 
 ---
 
