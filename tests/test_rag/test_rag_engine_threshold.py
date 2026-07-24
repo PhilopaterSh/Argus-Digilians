@@ -12,6 +12,8 @@ from app.core.rag.config import RAGConfig
 from app.core.rag.embeddings import EmbeddingFactory
 from app.core.rag.rag_engine import RAGEngine
 
+pytestmark = pytest.mark.unit
+
 
 @pytest.fixture(autouse=True)
 def _reset_embedding_factory():

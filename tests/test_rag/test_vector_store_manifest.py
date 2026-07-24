@@ -13,6 +13,8 @@ from app.core.rag.config import RAGConfig
 from app.core.rag.embeddings import EmbeddingFactory
 from app.core.rag.vector_store import VectorStore
 
+pytestmark = pytest.mark.unit
+
 
 @pytest.fixture(autouse=True)
 def _reset_embedding_factory():

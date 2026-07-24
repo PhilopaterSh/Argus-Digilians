@@ -10,10 +10,14 @@ import sys
 from pathlib import Path
 from unittest.mock import patch
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 import scripts.run_agent as run_agent_module
 from scripts.run_agent import _build_final_state
+
+pytestmark = pytest.mark.unit
 
 
 def test_build_final_state_with_valid_structured_report():

@@ -5,9 +5,12 @@ a mocked save_entry so no real blackboard DB is touched.
 """
 from unittest.mock import patch
 
+import pytest
 from langgraph.graph import END
 
 from app.core.agent.graph import should_continue
+
+pytestmark = pytest.mark.unit
 
 
 def _make_state(**overrides):

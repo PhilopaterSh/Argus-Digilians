@@ -6,7 +6,11 @@ this is a pure function extracted from render_agent().
 """
 from unittest.mock import MagicMock
 
+import pytest
+
 from app.GUI.tabs.agent import _reconcile_agent_running_state
+
+pytestmark = pytest.mark.unit
 
 
 def _make_controller(is_running: bool, status: dict):

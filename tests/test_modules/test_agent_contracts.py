@@ -1,3 +1,5 @@
+import pytest
+
 from app.core.agent.contracts import (
     AgentRunEvent,
     build_initial_agent_state,
@@ -6,6 +8,8 @@ from app.core.agent.contracts import (
     record_state_event,
     load_json_file,
 )
+
+pytestmark = pytest.mark.unit
 
 
 def test_build_initial_agent_state_includes_runtime_fields(tmp_path):

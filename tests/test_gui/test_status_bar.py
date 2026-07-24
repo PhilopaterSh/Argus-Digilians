@@ -1,7 +1,11 @@
 import socket
 from unittest.mock import patch
 
+import pytest
+
 from app.GUI.components.status_bar import check_ollama_status, check_ssh_status
+
+pytestmark = pytest.mark.unit
 
 
 class TestCheckOllamaStatus:

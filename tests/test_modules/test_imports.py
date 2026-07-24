@@ -3,6 +3,8 @@
 import importlib
 import pytest
 
+pytestmark = pytest.mark.unit
+
 MODULES = [
     "app.modules.base",
     "app.modules.argus_reasoning",
