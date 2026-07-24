@@ -31,7 +31,16 @@ python benchmarks/runner.py --fixtures info_disclosure_env_leak
 python benchmarks/runner.py
 python benchmarks/runner.py --configs-json "{\"baseline\": {}, \"no_inter_reflection\": {\"enable_inter_reflection\": false}}"
 python benchmarks/runner.py --timeout 900
+python benchmarks/runner.py --configs-json "{\"baseline\": {}, \"no_inter_reflection\": {\"enable_inter_reflection\": false}}" --trials 3
 ```
+
+**`--trials N`** (default 1) reruns each `(fixture, configuration)` pair `N` times and reports a
+solved-rate + mean/stddev instead of one point value. Use this for any ablation you actually plan
+to draw a conclusion from - this project's own history is the reason why: two `trials=1` runs of
+the `enable_inter_reflection` ablation gave different verdicts (0.33 vs 0.25 mean SCR, then 0.33
+vs 0.33). `trials=1` stays the default so a quick single-fixture sanity check doesn't silently
+get `N` times slower - each additional trial is a full live agent run per fixture per
+configuration (currently 1-3 minutes each).
 
 Or from Python directly, for one fixture:
 
@@ -48,11 +57,14 @@ print(result)
 Each run writes `benchmarks/results/<UTC-timestamp>_report.md` (every run is kept, not just
 the latest, so trends across commits/phases stay visible). Two sections:
 
-- **Aggregate** - one row per configuration: solved/total SR, mean SCR, mean TTE. This is the
-  ablation comparison table (specs/025 FR-004/SC-002) - compare rows across configurations to
-  see whether a feature flag actually helped.
-- **Per-fixture detail** (one table per configuration) - SR/SCR/TTE and which named subtasks
-  matched, per fixture. Use this to see *where* a run succeeded or failed, not just the total.
+- **Aggregate** - one row per configuration: solved/total-trials SR, mean SCR (+/- stddev across
+  trials), mean TTE. This is the ablation comparison table (specs/025 FR-004/SC-002) - compare
+  rows across configurations to see whether a feature flag actually helped. With `trials=1`
+  (the default) stddev is always `0.00` - a single sample has no spread to show, not a claim of
+  certainty.
+- **Per-fixture detail** (one table per configuration) - SR rate/SCR/TTE and each named subtask's
+  match rate across trials, per fixture. Use this to see *where* a run succeeded or failed, not
+  just the total.
 
 ## Authoring a new fixture
 

@@ -11,11 +11,17 @@
 
 `run_suite()` runs a fixture set under one or more named configurations
 (e.g. `enable_inter_reflection` on/off) and writes a comparison report -
-this is what makes an ablation study (specs/025 FR-004) possible.
+this is what makes an ablation study (specs/025 FR-004) possible. Pass
+`trials > 1` to repeat each (fixture, configuration) pair and aggregate
+(mean + population stddev) via `AggregatedResult`/`_aggregate_trials()` -
+a single trial per configuration is not reliable evidence: two one-trial
+ablations of `enable_inter_reflection` in this project's own history gave
+different verdicts (0.33 vs 0.25 mean SCR, then 0.33 vs 0.33).
 """
 import json
 import os
 import re
+import statistics
 import sys
 import threading
 import time
@@ -46,10 +52,32 @@ class FixtureResult:
 
 
 @dataclass
+class AggregatedResult:
+    """SR/SCR/TTE aggregated across `trials` repeated runs of one fixture+config.
+
+    A single run's result can be noise (see the module-level "why trials
+    exist" note on `run_suite()`); this is what a multi-trial comparison
+    should actually be read from, not any one `FixtureResult`.
+    """
+
+    fixture_name: str
+    config_name: str
+    trials: int
+    solved_count: int
+    sr_rate: float
+    mean_scr: float
+    stddev_scr: float
+    mean_tte: Optional[float]
+    error_count: int
+    subtask_match_rates: dict[str, float]
+
+
+@dataclass
 class SuiteReport:
     timestamp: str
     configs: dict[str, dict]
-    results: dict[str, list[FixtureResult]] = field(default_factory=dict)
+    trials: int = 1
+    results: dict[str, list[AggregatedResult]] = field(default_factory=dict)
 
 
 class TraceCaptureCallback:
@@ -226,13 +254,64 @@ def run_fixture(
     return FixtureResult(fixture.name, config_name, sr, scr, subtask_results, tte, duration_s, None)
 
 
+def _aggregate_trials(trial_results: list[FixtureResult]) -> AggregatedResult:
+    """Aggregate N repeated `run_fixture()` results into one `AggregatedResult`.
+
+    Args:
+        trial_results (list[FixtureResult]): One or more runs of the same
+            fixture under the same configuration.
+
+    Returns:
+        AggregatedResult: solved-rate, mean+population-stddev SCR, mean TTE
+            over solved trials only (None if none solved), and error count.
+            `statistics.pstdev` (population, not sample) is used so a single
+            trial still yields a defined `0.0` rather than raising - trials=1
+            is the documented default, not an edge case to special-case.
+    """
+    first = trial_results[0]
+    trials = len(trial_results)
+    solved_count = sum(1 for r in trial_results if r.sr)
+    scrs = [r.scr for r in trial_results]
+    ttes = [r.tte for r in trial_results if r.tte is not None]
+    error_count = sum(1 for r in trial_results if r.error)
+
+    subtask_names = first.subtask_results.keys()
+    subtask_match_rates = {
+        name: sum(1 for r in trial_results if r.subtask_results.get(name)) / trials
+        for name in subtask_names
+    }
+
+    return AggregatedResult(
+        fixture_name=first.fixture_name,
+        config_name=first.config_name,
+        trials=trials,
+        solved_count=solved_count,
+        sr_rate=solved_count / trials,
+        mean_scr=statistics.fmean(scrs),
+        stddev_scr=statistics.pstdev(scrs),
+        mean_tte=statistics.fmean(ttes) if ttes else None,
+        error_count=error_count,
+        subtask_match_rates=subtask_match_rates,
+    )
+
+
 def run_suite(
     fixture_dirs: list[Path],
     configs: dict[str, dict],
     results_dir: Path = Path("benchmarks/results"),
     timeout_s: int = 1800,
+    trials: int = 1,
 ) -> SuiteReport:
     """Run every fixture under every named configuration and write a report.
+
+    A single run of a fixture is noisy - this project's own ablation history
+    is the evidence: two one-trial-per-configuration runs of the same
+    `enable_inter_reflection` ablation gave different verdicts (0.33 vs 0.25,
+    then 0.33 vs 0.33). `trials > 1` re-runs each `(fixture, config)` pair N
+    times and reports a solved-rate/mean+stddev instead of a single point
+    value, which is what makes a comparison actually trustworthy - `trials=1`
+    stays the default so a quick single-fixture check doesn't silently get
+    N times slower.
 
     Args:
         fixture_dirs (list[Path]): Fixtures to run.
@@ -240,21 +319,28 @@ def run_suite(
             `{"baseline": {}, "no_inter_reflection": {"enable_inter_reflection": False}}`.
         results_dir (Path): Directory for the timestamped report (specs/025 FR-005).
         timeout_s (int): Per-fixture wall-clock budget, passed to `run_fixture()`.
+        trials (int): Repeated runs per `(fixture, config)` pair (default 1,
+            today's behavior). Total live runs = `len(fixture_dirs) *
+            len(configs) * trials` - each is a full live agent run when `llm`
+            is not overridden, so raise this deliberately, not by default.
 
     Returns:
         SuiteReport: aggregate + per-fixture results, already written to disk.
     """
-    results: dict[str, list[FixtureResult]] = {}
+    results: dict[str, list[AggregatedResult]] = {}
     for config_name, overrides in configs.items():
-        config_results = [
-            run_fixture(fixture_dir, config_overrides=overrides, config_name=config_name, timeout_s=timeout_s)
-            for fixture_dir in fixture_dirs
-        ]
+        config_results = []
+        for fixture_dir in fixture_dirs:
+            trial_results = [
+                run_fixture(fixture_dir, config_overrides=overrides, config_name=config_name, timeout_s=timeout_s)
+                for _ in range(trials)
+            ]
+            config_results.append(_aggregate_trials(trial_results))
         results[config_name] = config_results
         ArgusConfig.reset()  # belt-and-suspenders: don't leak this config batch into the next
 
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    report = SuiteReport(timestamp=timestamp, configs=configs, results=results)
+    report = SuiteReport(timestamp=timestamp, configs=configs, trials=trials, results=results)
 
     results_dir.mkdir(parents=True, exist_ok=True)
     (results_dir / f"{timestamp}_report.md").write_text(render_report(report), encoding="utf-8")
@@ -270,27 +356,31 @@ def render_report(report: SuiteReport) -> str:
     Returns:
         str: Markdown report text.
     """
-    lines = [f"# Benchmark Suite Report - {report.timestamp}", "", "## Aggregate", ""]
-    lines.append("| Configuration | SR (solved/total) | Mean SCR | Mean TTE (solved only) |")
+    lines = [f"# Benchmark Suite Report - {report.timestamp}", "", f"Trials per (fixture, configuration): {report.trials}", "", "## Aggregate", ""]
+    lines.append("| Configuration | SR (solved/total trials) | Mean SCR (+/- stddev) | Mean TTE (solved only) |")
     lines.append("|---|---|---|---|")
-    for config_name, fixture_results in report.results.items():
-        total = len(fixture_results)
-        solved = sum(1 for r in fixture_results if r.sr)
-        mean_scr = sum(r.scr for r in fixture_results) / total if total else 0.0
-        solved_ttes = [r.tte for r in fixture_results if r.tte is not None]
-        mean_tte_str = f"{sum(solved_ttes) / len(solved_ttes):.1f}" if solved_ttes else "N/A"
-        lines.append(f"| {config_name} | {solved}/{total} | {mean_scr:.2f} | {mean_tte_str} |")
+    for config_name, agg_results in report.results.items():
+        total_trials = sum(r.trials for r in agg_results)
+        total_solved = sum(r.solved_count for r in agg_results)
+        mean_scr = statistics.fmean(r.mean_scr for r in agg_results) if agg_results else 0.0
+        mean_stddev = statistics.fmean(r.stddev_scr for r in agg_results) if agg_results else 0.0
+        fixture_ttes = [r.mean_tte for r in agg_results if r.mean_tte is not None]
+        mean_tte_str = f"{statistics.fmean(fixture_ttes):.1f}" if fixture_ttes else "N/A"
+        lines.append(f"| {config_name} | {total_solved}/{total_trials} | {mean_scr:.2f} (+/- {mean_stddev:.2f}) | {mean_tte_str} |")
     lines.append("")
 
-    for config_name, fixture_results in report.results.items():
+    for config_name, agg_results in report.results.items():
         lines.append(f"## Per-fixture detail - {config_name}")
         lines.append("")
-        lines.append("| Fixture | SR | SCR | TTE | Subtasks matched | Error |")
+        lines.append("| Fixture | SR rate | Mean SCR (+/- stddev) | Mean TTE | Subtask match rates | Errors |")
         lines.append("|---|---|---|---|---|---|")
-        for r in fixture_results:
-            matched = ", ".join(name for name, ok in r.subtask_results.items() if ok) or "(none)"
-            tte_str = str(r.tte) if r.tte is not None else "N/A"
-            lines.append(f"| {r.fixture_name} | {'yes' if r.sr else 'no'} | {r.scr:.2f} | {tte_str} | {matched} | {r.error or ''} |")
+        for r in agg_results:
+            tte_str = f"{r.mean_tte:.1f}" if r.mean_tte is not None else "N/A"
+            subtasks_str = ", ".join(f"{name}: {rate:.0%}" for name, rate in r.subtask_match_rates.items()) or "(none)"
+            lines.append(
+                f"| {r.fixture_name} | {r.solved_count}/{r.trials} | {r.mean_scr:.2f} (+/- {r.stddev_scr:.2f}) | "
+                f"{tte_str} | {subtasks_str} | {r.error_count}/{r.trials} |"
+            )
         lines.append("")
 
     return "\n".join(lines)
@@ -311,6 +401,12 @@ if __name__ == "__main__":
              'Default: {"baseline": {}}.'
     )
     parser.add_argument("--timeout", type=int, default=1800, help="Per-fixture wall-clock timeout in seconds.")
+    parser.add_argument(
+        "--trials", type=int, default=1,
+        help="Repeated runs per (fixture, configuration) pair, aggregated with a mean+stddev "
+             "(default 1). Raise for a trustworthy ablation comparison - each additional trial "
+             "multiplies total live-run time."
+    )
     args = parser.parse_args()
 
     fixtures_root = Path(__file__).parent / "fixtures"
@@ -321,5 +417,5 @@ if __name__ == "__main__":
 
     selected_configs = json.loads(args.configs_json) if args.configs_json else {"baseline": {}}
 
-    suite_report = run_suite(selected_dirs, selected_configs, timeout_s=args.timeout)
+    suite_report = run_suite(selected_dirs, selected_configs, timeout_s=args.timeout, trials=args.trials)
     print(render_report(suite_report))

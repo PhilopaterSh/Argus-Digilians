@@ -81,6 +81,34 @@ just hedged. Settling this would need repeated runs per configuration (majority 
 confidence interval across N runs), which is future scope, not implied by either existing
 report.
 
+## Post-completion enhancement: repeated-trial support (2026-07-24, user requested)
+
+User asked to pursue two things together: (A) `specs/021`'s exploitation-toolkit gap (the
+"finds the endpoint, never extracts" pattern above) and (B) making the ablation methodology
+above statistically trustworthy, and asked for a Claude/OpenCode cross-review of the plan before
+implementing. OpenCode (`opencode run`, this repo's other configured coding-agent CLI) could not
+be used for that review in this environment - 3 attempts at a multi-turn planning discussion
+(default agent, `--agent plan`, then a fully self-contained no-file-read prompt) all hung with
+zero output for several minutes despite a trivial one-line prompt succeeding in under a minute
+with the same agent/model - reported to the user as an honest limitation rather than fabricating
+a "converged" plan. Proceeded with Claude's own independently-drafted plan, approved by the user.
+
+Implemented track (B) first (small, unblocks trustworthy future measurement of track A once
+built): `benchmarks/runner.py` gained `AggregatedResult` (`trials`, `solved_count`, `sr_rate`,
+`mean_scr`, `stddev_scr` via `statistics.pstdev` - population, not sample, so `trials=1` is
+still well-defined at `0.0` rather than a special case, `mean_tte` over solved trials only,
+`error_count`, `subtask_match_rates`) and `_aggregate_trials()`. `run_suite(..., trials: int =
+1)` now runs each `(fixture, config)` pair `trials` times and aggregates instead of taking one
+run at face value; `render_report()` shows solved-rate/mean+stddev instead of a single point
+value. `--trials` added to the CLI. Default stays 1 (today's behavior) so a quick check doesn't
+silently get `N` times slower. 4 new unit tests (`benchmarks/tests/test_runner.py`, 14/14
+passing) cover the aggregation math directly and confirm `run_suite()` actually invokes
+`run_fixture()` `trials` times per pair (monkeypatched, no live Ollama needed).
+
+Track (A) - building `specs/021`'s IDOR/XSS/SSTI tool groups (chosen over the spec's own
+suggested JWT-first order because those 3 groups map directly onto benchmark fixtures already
+built, per Claude's plan) - is the next step, not yet started as of this entry.
+
 ## Real bug found and fixed during implementation (not in the original plan)
 
 The live sanity run for T008 initially failed (SR=False, SCR=0.0 on `info_disclosure_env_leak`)
