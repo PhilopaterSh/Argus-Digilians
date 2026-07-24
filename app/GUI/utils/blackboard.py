@@ -11,6 +11,11 @@ _memory = None
 
 
 def _get_memory():
+    """Return the process-wide ArgusMemory instance, creating it once.
+
+    Returns:
+        ArgusMemory: The shared instance.
+    """
     global _memory
     if _memory is None:
         _memory = ArgusMemory()
@@ -18,11 +23,28 @@ def _get_memory():
 
 
 def load_targets():
+    """Return the Blackboard's current summary.
+
+    Returns:
+        str: `ArgusMemory.get_blackboard_summary()`'s JSON string.
+    """
     memory = _get_memory()
     return memory.get_blackboard_summary()
 
 
 def save_target(url, target_type="url", status="pending", tags=None):
+    """Upsert a target into the Blackboard by URL/domain.
+
+    Args:
+        url (str): The target URL/domain to upsert.
+        target_type (str): Currently unused - `ArgusMemory.upsert_target`
+            has no such concept; accepted for call-site compatibility.
+        status (str): Currently unused, same reason.
+        tags: Currently unused, same reason.
+
+    Returns:
+        None: `ArgusMemory.upsert_target()` always returns `None`.
+    """
     memory = _get_memory()
     return memory.upsert_target(url)
 
@@ -58,6 +80,11 @@ def build_graph_data():
     Previously this returned an always-empty DiGraph unconditionally, so the
     Knowledge Graph tab showed "No entities found" even with a fully
     populated Blackboard.
+
+    Returns:
+        networkx.DiGraph | None: A graph with one node per domain and per
+        finding (edges from domain to finding, labeled by tool name), or
+        `None` if `networkx` isn't installed.
     """
     try:
         import networkx as nx
@@ -81,6 +108,7 @@ def build_graph_data():
 
 
 def init_gui_tables():
+    """Create the `gui_sessions`/`gui_jobs` tables if they don't already exist."""
     conn = _get_gui_conn()
     try:
         conn.execute(

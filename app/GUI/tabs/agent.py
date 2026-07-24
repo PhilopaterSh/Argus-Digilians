@@ -10,7 +10,15 @@ def _reconcile_agent_running_state(session_agent_running, controller):
     check, a failed run would keep showing "Running" until the next full page
     reload clears session_state.
 
-    Returns (new_agent_running, current_state).
+    Args:
+        session_agent_running (bool): The session's current
+            `agent_running` flag.
+        controller: An AgentController, or `None` if no run has started
+            yet this session.
+
+    Returns:
+        tuple: `(new_agent_running, current_state)` - `current_state` is
+        `{}` if `controller` is `None`, else `controller.get_status()`.
     """
     if controller is None:
         return session_agent_running, {}
@@ -22,6 +30,16 @@ def _reconcile_agent_running_state(session_agent_running, controller):
 
 
 def _render_events(events):
+    """Render the last 20 agent events as styled HTML feed entries.
+
+    Args:
+        events (list[dict]): Event dicts with `node`/`status`/`detail`/
+            `timestamp` keys.
+
+    Returns:
+        str: HTML markup for the feed (one styled `<div>` per event,
+        color-coded by status).
+    """
     feed_html = ''
     for event in events[-20:]:
         node = event.get('node', '?')
@@ -40,6 +58,8 @@ def _render_events(events):
 
 
 def render_agent():
+    """Render the Agent Control tab: target selection, Start/Stop
+    controls, and a live-polling feed of the current/last run."""
     st.title(':robot_face: Agent Control')
     st.markdown('---')
 
@@ -93,6 +113,9 @@ def render_agent():
 
     @st.fragment(run_every=run_every)
     def _live_section():
+        """Render the polling status/feed/results section as an isolated
+        Streamlit fragment, re-run on its own timer while a run is active
+        instead of blocking the whole page (see the comment above)."""
         controller = st.session_state.get('agent_controller')
         if controller is None:
             st.info('Agent feed will appear here when running. Select a target and click Start Agent.')

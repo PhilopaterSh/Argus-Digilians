@@ -24,6 +24,8 @@ from langchain_core.tools import Tool
 
 class DesktopArgusGUI:
     def __init__(self):
+        """Build the Tkinter window and its widgets; exits the process if
+        Tkinter isn't installed."""
         if not TK_AVAILABLE:
             print("Error: Tkinter is not available.")
             print("Install with: sudo apt-get install python3-tk  (WSL/Kali)")
@@ -38,6 +40,7 @@ class DesktopArgusGUI:
         self._build_ui()
 
     def _build_ui(self):
+        """Lay out the title, target-input row, output text area, and status bar."""
         title = tk.Label(
             self.root, text="Argus Desktop Security Studio",
             fg="#00ff41", bg="#1e1e1e", font=("Consolas", 16, "bold"),
@@ -78,6 +81,11 @@ class DesktopArgusGUI:
         status_bar.pack(fill=tk.X, side=tk.BOTTOM)
 
     def _log(self, text):
+        """Append a line to the output text area and scroll to the bottom.
+
+        Args:
+            text (str): The line to append (a newline is added).
+        """
         self.output.config(state=tk.NORMAL)
         self.output.insert(tk.END, text + "\n")
         self.output.see(tk.END)
@@ -85,6 +93,12 @@ class DesktopArgusGUI:
         self.root.update()
 
     def _run_analysis(self):
+        """Read the target field, run ArgusBrain against it, and log the result.
+
+        Bound to the "RUN ANALYSIS" button; logs an error and updates the
+        status bar instead of raising if the target is empty or the
+        analysis itself fails.
+        """
         target = self.target_var.get().strip()
         if not target:
             self._log("Error: No target provided.")
@@ -120,6 +134,7 @@ class DesktopArgusGUI:
 
 
 def main():
+    """Create and run the Desktop Argus GUI (blocks on the Tkinter mainloop)."""
     app = DesktopArgusGUI()
     app.run()
 

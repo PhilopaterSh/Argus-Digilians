@@ -5,6 +5,8 @@ from app.GUI.components.session_manager import list_sessions, save_session, load
 
 
 def render_settings():
+    """Render the Settings tab: model/SSH/theme configuration, session
+    save/load/delete, and a recent-logs viewer."""
     st.title(":gear: Settings")
     st.markdown("---")
 

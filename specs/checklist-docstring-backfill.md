@@ -6,77 +6,77 @@ Auto-generated inventory of functions this PR's diff touches that need a real, h
 
 ## `app/GUI/components/export.py`
 
-- [ ] `generate_html_report` (line 6) - needs: Args, Returns
-- [ ] `generate_markdown_report` (line 70) - needs: Args, Returns
-- [ ] `generate_json_report` (line 109) - needs: Args, Returns
-- [ ] `get_available_templates` (line 124) - needs: Returns
+- [x] `generate_html_report` (line 6) - needs: Args, Returns. **Done 2026-07-24**: Tier 3 batch (app/GUI/).
+- [x] `generate_markdown_report` (line 70) - needs: Args, Returns. **Done 2026-07-24**: Tier 3 batch (app/GUI/).
+- [x] `generate_json_report` (line 109) - needs: Args, Returns. **Done 2026-07-24**: Tier 3 batch (app/GUI/).
+- [x] `get_available_templates` (line 124) - needs: Returns. **Done 2026-07-24**: Tier 3 batch (app/GUI/).
 
 ## `app/GUI/components/session_manager.py`
 
-- [ ] `save_session` (line 8) - needs: Args, Returns
-- [ ] `load_session` (line 34) - needs: Args, Returns
-- [ ] `list_sessions` (line 52) - needs: Returns
-- [ ] `delete_session` (line 63) - needs: Args
-- [ ] `update_session` (line 72) - needs: Args
+- [x] `save_session` (line 8) - needs: Args, Returns. **Done 2026-07-24**: Tier 3 batch (app/GUI/).
+- [x] `load_session` (line 34) - needs: Args, Returns. **Done 2026-07-24**: Tier 3 batch (app/GUI/).
+- [x] `list_sessions` (line 52) - needs: Returns. **Done 2026-07-24**: Tier 3 batch (app/GUI/).
+- [x] `delete_session` (line 63) - needs: Args. **Done 2026-07-24**: Tier 3 batch (app/GUI/).
+- [x] `update_session` (line 72) - needs: Args. **Done 2026-07-24**: Tier 3 batch (app/GUI/).
 
 ## `app/GUI/components/status_bar.py`
 
-- [ ] `render_status_bar` (line 57) - needs: summary
+- [x] `render_status_bar` (line 57) - needs: summary. **Done 2026-07-24**: Tier 3 batch (app/GUI/).
 
 ## `app/GUI/desktop_gui.py`
 
-- [ ] `__init__` (line 26) - needs: summary
-- [ ] `_build_ui` (line 40) - needs: summary
-- [ ] `_log` (line 80) - needs: Args
-- [ ] `_run_analysis` (line 87) - needs: summary
-- [ ] `main` (line 121) - needs: summary
+- [x] `__init__` (line 26) - needs: summary. **Done 2026-07-24**: Tier 3 batch (app/GUI/).
+- [x] `_build_ui` (line 40) - needs: summary. **Done 2026-07-24**: Tier 3 batch (app/GUI/).
+- [x] `_log` (line 80) - needs: Args. **Done 2026-07-24**: Tier 3 batch (app/GUI/).
+- [x] `_run_analysis` (line 87) - needs: summary. **Done 2026-07-24**: Tier 3 batch (app/GUI/).
+- [x] `main` (line 121) - needs: summary. **Done 2026-07-24**: Tier 3 batch (app/GUI/).
 
 ## `app/GUI/tabs/agent.py`
 
-- [ ] `_reconcile_agent_running_state` (line 4) - needs: Args, Returns
-- [ ] `_render_events` (line 24) - needs: Args, Returns
-- [ ] `render_agent` (line 42) - needs: summary
-- [ ] `_live_section` (line 95) - needs: summary
+- [x] `_reconcile_agent_running_state` (line 4) - needs: Args, Returns. **Done 2026-07-24**: Tier 3 batch (app/GUI/).
+- [x] `_render_events` (line 24) - needs: Args, Returns. **Done 2026-07-24**: Tier 3 batch (app/GUI/).
+- [x] `render_agent` (line 42) - needs: summary. **Done 2026-07-24**: Tier 3 batch (app/GUI/).
+- [x] `_live_section` (line 95) - needs: summary. **Done 2026-07-24**: Tier 3 batch (app/GUI/).
 
 ## `app/GUI/tabs/knowledge_graph.py`
 
-- [ ] `render_knowledge_graph` (line 7) - needs: summary
+- [x] `render_knowledge_graph` (line 7) - needs: summary. **Done 2026-07-24**: Tier 3 batch (app/GUI/).
 
 ## `app/GUI/tabs/overview.py`
 
-- [ ] `_load_recent_runs` (line 10) - needs: Args, Returns
-- [ ] `render_dashboard` (line 29) - needs: summary
+- [x] `_load_recent_runs` (line 10) - needs: Args, Returns. **Done 2026-07-24**: Tier 3 batch (app/GUI/).
+- [x] `render_dashboard` (line 29) - needs: summary. **Done 2026-07-24**: Tier 3 batch (app/GUI/).
 
 ## `app/GUI/tabs/reports.py`
 
-- [ ] `_latest_run_for_target` (line 11) - needs: Args, Returns
-- [ ] `render_reports` (line 33) - needs: summary
+- [x] `_latest_run_for_target` (line 11) - needs: Args, Returns. **Done 2026-07-24**: Tier 3 batch (app/GUI/).
+- [x] `render_reports` (line 33) - needs: summary. **Done 2026-07-24**: Tier 3 batch (app/GUI/).
 
 ## `app/GUI/tabs/settings.py`
 
-- [ ] `render_settings` (line 7) - needs: summary
+- [x] `render_settings` (line 7) - needs: summary. **Done 2026-07-24**: Tier 3 batch (app/GUI/).
 
 ## `app/GUI/tabs/targets.py`
 
-- [ ] `render_targets` (line 6) - needs: summary
+- [x] `render_targets` (line 6) - needs: summary. **Done 2026-07-24**: Tier 3 batch (app/GUI/).
 
 ## `app/GUI/utils/agent_controller.py`
 
-- [ ] `__init__` (line 19) - needs: Args
-- [ ] `stop` (line 103) - needs: Returns
-- [ ] `get_log_tail` (line 122) - needs: Args, Returns
-- [ ] `get_status` (line 133) - needs: Returns
-- [ ] `get_feed` (line 142) - needs: Returns
-- [ ] `is_running` (line 146) - needs: Returns
-- [ ] `_write_state` (line 154) - needs: Args
+- [x] `__init__` (line 19) - needs: Args. **Done 2026-07-24**: Tier 3 batch (app/GUI/).
+- [x] `stop` (line 103) - needs: Returns. **Done 2026-07-24**: Tier 3 batch (app/GUI/).
+- [x] `get_log_tail` (line 122) - needs: Args, Returns. **Done 2026-07-24**: Tier 3 batch (app/GUI/).
+- [x] `get_status` (line 133) - needs: Returns. **Done 2026-07-24**: Tier 3 batch (app/GUI/).
+- [x] `get_feed` (line 142) - needs: Returns. **Done 2026-07-24**: Tier 3 batch (app/GUI/).
+- [x] `is_running` (line 146) - needs: Returns. **Done 2026-07-24**: Tier 3 batch (app/GUI/).
+- [x] `_write_state` (line 154) - needs: Args. **Done 2026-07-24**: Tier 3 batch (app/GUI/).
 
 ## `app/GUI/utils/blackboard.py`
 
-- [ ] `_get_memory` (line 13) - needs: Returns
-- [ ] `load_targets` (line 20) - needs: Returns
-- [ ] `save_target` (line 25) - needs: Args, Returns
-- [ ] `build_graph_data` (line 50) - needs: Returns
-- [ ] `init_gui_tables` (line 78) - needs: summary
+- [x] `_get_memory` (line 13) - needs: Returns. **Done 2026-07-24**: Tier 3 batch (app/GUI/).
+- [x] `load_targets` (line 20) - needs: Returns. **Done 2026-07-24**: Tier 3 batch (app/GUI/).
+- [x] `save_target` (line 25) - needs: Args, Returns. **Done 2026-07-24**: Tier 3 batch (app/GUI/) - docstring also notes `target_type`/`status`/`tags` are accepted but unused (verified: `ArgusMemory.upsert_target` takes no such params) and the real return value is always `None`, not the `int` a casual read of `return memory.upsert_target(url)` might suggest.
+- [x] `build_graph_data` (line 50) - needs: Returns. **Done 2026-07-24**: Tier 3 batch (app/GUI/).
+- [x] `init_gui_tables` (line 78) - needs: summary. **Done 2026-07-24**: Tier 3 batch (app/GUI/).
 
 ## `app/core/agent/blackboard.py`
 

@@ -4,6 +4,19 @@ from datetime import datetime, timezone
 
 
 def generate_html_report(findings, target, template=None):
+    """Render a self-contained dark-themed HTML security report.
+
+    Args:
+        findings (list[dict]): Findings, each with `severity`/`type`/
+            `summary` keys (missing keys default to "info"/"?").
+        target (str): The scanned target, shown in the report header.
+        template: Currently unused by this function's own body - accepted
+            for call-site compatibility.
+
+    Returns:
+        str: A complete HTML document string (executive summary table,
+        per-finding table, and a raw-JSON technical-details section).
+    """
     safe_name = target.replace("https://", "").replace("http://", "").replace("/", "_")
     html = [
         "<!DOCTYPE html><html><head><meta charset='utf-8'>",
@@ -68,6 +81,17 @@ def generate_html_report(findings, target, template=None):
 
 
 def generate_markdown_report(findings, target):
+    """Render a Markdown security report.
+
+    Args:
+        findings (list[dict]): Findings, each with `severity`/`type`/
+            `summary` keys (missing keys default to "info"/"?").
+        target (str): The scanned target, shown in the report header.
+
+    Returns:
+        str: A Markdown document (summary table, per-severity counts,
+        and a bulleted findings list).
+    """
     severity_counts = {"critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0}
     for f in findings:
         sev = f.get("severity", "info").lower()
@@ -107,6 +131,17 @@ def generate_markdown_report(findings, target):
 
 
 def generate_json_report(findings, target):
+    """Render a machine-readable JSON security report.
+
+    Args:
+        findings (list[dict]): Findings included verbatim under the
+            report's `findings` key.
+        target (str): The scanned target.
+
+    Returns:
+        str: A pretty-printed JSON string with `report_type`, `target`,
+        `generated_at`, `findings_count`, `findings`, and `metadata` keys.
+    """
     report = {
         "report_type": "Argus Security Assessment",
         "target": target,
@@ -122,6 +157,12 @@ def generate_json_report(findings, target):
 
 
 def get_available_templates():
+    """List available HTML report template filenames.
+
+    Returns:
+        list[str]: `.html` filenames under `app/GUI/templates/reports/`,
+        or `["default.html"]` if that directory doesn't exist.
+    """
     templates_dir = os.path.join(os.path.dirname(__file__), "..", "templates", "reports")
     if os.path.exists(templates_dir):
         return [f for f in os.listdir(templates_dir) if f.endswith(".html")]

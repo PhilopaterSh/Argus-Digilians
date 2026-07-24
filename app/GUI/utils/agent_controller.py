@@ -17,6 +17,12 @@ from app.core.agent.contracts import (
 
 class AgentController:
     def __init__(self, state_dir=None):
+        """Set up run-state defaults and ensure the state directory exists.
+
+        Args:
+            state_dir (str | None): Directory to write run-state/log
+                files into; defaults to `<repo_root>/logs/agent_runs`.
+        """
         self.process = None
         self.state_dir = state_dir or str(Path(__file__).parent.parent.parent.parent / 'logs' / 'agent_runs')
         os.makedirs(self.state_dir, exist_ok=True)
@@ -101,6 +107,13 @@ class AgentController:
         return self.run_id
 
     def stop(self):
+        """Terminate the running agent subprocess, if one is active.
+
+        Returns:
+            bool: True if a running process was found and terminated
+            (state updated to "stopped", log file closed); False if no
+            process was running.
+        """
         if self.process and self.process.poll() is None:
             if sys.platform == 'win32':
                 self.process.kill()
@@ -121,7 +134,15 @@ class AgentController:
             self.log_file.close()
 
     def get_log_tail(self, max_lines=200):
-        """Read the agent subprocess's captured stdout/stderr for diagnostics."""
+        """Read the agent subprocess's captured stdout/stderr for diagnostics.
+
+        Args:
+            max_lines (int): Max trailing lines to return.
+
+        Returns:
+            str: The last `max_lines` lines of the log file, joined; "" if
+            no log file exists yet or it can't be read.
+        """
         if not self.log_path or not os.path.exists(self.log_path):
             return ""
         try:
@@ -132,6 +153,13 @@ class AgentController:
             return ""
 
     def get_status(self):
+        """Read the current run's state file.
+
+        Returns:
+            dict: The parsed state file, or a fallback
+            `{"status": "unknown"/"error", ...}` dict if no state file
+            exists yet or it fails to parse.
+        """
         if not self.state_file or not os.path.exists(self.state_file):
             return {'status': 'unknown', 'current_node': 'idle', 'events': []}
         try:
@@ -141,10 +169,22 @@ class AgentController:
             return {'status': 'error', 'current_node': 'unknown', 'events': []}
 
     def get_feed(self):
+        """Return the current run's event list.
+
+        Returns:
+            list: `get_status()["events"]`, or `[]` if absent.
+        """
         state = self.get_status()
         return state.get('events', [])
 
     def is_running(self):
+        """Whether the subprocess is still alive.
+
+        Returns:
+            bool: True if a process was started and hasn't exited yet;
+            False otherwise (also closes the log file the first time a
+            finished process is observed).
+        """
         if self.process is None:
             return False
         running = self.process.poll() is None
@@ -153,6 +193,15 @@ class AgentController:
         return running
 
     def _write_state(self, updates):
+        """Merge `updates` into the state file's JSON content and write it back.
+
+        Args:
+            updates (dict): Fields to merge into the existing state (or a
+                fresh `{}` if the file doesn't exist yet); `started_at`
+                is set once, `updated_at` is refreshed on every call.
+                Silently does nothing if the write/read fails or
+                `self.state_file` isn't set.
+        """
         if not self.state_file:
             return
         try:

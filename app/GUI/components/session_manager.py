@@ -6,6 +6,18 @@ from app.GUI.utils.db_connection import get_gui_db_connection as _get_conn
 
 
 def save_session(name, targets, settings, agent_state=None):
+    """Insert a new session row into the `gui_sessions` table.
+
+    Args:
+        name (str): Human-readable session name.
+        targets (list): Target dicts, stored JSON-encoded.
+        settings (dict): Settings dict, stored JSON-encoded.
+        agent_state (dict | None): Agent state, stored JSON-encoded
+            (`"{}"` if omitted).
+
+    Returns:
+        str: A freshly generated UUID4 session id.
+    """
     conn = _get_conn()
     try:
         session_id = str(uuid.uuid4())
@@ -32,6 +44,15 @@ def save_session(name, targets, settings, agent_state=None):
 
 
 def load_session(session_id):
+    """Load one session row, with its JSON-encoded columns decoded.
+
+    Args:
+        session_id (str): The session's id.
+
+    Returns:
+        dict | None: The session row as a dict, with `targets`/`settings`/
+        `agent_state` decoded from JSON, or `None` if no row matches.
+    """
     conn = _get_conn()
     try:
         cursor = conn.execute(
@@ -50,6 +71,13 @@ def load_session(session_id):
 
 
 def list_sessions():
+    """List all saved sessions, most recently updated first.
+
+    Returns:
+        list[dict]: Each dict has `session_id`/`name`/`created_at`/
+        `updated_at`/`status` (targets/settings/agent_state are not
+        included - use `load_session` for those).
+    """
     conn = _get_conn()
     try:
         cursor = conn.execute(
@@ -61,6 +89,11 @@ def list_sessions():
 
 
 def delete_session(session_id):
+    """Delete a session row by id (no-op if it doesn't exist).
+
+    Args:
+        session_id (str): The session's id.
+    """
     conn = _get_conn()
     try:
         conn.execute("DELETE FROM gui_sessions WHERE session_id = ?", (session_id,))
@@ -70,6 +103,17 @@ def delete_session(session_id):
 
 
 def update_session(session_id, targets=None, settings=None, agent_state=None):
+    """Update a session's `updated_at` and any of its provided fields.
+
+    Args:
+        session_id (str): The session's id.
+        targets (list | None): If given, replaces the stored targets
+            (JSON-encoded).
+        settings (dict | None): If given, replaces the stored settings
+            (JSON-encoded).
+        agent_state (dict | None): If given, replaces the stored agent
+            state (JSON-encoded).
+    """
     conn = _get_conn()
     try:
         now = datetime.now(timezone.utc).isoformat()

@@ -55,6 +55,8 @@ def check_ssh_status():
 
 
 def render_status_bar():
+    """Render the top status bar: Ollama/SSH connectivity, Blackboard
+    counts, and the active model name, as four Streamlit columns."""
     ollama_ok = check_ollama_status()
     ssh_ok = check_ssh_status()
 

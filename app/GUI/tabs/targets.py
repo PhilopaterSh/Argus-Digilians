@@ -4,6 +4,8 @@ from datetime import datetime, timezone
 
 
 def render_targets():
+    """Render the Target Management tab: add/search/list targets in
+    `st.session_state.targets`, and launch the agent against one."""
     st.title(":dart: Target Management")
     st.markdown("---")
 

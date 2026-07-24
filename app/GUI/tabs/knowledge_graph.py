@@ -5,6 +5,9 @@ import tempfile
 
 
 def render_knowledge_graph():
+    """Render the Knowledge Graph tab: an interactive pyvis network of
+    Blackboard entities/findings, with a search filter and an entity
+    detail viewer."""
     st.title(":link: Knowledge Graph")
     st.markdown("---")
 

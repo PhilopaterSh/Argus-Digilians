@@ -16,6 +16,14 @@ def _latest_run_for_target(target_url):
     "Generate Report" always produced a report with 0 findings even right
     after a fully successful agent run. Reports now pull real results from
     the same run state files scripts/run_agent.py writes.
+
+    Args:
+        target_url (str): The target to find a run for, matched against
+            each run file's `target` field.
+
+    Returns:
+        dict | None: The most recently modified run-state dict whose
+        `target` matches `target_url`, or `None` if none is found.
     """
     paths = glob.glob(os.path.join(_AGENT_RUNS_DIR, "agent_*.json"))
     paths.sort(key=os.path.getmtime, reverse=True)
@@ -31,6 +39,9 @@ def _latest_run_for_target(target_url):
 
 
 def render_reports():
+    """Render the Report Generation tab: pick a target and format, then
+    generate and offer a download of an HTML/Markdown/JSON report built
+    from that target's latest agent run."""
     st.title(":page_facing_up: Report Generation")
     st.markdown("---")
 

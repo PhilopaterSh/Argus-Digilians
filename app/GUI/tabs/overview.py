@@ -13,6 +13,14 @@ def _load_recent_runs(limit=20):
     st.session_state.jobs, which is initialized to [] in dashboard.py and
     nothing ever appends to - so "Recent Activity" and the metrics above it
     were permanently empty/static regardless of real agent activity.
+
+    Args:
+        limit (int): Max number of most-recently-modified run files to
+            return.
+
+    Returns:
+        list[dict]: Up to `limit` parsed run-state dicts, most recently
+        modified first; unreadable/corrupt files are skipped.
     """
     paths = glob.glob(os.path.join(_AGENT_RUNS_DIR, "agent_*.json"))
     paths.sort(key=os.path.getmtime, reverse=True)
@@ -27,6 +35,8 @@ def _load_recent_runs(limit=20):
 
 
 def render_dashboard():
+    """Render the Dashboard tab: run-count metrics, quick-action buttons,
+    and a recent-activity feed built from real agent run state files."""
     st.title(":bar_chart: Dashboard")
     st.markdown("---")
 
