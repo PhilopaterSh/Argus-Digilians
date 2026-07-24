@@ -9,6 +9,8 @@ from typing import Any, Dict, List, NotRequired, Optional, TypedDict
 
 from langchain_core.messages import HumanMessage
 
+from app.core.agent.state import AgentState
+
 AGENT_RUNNER_ENTRYPOINT = "scripts/run_agent.py"
 STREAMLIT_DASHBOARD_ENTRYPOINT = "app/GUI/dashboard.py"
 AGENT_RUN_MODE_PRODUCTION = "production"
@@ -228,24 +230,24 @@ def append_run_event(state_file: str, event: AgentRunEvent) -> None:
     write_json_file(state_file, state)
 
 
-def record_state_event(state: Dict[str, Any], node: str, status: str, detail: str) -> Dict[str, Any]:
+def record_state_event(state: AgentState, node: str, status: str, detail: str) -> AgentState:
     """Append an event to an in-memory state dict and, if it names a
     state_file, persist it there too via `append_run_event`.
 
     Args:
-        state (Dict[str, Any]): The in-memory agent state to update.
+        state (AgentState): The in-memory agent state to update.
         node (str): The graph node/agent step this event is from.
         status (str): "running"/"completed"/"failed".
         detail (str): Human-readable event text.
 
     Returns:
-        Dict[str, Any]: `state`, mutated in place (`events`,
+        AgentState: `state`, mutated in place (`events`,
         `current_node`, `status`, `updated_at` updated) and returned for
         convenience.
     """
     event = build_run_event(node, status, detail, run_id=state.get("run_id"), target=state.get("target_ip"), mode=state.get("mode"))
     events = list(state.get("events", []))
-    events.append(event)
+    events.append(dict(event))
     state["events"] = events
     state["current_node"] = node
     state["status"] = status
