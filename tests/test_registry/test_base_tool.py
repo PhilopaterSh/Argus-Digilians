@@ -1,6 +1,8 @@
 import pytest
 from app.core.registry.base_tool import BaseToolService, ToolMetadata
 
+pytestmark = pytest.mark.unit
+
 
 class ConcreteTool(BaseToolService):
     @property

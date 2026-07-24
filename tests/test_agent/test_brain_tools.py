@@ -2,11 +2,15 @@
 extended specs/018 CHK090, extended specs/020 role partitioning)."""
 from unittest.mock import MagicMock
 
+import pytest
+
 from app.core.agent.brain_tools import (
     ROLE_TOOL_PARTITIONS,
     build_argus_tools,
     partition_tools_by_role,
 )
+
+pytestmark = pytest.mark.unit
 
 EXPECTED_TOOL_NAMES = {
     "Check_Reachability", "Subdomain_Enumeration", "Recon_Suite", "Query_Memory",

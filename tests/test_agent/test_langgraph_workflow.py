@@ -11,6 +11,8 @@ import warnings
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 from typing import Any
+
+import pytest
 from langchain_core.messages import AIMessage, HumanMessage
 from app.core.agent.react_workflow import (
     _ArgusAction,
@@ -32,6 +34,8 @@ from app.core.agent.react_workflow import (
     OBSERVATION_MAX_CHARS,
 )
 from app.core.agent.react_state import ArgusAgentState
+
+pytestmark = pytest.mark.unit
 
 
 # -- Mock helpers -------------------------------------

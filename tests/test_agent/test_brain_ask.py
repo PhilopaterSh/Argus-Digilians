@@ -8,11 +8,14 @@ testability.
 """
 from unittest.mock import MagicMock
 
+import pytest
 from langchain_core.language_models.fake import FakeListLLM
 from langchain_core.messages import AIMessage
 from langchain_core.tools import Tool
 
 from app.core.agent.brain import ArgusBrain
+
+pytestmark = pytest.mark.unit
 
 FULL_REPORT_JSON = (
     '{"summary": "ok", "attack_surface_stats": "none", "findings": [], '

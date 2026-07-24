@@ -4,6 +4,11 @@ import os
 import json
 from app.core.memory.memory_service import ArgusMemory
 
+# Real (tmp-file-isolated) SQLite via ArgusMemory - matches this project's
+# own "integration: ... ephemeral SQLite ..." pytest.ini definition, not
+# "unit: ... no external services".
+pytestmark = pytest.mark.integration
+
 
 @pytest.fixture
 def db_path():

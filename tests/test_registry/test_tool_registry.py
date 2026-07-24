@@ -2,6 +2,8 @@ import pytest
 from app.core.registry.tool_registry import ToolRegistry
 from app.core.registry.base_tool import BaseToolService, ToolMetadata
 
+pytestmark = pytest.mark.unit
+
 
 class FakeTool(BaseToolService):
     @property

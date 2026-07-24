@@ -13,6 +13,8 @@ from langchain_core.agents import AgentAction, AgentFinish
 
 from app.core.agent.react_callback import ConsoleTraceCallbackHandler, LiveFeedCallbackHandler
 
+pytestmark = pytest.mark.unit
+
 
 @pytest.fixture
 def state_file(tmp_path):

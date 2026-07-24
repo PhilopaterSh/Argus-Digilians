@@ -1,3 +1,5 @@
+import pytest
+
 from app.core.agent.react_prompts import (
     build_collector_prompt,
     build_exploiter_prompt,
@@ -5,6 +7,8 @@ from app.core.agent.react_prompts import (
     build_react_system_prompt,
     build_summarizer_prompt,
 )
+
+pytestmark = pytest.mark.unit
 
 
 def _make_state(**overrides):

@@ -7,8 +7,12 @@ from langchain_classic.agents import AgentExecutor
 from langchain_core.language_models.fake import FakeListLLM
 from langchain_core.tools import Tool
 
+import pytest
+
 from app.core.agent.agent_factory import build_agent_executor
 from app.core.prompts import get_argus_prompt
+
+pytestmark = pytest.mark.unit
 
 
 def _make_tools():

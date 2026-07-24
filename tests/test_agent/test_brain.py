@@ -8,6 +8,8 @@ from langchain_core.tools import Tool
 
 from app.core.agent.brain import ArgusBrain
 
+pytestmark = pytest.mark.unit
+
 
 def _make_brain():
     """Build an ArgusBrain with one fake tool and RAG disabled, for tool-dispatch tests.

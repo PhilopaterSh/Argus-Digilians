@@ -10,6 +10,8 @@ from app.core.memory.memory_service import ArgusMemory
 
 
 class TestSafetyLayerPorted:
+    pytestmark = pytest.mark.unit
+
     def test_validate_https_url(self):
         """Verify Validate https url."""
         sl = SafetyLayer()
@@ -101,6 +103,11 @@ class TestSafetyLayerPorted:
 
 
 class TestMemoryPorted:
+    # Real (tmp-file-isolated) SQLite via ArgusMemory - matches this
+    # project's own "integration: ... ephemeral SQLite ..." pytest.ini
+    # definition, not "unit: ... no external services".
+    pytestmark = pytest.mark.integration
+
     @pytest.fixture
     def db_path(self):
         """Yield a temp SQLite file path, removed after the test."""
