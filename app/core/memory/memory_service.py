@@ -17,6 +17,20 @@ _PRIORITY_TARGET_BAD_SUBSTRINGS = ("error", "---", "code ", "suggestion:", "not 
 
 class ArgusMemory:
     def __init__(self, db_path: str = _DEFAULT_DB_PATH) -> None:
+        """Open (creating/migrating/repairing as needed) the Blackboard SQLite DB.
+
+        For a real file-backed path: migrates any legacy root-level DB in
+        first, resets the file if it's corrupt, initializes the schema,
+        then verifies integrity. Skips migration/corruption-repair/
+        integrity-check for `":memory:"` (used by tests).
+
+        Args:
+            db_path (str): Path to the SQLite file, or `":memory:"` for
+                an ephemeral in-memory DB.
+
+        Returns:
+            None
+        """
         self.db_path = db_path
         db_dir = os.path.dirname(self.db_path)
         if db_dir:
@@ -34,7 +48,13 @@ class ArgusMemory:
     # ------------------------------------------------------------------
     def _db_ok(self) -> bool:
         """True if the DB file is a valid SQLite database (or doesn't exist yet).
-        Always closes the probe connection so the file is not left locked."""
+        Always closes the probe connection so the file is not left locked.
+
+        Returns:
+            bool: True if `self.db_path` doesn't exist yet, or opening it
+            and running a trivial query succeeds; False if it raises
+            `sqlite3.DatabaseError` (malformed file).
+        """
         if not os.path.exists(self.db_path):
             return True
         conn = None
@@ -53,7 +73,11 @@ class ArgusMemory:
 
     def _reset_corrupt_db(self) -> None:
         """Handle a malformed SQLite file: keep the bad file as *.corrupt
-        (for inspection) and clear any side files so a clean DB can be built."""
+        (for inspection) and clear any side files so a clean DB can be built.
+
+        Returns:
+            None
+        """
         for suffix in ("", "-journal", "-wal", "-shm"):
             p = self.db_path + suffix
             try:
@@ -78,6 +102,18 @@ class ArgusMemory:
     # ------------------------------------------------------------------
     @contextmanager
     def _get_conn(self) -> Any:
+        """Open a WAL-mode SQLite connection as a context manager, committing
+        on success or rolling back on any exception.
+
+        Returns:
+            Iterator[sqlite3.Connection]: Yields a connection with
+            `row_factory=sqlite3.Row`, WAL journal mode, and foreign keys
+            enabled; the connection is always closed on exit.
+
+        Raises:
+            Exception: Re-raises whatever exception occurred inside the
+                `with` block, after rolling back the transaction.
+        """
         # 10s was too tight for the actual concurrency pattern: the LangGraph
         # agent subprocess (each node re-instantiates ArgusMemory, so this
         # opens/closes several connections per run) writes to this same file
@@ -102,6 +138,17 @@ class ArgusMemory:
     # Migration from root db
     # ------------------------------------------------------------------
     def _migrate_from_root(self) -> None:
+        """One-time migration of a legacy root-level DB into `self.db_path`.
+
+        If no target DB exists yet, backs up the whole root DB in place;
+        otherwise merges each table's rows in with `INSERT OR IGNORE`
+        (per-row failures are swallowed, not fatal). Removes the root DB
+        file afterward. A no-op if the root DB doesn't exist, or if
+        `self.db_path` IS the root DB path. Failures are logged, not raised.
+
+        Returns:
+            None
+        """
         if not os.path.exists(_ROOT_DB_PATH):
             return
         if self.db_path == _ROOT_DB_PATH:
@@ -415,6 +462,17 @@ class ArgusMemory:
         Added 2026-07-18 for the opt-in experimental_agent module
         (app/modules/experimental_agent/), ported from the momen branch,
         which calls this for session-scoped result filtering.
+
+        Args:
+            domain (str): The target domain to fetch findings for.
+            since (str | None): If given, an ISO timestamp - only
+                findings recorded at or after this are returned.
+
+        Returns:
+            list[dict]: `{"tool_name", "data_type", "raw_data", "summary",
+            "timestamp", "severity"}` dicts, oldest first (`severity`
+            defaults to "Info" if the stored value is null); empty on
+            any query failure (logged, not raised).
         """
         try:
             with self._get_conn() as conn:
@@ -602,6 +660,13 @@ class ArgusMemory:
         paragraph ("CONSULT MEMORY FIRST using 'Query_Memory'. Then
         perform a comprehensive security analysis for...") got passed
         through and stored as if it were the target/domain itself.
+
+        Args:
+            domain (str | None): The stored domain value to check.
+
+        Returns:
+            bool: True if `domain` is falsy, contains whitespace/quotes,
+            or is longer than 100 chars; False for a plausible real domain.
         """
         if not domain:
             return True
@@ -617,6 +682,10 @@ class ArgusMemory:
         _looks_like_garbage_domain() - unlike clear_memory(), this leaves
         every legitimately-scanned target's data untouched. Returns the
         number of garbage targets removed.
+
+        Returns:
+            int: Number of garbage targets (and their findings) removed;
+            0 on any failure (logged, not raised) or if none matched.
         """
         removed = 0
         try:
@@ -655,6 +724,17 @@ class ArgusMemory:
             logger.error("log_scan_session(%s) failed: %s", target, e)
 
     def get_scan_history(self, limit: int = 50) -> list[dict]:
+        """List past scan sessions, most recent first.
+
+        Args:
+            limit (int): Max sessions to return.
+
+        Returns:
+            list[dict]: `{"target", "mode", "started", "completed",
+            "findings", "risk_score", "report"}` per session, most
+            recently started first; empty on any query failure (logged,
+            not raised).
+        """
         try:
             with self._get_conn() as conn:
                 rows = conn.execute(
@@ -684,6 +764,15 @@ class ArgusMemory:
         Formatted list of the highest-priority already-recorded targets, for
         direct inclusion in an agent's context - filters out garbage/error
         strings the same way _looks_like_garbage_domain() does elsewhere.
+
+        Args:
+            limit (int): Max targets to include in the formatted list.
+
+        Returns:
+            str: A "TOP PRIORITY TARGETS:" numbered list, or an explicit
+            "No prioritized/valid targets in memory yet." message if
+            there are none (or all rows are filtered out as garbage), or
+            on any query failure (logged, not raised).
         """
         try:
             with self._get_conn() as conn:
@@ -712,6 +801,11 @@ class ArgusMemory:
     # Clear memory
     # ------------------------------------------------------------------
     def clear_memory(self) -> None:
+        """Back up the current DB file (`.bak`) and rebuild a fresh, empty schema.
+
+        Returns:
+            None
+        """
         backup = self.db_path + ".bak"
         try:
             if os.path.exists(self.db_path):

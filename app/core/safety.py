@@ -30,12 +30,27 @@ class SafetyLayer:
     """Central safety enforcement for all Argus operations."""
 
     def __init__(self, allow_internal: bool = False):
+        """Set up blocked-action counters and the audit log.
+
+        Args:
+            allow_internal (bool): If True, `validate_target` allows
+                private/internal IP ranges instead of blocking them.
+        """
         self.allow_internal = allow_internal
         self._blocked_count = 0
         self._audit_log = []
 
     def sanitize_input(self, text: str) -> str:
-        """Removes shell injection characters and normalizes input."""
+        """Removes shell injection characters and normalizes input.
+
+        Args:
+            text (str): The input to sanitize; non-strings are coerced
+                via `str()` first.
+
+        Returns:
+            str: `text` with null bytes and backtick/`$(` sequences
+            removed, and leading/trailing whitespace stripped.
+        """
         if not isinstance(text, str):
             return str(text)
         text = text.replace('\x00', '')
@@ -45,7 +60,15 @@ class SafetyLayer:
         return text.strip()
 
     def is_destructive_payload(self, payload: str) -> bool:
-        """Returns True if the payload matches any destructive pattern."""
+        """Returns True if the payload matches any destructive pattern.
+
+        Args:
+            payload (str): The command/payload text to check.
+
+        Returns:
+            bool: True if `payload` matches any `DESTRUCTIVE_PATTERNS`
+            entry (also logs the block); False otherwise.
+        """
         payload_lower = payload.lower()
         for pattern in DESTRUCTIVE_PATTERNS:
             if re.search(pattern, payload_lower, re.IGNORECASE):
@@ -57,6 +80,16 @@ class SafetyLayer:
         """
         Validates a target URL.
         Returns (is_valid: bool, reason: str)
+
+        Args:
+            url (str): The target URL/host (a scheme is added if missing).
+            mode (str): Currently unused by this method's own body -
+                accepted for call-site compatibility.
+
+        Returns:
+            tuple: `(is_valid, reason)` - `False` if `url` is empty, has
+            no parseable hostname, or (unless `allow_internal`) resolves
+            to a private/internal IP range; `True` otherwise.
         """
         if not url or not isinstance(url, str):
             return False, "Target URL is empty or invalid."
@@ -89,13 +122,28 @@ class SafetyLayer:
         """
         Guards a WSL command before execution.
         Returns (is_safe: bool, reason: str)
+
+        Args:
+            command (str): The command about to be executed.
+
+        Returns:
+            tuple: `(is_safe, reason)` - `(False, "BLOCKED: ...")` if
+            `is_destructive_payload(command)` is True, else
+            `(True, "Command is safe.")`.
         """
         if self.is_destructive_payload(command):
             return False, f"BLOCKED: Command contains destructive pattern."
         return True, "Command is safe."
 
     def _log_block(self, block_type: str, content: str):
-        """Logs a blocked action to the audit trail."""
+        """Logs a blocked action to the audit trail.
+
+        Args:
+            block_type (str): A short category tag (e.g.
+                "destructive_payload", "private_ip").
+            content (str): The blocked content; truncated to 200 chars
+                in the stored entry.
+        """
         import datetime
         self._blocked_count += 1
         entry = {

@@ -88,6 +88,18 @@ class ArgusConfig:
 
     @classmethod
     def load(cls, path: Optional[str] = None) -> "ArgusConfig":
+        """Load (and cache) the singleton ArgusConfig from a YAML file.
+
+        Args:
+            path (str | None): Path to the config YAML; defaults to the
+                `ARGUS_CONFIG` env var, or "config/config.yaml".
+
+        Returns:
+            ArgusConfig: The cached singleton instance - subsequent calls
+            return the same object without re-reading the file. If the
+            file is missing or fails to parse, returns the dataclass
+            defaults (logged, not raised).
+        """
         if cls._instance is not None:
             return cls._instance
 

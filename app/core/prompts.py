@@ -221,6 +221,18 @@ Question: {input}
 Thought: {agent_scratchpad}"""
 
 def get_argus_prompt(format_instructions=""):
+    """Build the ARGUS_AGENT_TEMPLATE prompt template for `agent_factory.
+    build_agent_executor`'s classic AgentExecutor path - not called from
+    the production ReAct graph (`react_workflow.py`), only from
+    `tests/test_agent/test_agent_factory.py`.
+
+    Args:
+        format_instructions (str): Optional output-format instructions
+            text, injected as the `format_instructions` partial variable.
+
+    Returns:
+        PromptTemplate: Ready to pass to `create_react_agent`/`AgentExecutor`.
+    """
     return PromptTemplate(
         template=ARGUS_AGENT_TEMPLATE,
         input_variables=["input", "tools", "tool_names", "agent_scratchpad"],

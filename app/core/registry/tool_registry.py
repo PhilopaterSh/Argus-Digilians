@@ -20,6 +20,17 @@ class ToolRegistry:
         self._tools: dict[str, BaseToolService] = {}
 
     def register(self, tool: BaseToolService) -> None:
+        """Register a tool by its `metadata.name`, warning (not failing) on overwrite.
+
+        Args:
+            tool (BaseToolService): The tool instance to register.
+
+        Returns:
+            None
+
+        Raises:
+            TypeError: If `tool` isn't a `BaseToolService` instance.
+        """
         if not isinstance(tool, BaseToolService):
             raise TypeError(f"Expected BaseToolService, got {type(tool).__name__}")
         name = tool.metadata.name
