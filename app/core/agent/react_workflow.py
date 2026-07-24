@@ -27,6 +27,13 @@ from app.core.agent.react_prompts import (
 )
 from app.core.memory.memory_service import ArgusMemory
 from app.core.schemas import SecurityReport
+from app.tools.utils import (
+    to_bare_hostname,
+    parse_subdomains,
+    parse_tech_block,
+    clean_tech_string,
+    record_graph_edge,
+)
 
 
 warnings.filterwarnings("ignore", category=DeprecationWarning)
@@ -161,6 +168,71 @@ def _extract_vulnerability_hints(text: str) -> list[str]:
     if matched:
         hints.append(f"the output mentions vulnerability-class keyword(s): {', '.join(matched)}")
     return hints
+
+
+# Cap on how many discovered subdomains become graph edges per
+# Subdomain_Enumeration call. Unlike ArgusBrain.run_deterministic_recon's
+# MAX_CHAINED_SUBDOMAINS (which bounds extra network calls), this is a pure
+# DB write with no network cost - kept modest anyway so a target with heavy
+# passive-DNS noise (the same "example.com -> ~3000 lines" case
+# OBSERVATION_MAX_CHARS above already guards against) doesn't flood the
+# graph with low-value nodes.
+_MAX_GRAPH_SUBDOMAIN_EDGES = 10
+
+
+def _record_recon_graph_edges(
+    memory: Optional[ArgusMemory], target: str, tool_name: str, result: Any
+) -> None:
+    """Populate the entities/relations Knowledge Graph (Query_Knowledge_Graph's
+    data source) from a completed Subdomain_Enumeration/Recon_Suite call.
+
+    Before this, the only code path that ever wrote SUBDOMAIN_OF/USES_TECH
+    edges was `ArgusBrain.run_deterministic_recon` - reachable only via
+    `ask_deterministic()`, which nothing in production actually calls (every
+    real caller uses the live ReAct path, `ask()`). Query_Knowledge_Graph was
+    a fully wired agent tool with no data ever behind it. Mirrors
+    `run_deterministic_recon`'s own edge logic exactly via
+    `app/tools/utils.py`'s parse_subdomains/parse_tech_block/
+    clean_tech_string/record_graph_edge (single source of truth - both
+    brain.py and this module call the same functions).
+
+    VULNERABLE_TO edges are deliberately NOT written here yet -
+    `_extract_vulnerability_hints` above is a heuristic hint (a keyword or
+    page-title match), not a confirmed finding, and turning a hint into a
+    graph edge would overstate confidence beyond what was actually verified
+    (Constitution VIII - Truthful Runtime). Left as a documented follow-up,
+    not silently dropped.
+
+    Args:
+        memory (Optional[ArgusMemory]): Blackboard/knowledge-graph store;
+            no-op (never raises) if `None`.
+        target (str): The run's target (URL or bare host).
+        tool_name (str): The tool that just executed.
+        result (Any): The tool's raw return value.
+
+    Returns:
+        None
+    """
+    if memory is None or tool_name not in ("Subdomain_Enumeration", "Recon_Suite"):
+        return
+    root = to_bare_hostname(target)
+    if not root:
+        return
+    try:
+        memory.upsert_entity("domain", root)
+    except Exception as e:
+        print(f"[GRAPH] could not seed graph root '{root}': {e}")
+        return
+
+    text = str(result)
+    if tool_name == "Subdomain_Enumeration":
+        subs = parse_subdomains(text, exclude_hostname=root)[:_MAX_GRAPH_SUBDOMAIN_EDGES]
+        for sub in subs:
+            record_graph_edge(memory, ("domain", sub), sub, root, "SUBDOMAIN_OF")
+    elif tool_name == "Recon_Suite":
+        tech = clean_tech_string(parse_tech_block(text))
+        for token in tech.split():
+            record_graph_edge(memory, ("tech", token), root, token, "USES_TECH")
 
 
 def _build_reflection_note(prior_action: str, prior_response: str) -> str:
@@ -810,6 +882,7 @@ def _build_custom_workflow(
                     )
                 except Exception:
                     pass
+                _record_recon_graph_edges(memory, state["target"], name, result)
             return update
         except Exception as e:
             obs = f"Observation: Error executing {name}: {e}"
@@ -1063,6 +1136,7 @@ def _build_multi_role_workflow(
                 )
             except Exception:
                 pass
+            _record_recon_graph_edges(memory, state["target"], name, result)
 
         return {
             "tool_result": str(result)[:2000],

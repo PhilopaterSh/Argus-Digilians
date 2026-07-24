@@ -4,6 +4,13 @@ from app.core.schemas import SecurityReport
 from app.core.llm_factory import build_chat_llm
 from app.core.rag import RAGEngine, RAGConfig
 from app.core.memory.memory_service import ArgusMemory
+from app.tools.utils import (
+    to_bare_hostname,
+    parse_subdomains,
+    parse_tech_block,
+    clean_tech_string,
+    record_graph_edge,
+)
 import json
 import os
 import re
@@ -41,14 +48,9 @@ _INTERESTING_PATH_KEYWORDS = (
     "login", "admin", "register", "search", "upload",
     "config", "backup", "account", "user",
 )
-_TECH_BLOCK_RE = re.compile(r"Tech:\s*(.+?)(?:\nPorts:|\Z)", re.DOTALL)
-
-# WhatWeb-style "Tech:" lines are noisy (cookies, IP, page title, country)
-# alongside the actually useful tech identifiers. Searching the whole raw
-# line returns nothing because it's not a real query anyone would write -
-# these keys get dropped before building a Smart_Web_Search query.
-_TECH_NOISE_KEYS = {"Cookies", "Country", "IP", "Title"}
-_TECH_TOKEN_RE = re.compile(r"[A-Za-z][\w\-\.]*(?:\[[^\]]*\])?")
+# Tech-line parsing regexes/constants moved to app/tools/utils.py
+# (parse_tech_block/clean_tech_string) - single source of truth,
+# react_workflow.py's live ReAct path needs the identical logic.
 
 # Maps a keyword found in a crawled path to plain vulnerability-class terms,
 # since Exploit_Suggester almost certainly matches against a payload
@@ -488,9 +490,9 @@ class ArgusBrain:
 
     @staticmethod
     def _to_bare_hostname(target: str) -> str:
-        """
-        http://testasp.vulnweb.com/some/path?x=1  ->  testasp.vulnweb.com
-        testasp.vulnweb.com                        ->  testasp.vulnweb.com
+        """Delegates to `app.tools.utils.to_bare_hostname` (single source
+        of truth - `react_workflow.py`'s live ReAct path needs the same
+        logic).
 
         Args:
             target (str): A URL or bare host; a missing scheme is treated
@@ -500,11 +502,7 @@ class ArgusBrain:
             str: The bare hostname, or `target` unchanged if it has no
             parseable hostname.
         """
-        from urllib.parse import urlparse
-
-        parsed = urlparse(target if "://" in target else f"http://{target}")
-        host = parsed.hostname or target
-        return host
+        return to_bare_hostname(target)
 
     _COMMAND_NOT_FOUND_RE = re.compile(r"(\S+):\s*command not found")
     _SELF_HEAL_TOOL_NAME = "System_Self_Heal"
@@ -573,9 +571,9 @@ class ArgusBrain:
         target_val: str,
         rel_type: str,
     ) -> None:
-        """Persist a single knowledge-graph edge during recon so that
-        Query_Knowledge_Graph has real data to return. No-op (and never
-        fatal) when memory is disabled or a write fails.
+        """Delegates to `app.tools.utils.record_graph_edge` (single source
+        of truth - `react_workflow.py`'s live ReAct path needs the same
+        logic).
 
         Args:
             entity (tuple[str, str]): `(entity_type, entity_value)` for
@@ -590,17 +588,7 @@ class ArgusBrain:
         Returns:
             None
         """
-        entity_type, entity_value = entity
-        if self.memory is None:
-            return
-        value = (entity_value or "").strip()
-        if not value:
-            return
-        try:
-            self.memory.upsert_entity(entity_type, value)
-            self.memory.add_relation(source_val, target_val, rel_type)
-        except Exception as e:
-            print(f"[BRAIN] graph edge write skipped ({rel_type}): {e}")
+        record_graph_edge(self.memory, entity, source_val, target_val, rel_type)
 
     def _run_tool_safely(self, tool_name: str, target: str) -> str:
         """Call a registered tool by name, converting to a bare hostname
@@ -643,9 +631,9 @@ class ArgusBrain:
         return result
 
     def _parse_subdomains(self, observation: str, exclude_hostname: str) -> List[str]:
-        """Pulls plausible hostnames out of Subdomain_Enumeration's raw
-        (possibly fenced) line-per-subdomain output, excluding the root
-        host we already scanned and de-duping while preserving order.
+        """Delegates to `app.tools.utils.parse_subdomains` (single source
+        of truth - `react_workflow.py`'s live ReAct path needs the same
+        logic).
 
         Args:
             observation (str): Raw Subdomain_Enumeration tool output.
@@ -657,26 +645,13 @@ class ArgusBrain:
             `exclude_hostname` and any line containing a space or slash
             (or lacking a `.`) filtered out.
         """
-        candidates = []
-        for line in observation.splitlines():
-            line = line.strip().strip("`")
-            if not line or " " in line or "/" in line or "." not in line:
-                continue
-            if line == exclude_hostname:
-                continue
-            candidates.append(line)
-        seen = set()
-        out = []
-        for c in candidates:
-            if c not in seen:
-                seen.add(c)
-                out.append(c)
-        return out
+        return parse_subdomains(observation, exclude_hostname)
 
     def _parse_tech(self, observation: str) -> str:
-        """Pulls the raw 'Tech: ...' line out of Recon_Suite's output.
-        This is the noisy WhatWeb-style line (cookies, IP, title and all) -
-        use _clean_tech_string() before using it as a search query.
+        """Delegates to `app.tools.utils.parse_tech_block` (single source
+        of truth - `react_workflow.py`'s live ReAct path needs the same
+        logic). Use `_clean_tech_string()` before using the result as a
+        search query.
 
         Args:
             observation (str): Raw Recon_Suite tool output.
@@ -685,21 +660,12 @@ class ArgusBrain:
             str: The raw `Tech:` block's text (up to 500 chars), or `""`
             if no `Tech:` block is found.
         """
-        match = _TECH_BLOCK_RE.search(observation)
-        if not match:
-            return ""
-        return match.group(1).strip()[:500]
+        return parse_tech_block(observation)
 
     def _clean_tech_string(self, raw_tech: str) -> str:
-        """
-        Strips a WhatWeb-style tech line down to just the useful
-        identifiers. Raw input looks like:
-          "http://x.com/ [200 OK] ASP_NET, Cookies[...], Country[US],
-           HTTPServer[Microsoft-IIS/8.5], IP[1.2.3.4], Title[...], ..."
-        Searching that whole line returns nothing - no one has ever
-        written that as a search query. This keeps only tokens whose key
-        isn't in _TECH_NOISE_KEYS, and prefers the bracket VALUE (e.g.
-        "Microsoft-IIS/8.5") over the raw token when there is one.
+        """Delegates to `app.tools.utils.clean_tech_string` (single source
+        of truth - `react_workflow.py`'s live ReAct path needs the same
+        logic).
 
         Args:
             raw_tech (str): The raw `Tech:` line text (as returned by
@@ -710,30 +676,7 @@ class ArgusBrain:
             tokens (up to 200 chars); `""` if `raw_tech` is empty, or
             `raw_tech[:200]` unchanged if no tokens survive filtering.
         """
-        if not raw_tech:
-            return ""
-        text = raw_tech
-        if "] " in text:
-            # drop the "http://.../ [200 OK] " prefix if present
-            text = text.split("] ", 1)[1]
-
-        values = []
-        for tok in _TECH_TOKEN_RE.findall(text):
-            if "[" in tok:
-                key, _, rest = tok.partition("[")
-                if key in _TECH_NOISE_KEYS:
-                    continue
-                value = rest.rstrip("]").strip()
-                values.append(value if value else key)
-            elif tok not in _TECH_NOISE_KEYS and not re.fullmatch(r"[A-Z]{1,3}", tok):
-                # Skip short all-caps remnants like a leftover "US" from
-                # "Country[UNITED STATES][US]" - a stray bracket fragment,
-                # not a real technology token.
-                values.append(tok)
-
-        deduped = list(dict.fromkeys(values))
-        cleaned = " ".join(deduped)
-        return cleaned[:200] if cleaned else raw_tech[:200]
+        return clean_tech_string(raw_tech)
 
     def _parse_interesting_paths(self, observation: str) -> List[str]:
         """Pulls endpoints matching common sensitive-path keywords out of

@@ -614,6 +614,24 @@ extraction - 2026-07-13):
 - [mcp-browser (GitHub, badchars)](https://github.com/badchars/mcp-browser)
 - [hexstrike-ai (GitHub)](https://github.com/0x4m4/hexstrike-ai)
 
+**Local agent-model evaluation - vision/tool-use/reasoning capability vs. the current
+`ArgusConfig.model_name` default** (grounding a benchmarked model-swap comparison run via
+`benchmarks/runner.py`, specs/025's existing SR/SCR/TTE harness, against `WhiteRabbitNeo-V3-7B` -
+this model has native tool calling but no vision and no dedicated reasoning/thinking mode,
+confirmed by reading `app/core/llm_factory.py`/`app/core/agent/react_workflow.py` directly rather
+than assumed, 2026-07-24):
+- [Qwen3-VL-8B-Thinking-GGUF (Hugging Face)](https://huggingface.co/Qwen/Qwen3-VL-8B-Thinking-GGUF)
+- [qwen3-vl official Ollama library listing](https://ollama.com/library/qwen3-vl:8b)
+- [Qwen3-VL (GitHub, QwenLM)](https://github.com/qwenlm/qwen3-vl)
+- [Qwen3-VL-4B vs 8B: Benchmarks, VRAM, Which to Run (codersera, 2026)](https://codersera.com/blog/qwen3-vl-4b-vs-qwen3-vl-8b-benchmarks-vram-guide/)
+- [Best Local LLMs for Tool & Function Calling (Local AI Master, 2026)](https://localaimaster.com/blog/best-ollama-models-tool-calling)
+- [GLM-4.6V-Flash-9B (Ollama, community quant)](https://ollama.com/haervwe/GLM-4.6V-Flash-9B)
+- [GLM-V (GitHub, zai-org) - GLM-4.1V/4.5V/4.6V-Thinking multimodal reasoning](https://github.com/zai-org/GLM-V)
+- [GLM-4.6: Run Locally Guide (Unsloth docs)](https://docs.unsloth.ai/models/glm-4.6-how-to-run-locally)
+- [gpt-oss:20b (Ollama library)](https://ollama.com/library/gpt-oss:20b)
+- [OpenAI gpt-oss (Ollama blog)](https://ollama.com/blog/gpt-oss)
+- [WhiteRabbitNeo V3: AI-Native DevSecOps Model (Kindo)](https://www.kindo.ai/blog/introducing-whiterabbitneo-v3-the-next-generation-of-devsecops-ai)
+
 ---
 
 *Created by Argus Security Framework Team - June 2026. Reconciled per `specs/012-spec-reconciliation`
@@ -633,4 +651,9 @@ the multi-model variant and its NFR-001 result) and ADR-21 (`022`'s AI-Browser-A
 research finding) plus the new section 10 Research References section - a consolidated bibliography of
 every external source this project's architecture decisions have cited, at the user's explicit
 request, so the reasoning behind `019`-`022`'s design choices stays traceable to real sources
-rather than living only in chat history.*
+rather than living only in chat history. Updated 2026-07-24 (per Principle XI): added a new §10
+entry recording sources for a local agent-model evaluation (vision/tool-use/reasoning capability
+vs. the current `WhiteRabbitNeo-V3-7B` default) - the comparison itself is being run empirically via
+`benchmarks/runner.py` before any `ArgusConfig.model_name` change is treated as decided; no ADR
+added yet since no decision has been made, only the research grounding it (satisfies the
+Research provenance gate for this pass even though the outcome is still pending).*
