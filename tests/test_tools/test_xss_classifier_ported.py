@@ -70,3 +70,29 @@ def test_no_reflection_returns_none():
     """Verify No reflection returns none."""
     body = "<html><body>clean page</body></html>"
     assert _classify(body, "<script>alert(1)</script>") is None
+
+
+def test_marker_collision_with_unrelated_page_content_is_a_known_false_positive():
+    """Documents a known, currently-unfixed false-positive class: MARKER
+    ("ARGUSxSS7") is a fixed module-level constant, not generated per scan
+    session. If a page already contains that literal text for reasons
+    completely unrelated to the injected payload (e.g. a product code, a
+    prior scan's leftover artifact), classify_xss_reflection() has no way
+    to tell that apart from a genuine reflection - it reports a finding
+    even though `payload` itself never appears anywhere in `body`.
+
+    This is a locked-in regression guard on CURRENT behavior, not a claim
+    that the behavior is correct - see this module's docstring history
+    (specs/001-merge-branches/tasks.md's Open Follow-Ups) for the real
+    fix: a live scanning loop must generate a fresh random marker per scan
+    session instead of reusing this shared constant. If that fix ships,
+    this test's expected result should flip to `None` and this docstring
+    should be updated to say so, not silently deleted.
+    """
+    body = "<p>Our internal product reference code is ARGUSxSS7 for this SKU, nothing to do with your search.</p>"
+    payload = "this-payload-never-appears-anywhere"
+
+    sev, reason = _classify(body, payload)
+
+    assert sev == "Medium"
+    assert reason == "user input reflected unencoded in response"

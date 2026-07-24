@@ -127,6 +127,37 @@ class TestSystemSelfHeal:
             result = healer.system_self_heal("pip install requests")
             assert "successfully installed" in result.lower()
 
+    def test_pip_install_uses_list_form_not_shell_string(self, healer):
+        """Regression test for a real command-injection vulnerability found
+        and fixed (2026-07-19, opencode-delegate review): system_self_heal()
+        used to build a shell string and run it with `shell=True`, letting an
+        LLM-tool-call-derived package name inject arbitrary shell commands.
+        The fix passes argv as a list with no shell involved - this locks
+        that in, rather than trusting a mocked "it returned success" alone.
+
+        Args:
+            healer: test parameter provided by this test's own setup (a
+                pytest fixture or a mock/patch injected via a decorator -
+                see the test's parameters/decorators for which).
+        """
+        malicious_package = "innocuous;$(touch${IFS}/tmp/pwned)"
+        with patch("app.tools.self_heal.subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+            healer.system_self_heal(f"pip install {malicious_package}")
+
+            args, kwargs = mock_run.call_args
+            command = args[0]
+            assert isinstance(command, list), (
+                "subprocess.run must receive argv as a list, not a shell string"
+            )
+            assert not kwargs.get("shell", False), (
+                "subprocess.run must not use shell=True - it re-enables the "
+                "exact injection this fix closed"
+            )
+            # The malicious text must survive as one literal, unexecuted argv
+            # element - proof it was never hits a shell to interpret ; or $().
+            assert malicious_package in command
+
     def test_pip_install_fails(self, healer):
         """Verify Pip install fails."""
         with patch("app.tools.self_heal.subprocess.run") as mock_run:
