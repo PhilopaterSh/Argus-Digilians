@@ -5,7 +5,11 @@ not a local reimplementation - see that module's docstring for what was
 and wasn't ported from momen:core/tools.py's check_xss().
 """
 
+import pytest
+
 from app.tools.xss_classifier import classify_xss_reflection as _classify
+
+pytestmark = pytest.mark.unit
 
 
 def test_script_reflection():

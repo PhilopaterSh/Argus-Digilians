@@ -1,6 +1,11 @@
 import unittest
 from unittest.mock import MagicMock, patch
+
+import pytest
+
 from app.tools.web_search import SmartWebSearch
+
+pytestmark = pytest.mark.unit
 
 
 class TestSmartWebSearch(unittest.TestCase):

@@ -3,6 +3,8 @@ from unittest.mock import MagicMock
 
 from app.tools.scanners import VulnerabilityScanners
 
+pytestmark = pytest.mark.unit
+
 
 @pytest.fixture
 def service(tmp_path, monkeypatch):

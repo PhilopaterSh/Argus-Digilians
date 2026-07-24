@@ -2,6 +2,8 @@ import pytest
 from unittest.mock import MagicMock, patch
 from app.tools.self_heal import SelfHealingService
 
+pytestmark = pytest.mark.unit
+
 
 @pytest.fixture
 def healer():

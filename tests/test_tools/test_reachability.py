@@ -3,6 +3,8 @@ from unittest.mock import MagicMock
 
 from app.tools.reachability import ReachabilityService
 
+pytestmark = pytest.mark.unit
+
 
 @pytest.fixture
 def service():

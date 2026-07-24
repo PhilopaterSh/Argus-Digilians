@@ -1,6 +1,10 @@
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 from app.tools.evasion import EvasionService
+
+pytestmark = pytest.mark.unit
 
 
 def _make_runner(response_map: dict, default: str = ""):

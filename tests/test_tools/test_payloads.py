@@ -1,6 +1,10 @@
 from unittest.mock import MagicMock
 
+import pytest
+
 from app.tools.payloads import fetch_intruder_payloads
+
+pytestmark = pytest.mark.unit
 
 
 class TestFetchIntruderPayloads:
