@@ -6,7 +6,13 @@
 
 **Created**: 2026-07-08
 
-**Status**: Draft
+**Status**: Implemented — the gate (`scripts/check_docstrings.py`, FR-001-005) predates
+this status line; FR-006/FR-007's retrospective backfill completed 2026-07-24 (0
+violations, repo-wide - see `tasks.md`, `specs/checklist.md` CHK114-117, and
+`specs/checklist-docstring-backfill.md`). This line was stuck at `Draft` despite the
+feature being fully implemented and CI-enforced; corrected 2026-07-24 during a spec-kit
+accuracy review, alongside adding the `research.md`/`plan.md`/`tasks.md` this status tier
+requires.
 
 **Input**: Introduce a permanent Spec Kit phase that enforces Google-style docstrings
 (Summary/Args/Returns/Raises) on every function, applied retroactively where feasible and
@@ -69,3 +75,11 @@ contracts from source instead of reading them - the exact failure mode this phas
 - "Retroactive" backfill is a scheduled, reviewed, incremental effort (FR-006), not a
   same-day bulk edit - stated explicitly since the parent request asked for full retroactive
   coverage, which is achievable but not safely automatable in one unreviewed pass at this scale.
+
+## Artifact applicability
+
+- data-model.md: N/A — this feature adds a CI gate script and documentation content, not
+  any persisted schema or data contract. There is nothing to model.
+- quickstart.md: N/A — there is no new user/operator-facing workflow. `--diff`/`--all`
+  usage is already documented in `scripts/check_docstrings.py`'s own module docstring and
+  in `plan.md`'s Design section; a separate quickstart would duplicate both.
