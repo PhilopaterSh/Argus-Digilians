@@ -1,6 +1,6 @@
 import logging
 import re
-from typing import List
+from typing import Any, Dict, List
 from urllib.parse import urlparse
 
 from app.core.agent.contracts import AGENT_RUN_MODE_DEMO, AGENT_RUN_MODE_TEST, record_state_event, utc_now_iso
@@ -20,7 +20,7 @@ def parse_nmap_ports(nmap_output: str) -> List[int]:
         List[int]: Every port number matched by `<port>/tcp open`, in the
         order they appear; empty if `nmap_output` is empty/falsy.
     """
-    ports = []
+    ports: List[int] = []
     if not nmap_output:
         return ports
     pattern = re.compile(r"(\d+)/tcp\s+open")
@@ -90,7 +90,7 @@ def recon_node(state: AgentState) -> AgentState:
     state["status"] = "running"
     state["updated_at"] = utc_now_iso()
 
-    raw_recon = {}
+    raw_recon: Dict[str, Any] = {}
     try:
         tools = WSLBridgeTools()
         report = tools.recon.recon_suite(target)

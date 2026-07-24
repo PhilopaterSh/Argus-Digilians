@@ -14,6 +14,8 @@ copy it was supposed to have replaced. All 5 added below;
 `scripts/run_argus_cli.py` now imports this function instead of maintaining
 its own list.
 """
+from typing import Optional
+
 from langchain_core.tools import Tool
 
 from app.tools.tool_registry import WSLBridgeTools
@@ -46,7 +48,7 @@ ROLE_TOOL_PARTITIONS = {
 _PLANNER_SUMMARIZER_TOOLS = {"Query_Memory", "Query_Knowledge_Graph"}
 
 
-def build_argus_tools(bridge: WSLBridgeTools, role: str = None) -> list[Tool]:
+def build_argus_tools(bridge: WSLBridgeTools, role: Optional[str] = None) -> list[Tool]:
     """Wrap WSLBridgeTools methods as LangChain Tools for ArgusBrain's ReAct agent.
 
     Args:

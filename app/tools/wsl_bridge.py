@@ -4,6 +4,8 @@ import subprocess
 import threading
 import time
 from dataclasses import dataclass
+from typing import Optional
+
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -18,7 +20,7 @@ class WSLConfig:
 
 class WSLBridge:
     """Responsible only for WSL/SSH service configuration and readiness."""
-    def __init__(self, config: WSLConfig = None):
+    def __init__(self, config: Optional[WSLConfig] = None):
         """Store the WSL/SSH connection config and set up the readiness lock.
 
         Args:

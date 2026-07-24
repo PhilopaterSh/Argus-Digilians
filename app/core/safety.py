@@ -4,6 +4,7 @@ All scanning must be controlled, logged, and non-destructive.
 """
 import re
 import ipaddress
+from typing import Any, Dict, List
 from urllib.parse import urlparse
 
 # Patterns that are always blocked regardless of scan mode
@@ -38,7 +39,7 @@ class SafetyLayer:
         """
         self.allow_internal = allow_internal
         self._blocked_count = 0
-        self._audit_log = []
+        self._audit_log: List[Dict[str, Any]] = []
 
     def sanitize_input(self, text: str) -> str:
         """Removes shell injection characters and normalizes input.

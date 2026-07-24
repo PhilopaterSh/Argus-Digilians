@@ -7,6 +7,7 @@ RAGEngine (rag_engine.py) with zero-dependency static lookups.
 
 import json as _json
 from pathlib import Path as _Path
+from typing import Dict, List
 
 # -- CVE / vuln catalogue per technology ---------------------------------------
 TECH_VULNS = {
@@ -159,7 +160,7 @@ def get_tech_context(tech_string: str) -> dict:
         key matched.
     """
     ts = tech_string.lower()
-    result = {"cves": [], "hints": []}
+    result: Dict[str, List] = {"cves": [], "hints": []}
     for tech_key, cves in TECH_VULNS.items():
         if tech_key.lower() in ts:
             result["cves"].extend(cves)
