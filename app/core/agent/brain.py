@@ -196,6 +196,21 @@ class ArgusBrain:
         structured-decoding reliability fix on every call. `ChatOllama`
         verified working against the live model - see
         `app/core/llm_factory.py::build_chat_llm()`.
+
+        Args:
+            model_name (str): Ollama model tag, passed to `build_chat_llm()`
+                unless `llm` overrides it.
+            tools_list (list): Tools the ReAct graph/deterministic pipeline
+                can call; also indexed by name into `self.tool_map`.
+            rag_config (dict | None): RAG settings; defaults to
+                `_load_rag_config()`'s result (from `ArgusConfig`) if
+                omitted. RAG is disabled if this ends up `None` or lacks
+                `enabled: True`.
+            memory (ArgusMemory | None): Blackboard/knowledge-graph
+                backing store; RAG/graph-edge features are no-ops if
+                `None`.
+            llm: Optional LLM override (see above); defaults to
+                `build_chat_llm(model_name)`.
         """
         self.llm = llm if llm is not None else build_chat_llm(model_name)
         self.tools = tools_list
@@ -237,6 +252,13 @@ class ArgusBrain:
 
     @staticmethod
     def _load_rag_config() -> Optional[Dict[str, Any]]:
+        """Load RAG settings from the project-wide ArgusConfig, if RAG is enabled there.
+
+        Returns:
+            Optional[Dict[str, Any]]: `ArgusConfig.load().to_rag_dict()` if
+            `cfg.rag.enabled` is True, else `None` - also `None` if
+            loading the config raises for any reason.
+        """
         try:
             from app.core.config import ArgusConfig
             cfg = ArgusConfig.load()
@@ -246,6 +268,11 @@ class ArgusBrain:
         return None
 
     def _refresh_blackboard(self):
+        """Re-read the Blackboard summary/graph insights into `self._blackboard_context`.
+
+        Sets `self._blackboard_context` to `""` if `self.memory` is `None`
+        or the read fails (logged, not raised).
+        """
         if self.memory is None:
             self._blackboard_context = ""
             return
@@ -267,6 +294,21 @@ class ArgusBrain:
         self._refresh_blackboard()
 
     def _enrich_with_rag(self, query: str, callbacks=None) -> str:
+        """Fuse RAG (knowledge base) and Blackboard context into the query text.
+
+        Args:
+            query (str): The raw question/instruction.
+            callbacks (list | None): Forwarded to `_emit_graph_step` to
+                announce which RAG sources were retrieved, if any.
+
+        Returns:
+            str: `query` prefixed with fused RAG+Blackboard context if RAG
+            is enabled and retrieval succeeded; `query` prefixed with just
+            Blackboard context if RAG is disabled/unavailable/failed but
+            Blackboard context exists; `query` unchanged otherwise. Also
+            sets `self._last_rag_sources` to the retrieved source
+            basenames (empty if none).
+        """
         self._last_rag_sources = []
 
         if not self.rag_enabled or self._rag_engine is None:
@@ -321,6 +363,22 @@ class ArgusBrain:
         return query
 
     def ask(self, query: str, callbacks=None, on_phase: Optional[Any] = None) -> Dict[str, Any]:
+        """Run a security analysis for `query`, choosing the deterministic
+        pipeline if `on_phase` is given, else the modular ReAct workflow.
+
+        Args:
+            query (str): The user's request text (target is extracted
+                from this via `react_workflow.extract_target`).
+            callbacks (list | None): Forwarded to the chosen path for
+                live step reporting.
+            on_phase (callable | None): If given, explicitly selects
+                `ask_deterministic` (see that method's own docstring for
+                its signature); if omitted, runs the ReAct graph instead.
+
+        Returns:
+            Dict[str, Any]: `{"output": ...}`, shaped per whichever path
+            ran (see `ask_deterministic`/`_run_structured_graph`).
+        """
         if on_phase is not None:
             # Explicitly requested the deterministic pipeline
             return self.ask_deterministic(query, callbacks=callbacks, on_phase=on_phase)
@@ -340,6 +398,22 @@ class ArgusBrain:
         """
         Runs the fixed recon pipeline directly, then makes exactly one LLM call
         to synthesize the results into a SecurityReport.
+
+        Args:
+            target (str): The target to analyze (run through
+                `_extract_target` first in case it's embedded in a
+                longer instruction).
+            callbacks: Currently unused by this method's own body -
+                accepted for call-site compatibility with `ask`.
+            on_phase (callable | None): Forwarded to
+                `run_deterministic_recon` - see that method's docstring.
+
+        Returns:
+            Dict[str, Any]: `{"output": <SecurityReport-shaped dict>}` on
+            success (with `_raw_tool_observations` attached); an error
+            dict (`synthesis_llm_failed` or, after retries,
+            `synthesis_echoed_schema`) if the LLM call fails or keeps
+            echoing the schema instead of a real report.
         """
         self._refresh_blackboard()
         clean_target = self._extract_target(target)
@@ -417,6 +491,14 @@ class ArgusBrain:
         """
         http://testasp.vulnweb.com/some/path?x=1  ->  testasp.vulnweb.com
         testasp.vulnweb.com                        ->  testasp.vulnweb.com
+
+        Args:
+            target (str): A URL or bare host; a missing scheme is treated
+                as `http://`.
+
+        Returns:
+            str: The bare hostname, or `target` unchanged if it has no
+            parseable hostname.
         """
         from urllib.parse import urlparse
 
@@ -428,6 +510,16 @@ class ArgusBrain:
     _SELF_HEAL_TOOL_NAME = "System_Self_Heal"
 
     def _invoke(self, tool, arg: str) -> str:
+        """Call a tool with a single string argument, regardless of its calling convention.
+
+        Args:
+            tool: A LangChain `Tool` (has `.run`) or a plain callable
+                (has `.invoke`).
+            arg (str): The single string argument to pass.
+
+        Returns:
+            str: The tool's result, stringified.
+        """
         if hasattr(tool, "run"):
             return str(tool.run(arg))
         return str(tool.invoke(arg))
@@ -438,6 +530,17 @@ class ArgusBrain:
         errors, ask System_Self_Heal (if registered) to install each
         missing binary. Returns True if at least one heal attempt ran
         without raising, so the caller knows a retry is worth trying.
+
+        Args:
+            tool_name (str): Name of the tool whose output is being
+                checked (used only in log/print messages).
+            observation (str): The tool's raw output to scan for
+                "X: command not found" errors.
+
+        Returns:
+            bool: True if at least one self-heal attempt ran without
+            raising; False if no missing-command errors were found, or
+            `System_Self_Heal` isn't registered.
         """
         missing = self._COMMAND_NOT_FOUND_RE.findall(observation)
         if not missing:
@@ -474,10 +577,18 @@ class ArgusBrain:
         Query_Knowledge_Graph has real data to return. No-op (and never
         fatal) when memory is disabled or a write fails.
 
-        entity: (entity_type, entity_value) for the new node this edge
-        introduces - always equal to whichever of source_val/target_val
-        isn't the already-registered graph root, so it's bundled here
-        rather than passed as two more separate positional strings.
+        Args:
+            entity (tuple[str, str]): `(entity_type, entity_value)` for
+                the new node this edge introduces - always equal to
+                whichever of source_val/target_val isn't the
+                already-registered graph root, so it's bundled here
+                rather than passed as two more separate positional strings.
+            source_val (str): The relation's source node value.
+            target_val (str): The relation's target node value.
+            rel_type (str): The relation type (e.g. "USES_TECH").
+
+        Returns:
+            None
         """
         entity_type, entity_value = entity
         if self.memory is None:
@@ -492,6 +603,20 @@ class ArgusBrain:
             print(f"[BRAIN] graph edge write skipped ({rel_type}): {e}")
 
     def _run_tool_safely(self, tool_name: str, target: str) -> str:
+        """Call a registered tool by name, converting to a bare hostname
+        for tools that need one and retrying once after a self-heal
+        attempt if the first call reports a missing command.
+
+        Args:
+            tool_name (str): Name of the tool to call, looked up in
+                `self.tool_map`.
+            target (str): The raw target string to pass (converted to a
+                bare hostname first for tools in `_BARE_HOSTNAME_TOOLS`).
+
+        Returns:
+            str: The tool's output, or a `[SKIPPED]`/`[TOOL ERROR]`
+            message if the tool isn't registered or raises.
+        """
         tool = self.tool_map.get(tool_name)
         if tool is None:
             return f"[SKIPPED] Tool '{tool_name}' is not registered in this build."
@@ -520,7 +645,18 @@ class ArgusBrain:
     def _parse_subdomains(self, observation: str, exclude_hostname: str) -> List[str]:
         """Pulls plausible hostnames out of Subdomain_Enumeration's raw
         (possibly fenced) line-per-subdomain output, excluding the root
-        host we already scanned and de-duping while preserving order."""
+        host we already scanned and de-duping while preserving order.
+
+        Args:
+            observation (str): Raw Subdomain_Enumeration tool output.
+            exclude_hostname (str): The already-scanned root host to
+                exclude from the results.
+
+        Returns:
+            List[str]: Candidate subdomains, in first-seen order, with
+            `exclude_hostname` and any line containing a space or slash
+            (or lacking a `.`) filtered out.
+        """
         candidates = []
         for line in observation.splitlines():
             line = line.strip().strip("`")
@@ -540,7 +676,15 @@ class ArgusBrain:
     def _parse_tech(self, observation: str) -> str:
         """Pulls the raw 'Tech: ...' line out of Recon_Suite's output.
         This is the noisy WhatWeb-style line (cookies, IP, title and all) -
-        use _clean_tech_string() before using it as a search query."""
+        use _clean_tech_string() before using it as a search query.
+
+        Args:
+            observation (str): Raw Recon_Suite tool output.
+
+        Returns:
+            str: The raw `Tech:` block's text (up to 500 chars), or `""`
+            if no `Tech:` block is found.
+        """
         match = _TECH_BLOCK_RE.search(observation)
         if not match:
             return ""
@@ -556,6 +700,15 @@ class ArgusBrain:
         written that as a search query. This keeps only tokens whose key
         isn't in _TECH_NOISE_KEYS, and prefers the bracket VALUE (e.g.
         "Microsoft-IIS/8.5") over the raw token when there is one.
+
+        Args:
+            raw_tech (str): The raw `Tech:` line text (as returned by
+                `_parse_tech`).
+
+        Returns:
+            str: A space-joined, deduplicated string of useful tech
+            tokens (up to 200 chars); `""` if `raw_tech` is empty, or
+            `raw_tech[:200]` unchanged if no tokens survive filtering.
         """
         if not raw_tech:
             return ""
@@ -584,7 +737,17 @@ class ArgusBrain:
 
     def _parse_interesting_paths(self, observation: str) -> List[str]:
         """Pulls endpoints matching common sensitive-path keywords out of
-        Crawl_Target's 'Top findings:' list."""
+        Crawl_Target's 'Top findings:' list.
+
+        Args:
+            observation (str): Raw Crawl_Target tool output.
+
+        Returns:
+            List[str]: Up to `MAX_CHAINED_PATHS` lines from the "Top
+            findings:" section that contain a keyword from
+            `_INTERESTING_PATH_KEYWORDS`; empty if no such section/lines
+            exist.
+        """
         capture = False
         paths = []
         for line in observation.splitlines():
@@ -604,6 +767,15 @@ class ArgusBrain:
         of a sentence containing literal URLs/query-strings, which almost
         certainly doesn't match however Exploit_Suggester's payload
         repository search actually works.
+
+        Args:
+            paths (List[str]): Crawled endpoint lines (as returned by
+                `_parse_interesting_paths`).
+
+        Returns:
+            str: Space-joined, sorted vulnerability-class terms matched
+            via `_PATH_KEYWORD_TO_VULN_CLASS`; falls back to
+            "common web vulnerabilities" if no keyword matched.
         """
         terms = set()
         for path in paths:
@@ -626,8 +798,19 @@ class ArgusBrain:
         chains a few real findings into automatic follow-up calls. Returns
         {label: raw_observation} for every phase (core + chained) that ran.
 
-        on_phase: optional callable(phase_index, total_phases, tool_name,
-        observation) invoked immediately after each phase finishes.
+        Args:
+            target (str): The target to run recon against.
+            on_phase (callable | None): Optional
+                `callable(phase_index, total_phases, tool_name, observation)`
+                invoked immediately after each phase finishes (including
+                chained follow-ups); exceptions from it are logged and
+                ignored, never propagated.
+
+        Returns:
+            Dict[str, str]: `{label: raw_observation}` for every core
+            phase in `DETERMINISTIC_PHASES` plus any chained follow-up
+            calls (subdomain reachability re-checks, a tech-based
+            Smart_Web_Search, an Exploit_Suggester lookup) that actually ran.
         """
         observations: Dict[str, str] = {}
         counter = {"i": 0, "total": len(DETERMINISTIC_PHASES)}
@@ -644,6 +827,20 @@ class ArgusBrain:
                 print(f"[BRAIN] could not seed graph root '{graph_root}': {e}")
 
         def emit(label: str, obs: str, domain: str = target) -> None:
+            """Record one phase's observation into `observations`, persist
+            it as a finding, and notify `on_phase` if given.
+
+            Args:
+                label (str): Key to store this observation under (may
+                    differ from the raw tool name for chained calls, e.g.
+                    "Check_Reachability[sub.example.com]").
+                obs (str): The raw tool observation text.
+                domain (str): Domain to attribute the finding to; defaults
+                    to the outer `target`.
+
+            Returns:
+                None
+            """
             counter["i"] += 1
             observations[label] = obs
             if self.memory is not None:
@@ -713,6 +910,14 @@ class ArgusBrain:
         """
         Extract the target URL/domain from an instruction paragraph,
         applying scheme inference (prepending http:// to bare domains).
+
+        Args:
+            query (str): The instruction text to search.
+
+        Returns:
+            str: The first matched URL (as-is), or `http://` + the first
+            matched bare domain, or `query` unchanged (with a warning
+            printed) if neither pattern matches anywhere in the text.
         """
         query = query.strip()
 
@@ -738,6 +943,14 @@ class ArgusBrain:
         """
         Detects the model copying the JSON Schema / field-instructions
         text back verbatim instead of producing filled-in report data.
+
+        Args:
+            output (Any): The parsed synthesis output to check.
+
+        Returns:
+            bool: True if `output` isn't a dict, contains a `$defs`/
+            `properties`/`required` key (schema-echo signature), or is
+            missing the required `summary` key; False otherwise.
         """
         if not isinstance(output, dict):
             return False
@@ -884,6 +1097,16 @@ class ArgusBrain:
         so callers can distinguish them from ordinary tool observations
         (Constitution VIII - a reflection step's outcome must be visible,
         not hidden overhead).
+
+        Args:
+            callbacks (list | None): Objects exposing an
+                `on_graph_event(status, detail)` method; a no-op if
+                falsy.
+            message: The new graph message (its `.content`, or itself if
+                no `.content` attribute, is forwarded).
+
+        Returns:
+            None
         """
         if not callbacks:
             return
@@ -900,7 +1123,18 @@ class ArgusBrain:
                 handler(status, content)
 
     def _finalize_graph_output(self, state: Dict[str, Any]) -> Dict[str, Any]:
-        """Extract and structure the graph's Final Answer, if it reached one."""
+        """Extract and structure the graph's Final Answer, if it reached one.
+
+        Args:
+            state (Dict[str, Any]): The graph's final streamed state.
+
+        Returns:
+            Dict[str, Any]: `{"output": <SecurityReport-shaped dict>}` via
+            structured/Pydantic/regex-JSON extraction (see
+            `_process_output`), or `{"output": {"error":
+            "no_final_answer", "message": ...}}` if the graph never
+            reached `phase == "done"` with a "Final Answer:" message.
+        """
         from app.core.agent.react_workflow import _try_structured_final_answer
 
         messages = state.get("messages", [])
@@ -936,6 +1170,13 @@ class ArgusBrain:
         No-op if RAG retrieved nothing this run, or if `output` isn't a real
         report dict (e.g. the `no_final_answer` error path, or a raw-text
         fallback with no structure to attach metadata to).
+
+        Args:
+            result (Dict[str, Any]): The `{"output": ...}` dict to mutate
+                in place.
+
+        Returns:
+            None
         """
         if not self._last_rag_sources:
             return
@@ -944,6 +1185,20 @@ class ArgusBrain:
             output["sources_used"] = list(self._last_rag_sources)
 
     def _process_output(self, output: Any, raw_output: str = "") -> Dict[str, Any]:
+        """Coerce raw LLM output into a `{"output": ...}` dict, trying
+        Pydantic parsing, then regex-extracted inline JSON, then raw text.
+
+        Args:
+            output (Any): The value to structure - already-error dicts
+                pass through unchanged.
+            raw_output (str): Currently unused by this method's own body -
+                accepted for call-site compatibility.
+
+        Returns:
+            Dict[str, Any]: `{"output": <parsed dict or original value>}`
+            - never raises; each parsing attempt's failure is logged and
+            falls through to the next.
+        """
         if isinstance(output, dict) and "error" in output:
             return {"output": output}
 
@@ -966,7 +1221,16 @@ class ArgusBrain:
         return {"output": output}
 
     def simple_ask(self, prompt):
-        """Direct, single-turn LLM call bypassing the ReAct graph entirely."""
+        """Direct, single-turn LLM call bypassing the ReAct graph entirely.
+
+        Args:
+            prompt: The prompt to send directly to `self.llm.invoke()`.
+
+        Returns:
+            Dict[str, Any]: `{"output": <response text>}`, normalized to
+            a plain string whether `self.llm` returns an `AIMessage`
+            (ChatOllama) or a bare string.
+        """
         response = self.llm.invoke(prompt)
         # self.llm is a ChatOllama (build_chat_llm()) in production, whose
         # .invoke() returns an AIMessage, not a bare string like OllamaLLM's
@@ -976,7 +1240,20 @@ class ArgusBrain:
         return {"output": content}
 
     def dispatch(self, tool_name: str, **kwargs) -> Any:
-        """Invoke a single registered tool directly by name, bypassing the LLM executor."""
+        """Invoke a single registered tool directly by name, bypassing the LLM executor.
+
+        Args:
+            tool_name (str): Name of the tool to call, looked up in
+                `self.tool_map`.
+            **kwargs: Forwarded as keyword arguments to the tool's
+                underlying `.func`.
+
+        Returns:
+            Any: Whatever the tool's `.func(**kwargs)` returns.
+
+        Raises:
+            KeyError: If `tool_name` isn't registered in `self.tool_map`.
+        """
         tool = self.tool_map.get(tool_name)
         if tool is None:
             raise KeyError(f"Tool not found: {tool_name}")

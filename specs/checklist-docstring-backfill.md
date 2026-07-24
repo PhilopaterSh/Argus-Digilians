@@ -90,31 +90,35 @@ Auto-generated inventory of functions this PR's diff touches that need a real, h
 
 ## `app/core/agent/brain.py`
 
-- [ ] `__init__` (line 178) - needs: Args
-- [ ] `_load_rag_config` (line 239) - needs: Returns
-- [ ] `_refresh_blackboard` (line 248) - needs: summary
-- [ ] `_enrich_with_rag` (line 268) - needs: Args, Returns
-- [ ] `ask` (line 322) - needs: Args, Returns
-- [ ] `ask_deterministic` (line 338) - needs: Args, Returns
-- [ ] `_to_bare_hostname` (line 415) - needs: Args, Returns
-- [ ] `_invoke` (line 429) - needs: Args, Returns
-- [ ] `_try_self_heal` (line 434) - needs: Args, Returns
-- [ ] `_run_tool_safely` (line 465) - needs: Args, Returns
-- [ ] `_parse_subdomains` (line 491) - needs: Args, Returns
-- [ ] `_parse_tech` (line 511) - needs: Args, Returns
-- [ ] `_clean_tech_string` (line 520) - needs: Args, Returns
-- [ ] `_parse_interesting_paths` (line 556) - needs: Args, Returns
-- [ ] `_build_exploit_query` (line 572) - needs: Args, Returns
-- [ ] `run_deterministic_recon` (line 589) - needs: Args, Returns
-- [ ] `emit` (line 606) - needs: Args, Returns
-- [ ] `_extract_target` (line 666) - needs: Args, Returns
-- [ ] `_looks_like_schema_echo` (line 691) - needs: Args, Returns
-- [ ] `_emit_graph_step` (line 813) - needs: Args, Returns
-- [ ] `_finalize_graph_output` (line 841) - needs: Args, Returns
-- [ ] `_attach_rag_sources` (line 868) - needs: Args, Returns
-- [ ] `_process_output` (line 885) - needs: Args, Returns
-- [ ] `simple_ask` (line 907) - needs: Args, Returns
-- [ ] `dispatch` (line 917) - needs: Args, Raises, Returns
+Riskiest single file in the whole backlog (this project's own history: 2 mypy errors and 2 silent-TypeError bugs found here across 2 earlier sessions) - backfilled in 3 smaller sub-batches with a syntax parse + fresh gate scan after each, not as one pass.
+
+- [x] `__init__` (line 178) - needs: Args. **Done 2026-07-24**: Tier 4 batch (app/core/agent/, sub-batch 3, group A - init/setup/ask path).
+- [x] `_load_rag_config` (line 239) - needs: Returns. **Done 2026-07-24**: sub-batch 3, group A.
+- [x] `_refresh_blackboard` (line 248) - needs: summary. **Done 2026-07-24**: sub-batch 3, group A.
+- [x] `_enrich_with_rag` (line 268) - needs: Args, Returns. **Done 2026-07-24**: sub-batch 3, group A.
+- [x] `ask` (line 322) - needs: Args, Returns. **Done 2026-07-24**: sub-batch 3, group A.
+- [x] `ask_deterministic` (line 338) - needs: Args, Returns. **Done 2026-07-24**: sub-batch 3, group A - noted `callbacks` param is accepted but never referenced in this method's own body (verified by grep).
+- [x] `_to_bare_hostname` (line 415) - needs: Args, Returns. **Done 2026-07-24**: sub-batch 3, group B (tool-execution/parsing helpers).
+- [x] `_invoke` (line 429) - needs: Args, Returns. **Done 2026-07-24**: sub-batch 3, group B.
+- [x] `_try_self_heal` (line 434) - needs: Args, Returns. **Done 2026-07-24**: sub-batch 3, group B.
+- [x] `_run_tool_safely` (line 465) - needs: Args, Returns. **Done 2026-07-24**: sub-batch 3, group B.
+- [x] `_parse_subdomains` (line 491) - needs: Args, Returns. **Done 2026-07-24**: sub-batch 3, group B.
+- [x] `_parse_tech` (line 511) - needs: Args, Returns. **Done 2026-07-24**: sub-batch 3, group B.
+- [x] `_clean_tech_string` (line 520) - needs: Args, Returns. **Done 2026-07-24**: sub-batch 3, group B.
+- [x] `_parse_interesting_paths` (line 556) - needs: Args, Returns. **Done 2026-07-24**: sub-batch 3, group B.
+- [x] `_build_exploit_query` (line 572) - needs: Args, Returns. **Done 2026-07-24**: sub-batch 3, group B.
+- [x] `run_deterministic_recon` (line 589) - needs: Args, Returns. **Done 2026-07-24**: sub-batch 3, group C (orchestration/output path).
+- [x] `emit` (line 606) - needs: Args, Returns. **Done 2026-07-24**: sub-batch 3, group C - nested function inside `run_deterministic_recon`.
+- [x] `_extract_target` (line 666) - needs: Args, Returns. **Done 2026-07-24**: sub-batch 3, group C.
+- [x] `_looks_like_schema_echo` (line 691) - needs: Args, Returns. **Done 2026-07-24**: sub-batch 3, group C.
+- [x] `_emit_graph_step` (line 813) - needs: Args, Returns. **Done 2026-07-24**: sub-batch 3, group C.
+- [x] `_finalize_graph_output` (line 841) - needs: Args, Returns. **Done 2026-07-24**: sub-batch 3, group C.
+- [x] `_attach_rag_sources` (line 868) - needs: Args, Returns. **Done 2026-07-24**: sub-batch 3, group C.
+- [x] `_process_output` (line 885) - needs: Args, Returns. **Done 2026-07-24**: sub-batch 3, group C - noted `raw_output` param is accepted but never referenced in this method's own body (verified by re-reading the code).
+- [x] `simple_ask` (line 907) - needs: Args, Returns. **Done 2026-07-24**: sub-batch 3, group C.
+- [x] `dispatch` (line 917) - needs: Args, Raises, Returns. **Done 2026-07-24**: sub-batch 3, group C.
+
+**Tier 4 complete**: `check_docstrings.py --all app/core/agent` now reports 0 violations across all 112 scanned functions in the directory. Full verification after every sub-batch: syntax parse, the gate itself, ruff, CI's exact mypy file list (brain.py/react_workflow.py are both in it), validate_ascii.py, full pytest (339/339) - never just the last one.
 
 ## `app/core/agent/contracts.py`
 
