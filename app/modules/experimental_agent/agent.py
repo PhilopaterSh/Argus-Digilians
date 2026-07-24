@@ -122,6 +122,18 @@ class ArgusPipeline:
     """
 
     def __init__(self, target: str, status_cb=None):
+        """Parse the target string (detecting subdomain/directory wildcard
+        mode) and wire up memory, LLM, verifier, and payload-decider
+        collaborators.
+
+        Args:
+            target (str): The scan target - a plain URL/host, a subdomain
+                wildcard (`*.example.com`, optionally with a trailing
+                `/*/*` path template), or a directory wildcard
+                (`example.com/*`, `example.com/api/*`).
+            status_cb (callable | None): Optional `(msg, level="info")`
+                callback for live status updates; defaults to a no-op.
+        """
         raw = target.strip()
 
         # -- Detect scan mode from wildcard position ------------------------
@@ -191,11 +203,30 @@ class ArgusPipeline:
     # -- Helpers -----------------------------------------------------------
 
     def _log(self, msg: str, level: str = "info"):
+        """Forward a message to the status callback and append it to `self.evidence`.
+
+        Args:
+            msg (str): The message text.
+            level (str): Severity label (e.g. "info"/"step"/"warn"/"high"/
+                "critical"), forwarded to the callback as-is.
+        """
         self._cb(msg, level)
         self.evidence.append(msg)
 
     def _safe_step(self, name: str, fn, *args, **kwargs):
-        """Run fn(*args, **kwargs). On any exception: log, continue, return None."""
+        """Run fn(*args, **kwargs). On any exception: log, continue, return None.
+
+        Args:
+            name (str): Step name, used in log messages and recorded in
+                `self.step_log`.
+            fn (callable): The step function to run.
+            *args: Forwarded to `fn`.
+            **kwargs: Forwarded to `fn`.
+
+        Returns:
+            Whatever `fn(*args, **kwargs)` returns, or `None` if it raised
+            (the exception is logged and swallowed, never propagated).
+        """
         self._log(f"[STEP] {name} ...", "step")
         try:
             result = fn(*args, **kwargs)
@@ -221,6 +252,11 @@ class ArgusPipeline:
         """
         Try to load a larger wordlist from a local SecLists installation.
         Falls back to the embedded SUBDOMAIN_WORDLIST constant.
+
+        Returns:
+            list[str]: Up to 2000 words from a local SecLists file if
+            found at one of the hardcoded Windows paths, else
+            `SUBDOMAIN_WORDLIST`.
         """
         seclists_paths = [
             r"C:\tools\SecLists\Discovery\DNS\subdomains-top1million-5000.txt",
@@ -242,6 +278,14 @@ class ArgusPipeline:
         """
         Passive: query crt.sh certificate transparency logs.
         Returns a set of subdomain names (without scheme).
+
+        Args:
+            domain (str): The root domain to query crt.sh for.
+
+        Returns:
+            set[str]: Discovered subdomain names (no wildcards, no
+            scheme); empty on any request/parse failure (logged, not
+            raised).
         """
         found = set()
         try:
@@ -263,7 +307,15 @@ class ArgusPipeline:
         return found
 
     def _wsl_subfinder(self, domain: str) -> set[str]:
-        """Try to run subfinder via WSL - silent if not installed."""
+        """Try to run subfinder via WSL - silent if not installed.
+
+        Args:
+            domain (str): The root domain to enumerate subdomains for.
+
+        Returns:
+            set[str]: Discovered subdomain names; empty if WSL/subfinder/
+            amass aren't available or the run fails (silently, by design).
+        """
         found = set()
         try:
             import subprocess
@@ -297,6 +349,21 @@ class ArgusPipeline:
           {"url":"https://api.example.com","status-code":200,"title":"API","tech":["nginx"]}
 
         Falls back to Python requests probing if httpx is not installed in WSL.
+
+        Args:
+            hosts (list[str]): Hostnames or URLs to probe.
+
+        Returns:
+            list[dict]: One dict per live host (`url`/`status`/`title`/
+            `tech` keys) with HTTP status < 500; via httpx if it produced
+            results, else via a per-host requests fallback (https then
+            http). Empty if `hosts` is empty.
+
+        Raises:
+            None propagates - a self-raised `RuntimeError` ("httpx not
+            found") is used internally to jump into the requests-fallback
+            path via this method's own `except` clause; it never escapes
+            this function.
         """
         import subprocess, json as _json, tempfile
 
@@ -377,7 +444,16 @@ class ArgusPipeline:
         return live
 
     def _probe_subdomain(self, subdomain: str) -> str | None:
-        """Single-host probe (used when httpx bulk probe is not applicable)."""
+        """Single-host probe (used when httpx bulk probe is not applicable).
+
+        Args:
+            subdomain (str): Bare hostname to probe (https tried first,
+                then http).
+
+        Returns:
+            str | None: The live URL (with whichever scheme responded
+            with status < 500), or `None` if neither scheme is reachable.
+        """
         for scheme in ("https", "http"):
             url = f"{scheme}://{subdomain}"
             r = self._http_get(url)
@@ -463,6 +539,12 @@ class ArgusPipeline:
         Covers: fingerprint, file fuzz, secrets, XSS, SQLi.
         Nikto and Think_And_Adapt are skipped per-subdomain for speed;
         they run once over all findings at the end.
+
+        Args:
+            sub_url (str): The live subdomain URL to scan; temporarily
+                swaps `self.target`/`self.base`/`self.host` to this
+                subdomain's context for the duration of the call, then
+                restores the originals.
         """
         sub_host = re.sub(r"https?://", "", sub_url).split("/")[0]
         self._log(f"\n{'-'*60}", "step")
@@ -489,7 +571,13 @@ class ArgusPipeline:
     # -- Directory enumeration (path wildcard mode) -----------------------
 
     def _load_dir_wordlist(self) -> list[str]:
-        """Try local SecLists first, fall back to embedded list."""
+        """Try local SecLists first, fall back to embedded list.
+
+        Returns:
+            list[str]: Up to 3000 words from a local SecLists file if
+            found at one of the hardcoded Windows paths, else
+            `DIRECTORY_WORDLIST`.
+        """
         paths = [
             r"C:\tools\SecLists\Discovery\Web-Content\common.txt",
             r"C:\SecLists\Discovery\Web-Content\common.txt",
@@ -511,7 +599,17 @@ class ArgusPipeline:
         return DIRECTORY_WORDLIST
 
     def _probe_path(self, url: str) -> bool:
-        """Return True if the path exists (2xx/3xx, not a soft-404)."""
+        """Return True if the path exists (2xx/3xx, not a soft-404).
+
+        Args:
+            url (str): The full candidate URL to check.
+
+        Returns:
+            bool: False if the request fails or returns 404/410, or a 200
+            whose body size matches a guaranteed-nonexistent-path
+            baseline (soft-404); True for any other status < 400, or
+            401/403 (auth-protected is still "exists").
+        """
         dir_base = getattr(self, "_dir_base", self.target)
         baseline_url = dir_base + "/__argus_nonexistent_probe__"
         br = self._http_get(baseline_url)
@@ -534,6 +632,14 @@ class ArgusPipeline:
         Builds the full candidate URL list, then passes them ALL to httpx
         in one bulk call - much faster than probing one-by-one.
         Returns list of confirmed live URLs.
+
+        Args:
+            base_path (str): URL path prefix to enumerate under (e.g. "/api").
+            wordlist (list[str]): Words to try as the next path segment.
+
+        Returns:
+            list[str]: Confirmed live URLs (each also recorded as a
+            finding in memory).
         """
         dir_base  = getattr(self, "_dir_base", self.target)
         base_path = base_path.rstrip("/")
@@ -645,6 +751,12 @@ class ArgusPipeline:
     # -- Step 1: Reachability ----------------------------------------------
 
     def _step_reachability(self):
+        """Probe `self.target` and record an Info finding with the HTTP status/Server header.
+
+        Returns:
+            bool: True if the target responded at all; False if the
+            request failed outright.
+        """
         self._log(f"Probing {self.target} ...")
         r = self._http_get(self.target)
         if r is None:
@@ -665,6 +777,8 @@ class ArgusPipeline:
     # -- Step 2: Technology fingerprint -----------------------------------
 
     def _step_fingerprint(self):
+        """Detect tech stack (CMS/framework/language) and WAF from headers/body
+        signatures, and record the combined summary as an Info finding."""
         r = self._http_get(self.target)
         if r is None:
             return
@@ -803,6 +917,9 @@ class ArgusPipeline:
     # -- Step 3: Sensitive file discovery (verified) -----------------------
 
     def _step_fuzz_files(self):
+        """Probe `SENSITIVE_FILES` under `self.base` via the Verifier and
+        record CONFIRMED/PROTECTED findings, generating an AI PoC for each
+        confirmed exposure."""
         confirmed = 0
         for path in SENSITIVE_FILES:
             result = self.verifier.verify_file(self.base, path)
@@ -838,6 +955,8 @@ class ArgusPipeline:
     # -- Step 4: Secrets in page source -----------------------------------
 
     def _step_secrets(self):
+        """Scan the target page source for secrets via the Verifier and
+        record a Critical finding per confirmed match."""
         r = self._http_get(self.target)
         if r is None:
             return
@@ -857,6 +976,10 @@ class ArgusPipeline:
     # -- Step 5: SQL injection (verified) ---------------------------------
 
     def _step_sqli(self):
+        """Test discovered/known-vulnerable parameters for SQL injection via
+        the Verifier and the agent-prioritized payload list, recording a
+        Critical finding (with an AI-generated PoC) per confirmed injection
+        point (one payload per parameter, first confirmed match wins)."""
         # Discover parameters from page links
         r = self._http_get(self.target)
         if r is None:
@@ -908,6 +1031,18 @@ class ArgusPipeline:
           2. <form> action + <input name=...> fields
           3. ?param= patterns found in page links / text
         Returns unique (url, param) pairs, capped at 15.
+
+        Args:
+            r (requests.Response | None): The target page's response, used
+                to extract form/link-based params; if `None`, only
+                params already in `self.target`'s own query string are
+                returned (sources 2-4 below are skipped).
+
+        Returns:
+            list[tuple[str, str]]: Up to 15 unique `(url, param)` pairs,
+            combining URL-query params, form-field names, `?param=`
+            patterns in the body, and a fixed list of common generic
+            param names.
         """
         from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
 
@@ -915,6 +1050,13 @@ class ArgusPipeline:
         seen: set[tuple[str, str]] = set()
 
         def add(url: str, param: str):
+            """Add (url-without-query, param) to `targets` if not already seen.
+
+            Args:
+                url (str): Candidate URL (its query string is stripped
+                    before dedup/storage).
+                param (str): The parameter name.
+            """
             key = (url.split("?")[0], param)
             if key not in seen:
                 seen.add(key)
@@ -956,6 +1098,9 @@ class ArgusPipeline:
         return targets[:15]
 
     def _step_xss(self):
+        """Collect candidate (url, param) pairs and test each for reflected
+        XSS via the Verifier, recording a High finding (with an
+        AI-generated PoC) per confirmed reflection."""
         r = self._http_get(self.target)
         # Don't abort if page fails - we still have URL params
         test_targets = self._collect_xss_targets(r)
@@ -1234,6 +1379,15 @@ class ArgusPipeline:
         SecLists payload pool for the requested step.
 
         Called immediately before _step_sqli() executes its payload loop.
+
+        Args:
+            step (str): The scan step to build context for (e.g. "sqli").
+
+        Returns:
+            dict: `{"step", "target_url", "host", "tech_stack",
+            "waf_detected", "findings_so_far", "available_payloads"}` -
+            see `AgentPayloadDecider.select_payloads`'s docstring for
+            these keys' meaning.
         """
         from app.modules.experimental_agent.llm_engine import SECLISTS_EMBEDDED
 
@@ -1347,6 +1501,11 @@ If no retries are needed, respond with: []
         """
         Aggressive XSS retry - targets DOM sinks and additional parameters.
         Driven by Think_And_Adapt when initial XSS step found nothing.
+
+        Args:
+            params (dict | None): Currently unused by this method's own
+                body - accepted for call-site compatibility with
+                `_think_and_adapt`'s retry dispatch.
         """
         params = params or {}
         from app.modules.experimental_agent.llm_engine import SECLISTS_EMBEDDED
@@ -1385,6 +1544,11 @@ If no retries are needed, respond with: []
         """
         Time-based blind SQLi retry using SLEEP payloads.
         Driven by Think_And_Adapt when initial SQLi found nothing.
+
+        Args:
+            params (dict | None): Currently unused by this method's own
+                body - accepted for call-site compatibility with
+                `_think_and_adapt`'s retry dispatch.
         """
         params = params or {}
         from app.modules.experimental_agent.llm_engine import SECLISTS_EMBEDDED
@@ -1418,6 +1582,10 @@ If no retries are needed, respond with: []
         """
         Extended file fuzz with additional backup and config extensions.
         Driven by Think_And_Adapt when initial file fuzz found nothing.
+
+        Args:
+            params (dict | None): May include `"extra_paths"` (list[str])
+                to probe in addition to the built-in extended list.
         """
         params = params or {}
         extra_paths = [
@@ -1448,6 +1616,13 @@ If no retries are needed, respond with: []
     # -- Step 8: LLM threat analysis ---------------------------------------
 
     def _step_llm_analysis(self):
+        """Send this session's confirmed findings to the LLM for structured
+        threat analysis and record the result as an Info finding.
+
+        Returns:
+            str: The LLM's analysis text, or "No confirmed findings to
+            analyse." if there are no confirmed findings this session.
+        """
         findings = self.memory.get_detailed_findings(self.host, since=self._scan_start)
         raw_ev   = "\n".join(self.evidence[-80:])   # last 80 lines of evidence
 
@@ -1470,6 +1645,18 @@ If no retries are needed, respond with: []
     # -- Main run ----------------------------------------------------------
 
     def run(self) -> dict:
+        """Execute the full scan pipeline, branching on the mode detected in
+        `__init__` (subdomain wildcard, directory wildcard, or a normal
+        single-URL scan), then run cross-cutting checks (SSRF, open
+        redirect, XXE, Nikto, adaptive retries) and LLM analysis.
+
+        Returns:
+            dict: `_build_result()`'s output - `{"target", "findings",
+            "analysis", "evidence", "step_log", "risk", "elapsed"}`.
+            Returns early (skipping most steps) if subdomain mode finds
+            no live subdomains, or if the base reachability check fails
+            in directory/normal mode.
+        """
         from datetime import datetime as _dt
         start = time.time()
         # Record the moment this scan starts - used to scope findings to this
@@ -1560,6 +1747,19 @@ If no retries are needed, respond with: []
         return self._build_result(analysis, elapsed)
 
     def _build_result(self, analysis: str, elapsed=0) -> dict:
+        """Assemble the final report dict from this session's findings.
+
+        Args:
+            analysis (str): The LLM analysis text (or an early-exit
+                message like "Unreachable").
+            elapsed (float): Total scan wall-clock time in seconds.
+
+        Returns:
+            dict: `{"target", "findings", "analysis", "evidence",
+            "step_log", "risk", "elapsed"}` - `findings` excludes Low/Info
+            severity; `risk` is the most severe remaining severity level
+            (or "Info" if there are no findings).
+        """
         # Only include findings from THIS scan session (not accumulated old runs)
         _all_findings = self.memory.get_detailed_findings(
             self.host, since=self._scan_start
