@@ -156,17 +156,17 @@ Auto-generated inventory of functions this PR's diff touches that need a real, h
 
 ## `app/core/agent/react_workflow.py`
 
-- [ ] `_try_structured_action` (line 119) - needs: Args, Returns
-- [ ] `_build_prebuilt_workflow` (line 262) - needs: Args, Returns
-- [ ] `prompt_fn` (line 271) - needs: Args, Returns
-- [ ] `pre_hook` (line 276) - needs: Args, Returns
-- [ ] `post_hook` (line 288) - needs: Args, Returns
-- [ ] `_build_custom_workflow` (line 322) - needs: Args, Returns
-- [ ] `agent_node` (line 345) - needs: Args, Returns
-- [ ] `_parse_react_output` (line 360) - needs: Args, Returns
-- [ ] `route_after_execute` (line 644) - needs: Args, Returns
-- [ ] `_build_tool_map` (line 670) - needs: Args, Returns
-- [ ] `extract_target` (line 684) - needs: Args, Returns
+- [x] `_try_structured_action` (line 119) - needs: Args, Returns. **Already compliant 2026-07-24** - fixed in an earlier, unrelated session round (see this file's own Methodology Notes on the specs/020 merge and CI-fix rounds); confirmed via a fresh `check_docstrings.py --all` scan, not re-touched.
+- [x] `_build_prebuilt_workflow` (line 262) - needs: Args, Returns. **Already compliant 2026-07-24**, same as above.
+- [x] `prompt_fn` (line 271) - needs: Args, Returns. **Done 2026-07-24**: Tier 4 batch (app/core/agent/, sub-batch 2 - react_workflow.py).
+- [x] `pre_hook` (line 276) - needs: Args, Returns. **Done 2026-07-24**: Tier 4 batch (app/core/agent/, sub-batch 2).
+- [x] `post_hook` (line 288) - needs: Args, Returns. **Already compliant 2026-07-24**, same as `_try_structured_action` above.
+- [x] `_build_custom_workflow` (line 322) - needs: Args, Returns. **Already compliant 2026-07-24**, same.
+- [x] `agent_node` (line 345) - needs: Args, Returns. **Done 2026-07-24**: Tier 4 batch (app/core/agent/, sub-batch 2).
+- [x] `_parse_react_output` (line 360) - needs: Args, Returns. **Already compliant 2026-07-24**, same.
+- [x] `route_after_execute` (line 644) - needs: Args, Returns. **Already compliant 2026-07-24**, same.
+- [x] `_build_tool_map` (line 670) - needs: Args, Returns. **Done 2026-07-24**: Tier 4 batch (app/core/agent/, sub-batch 2).
+- [x] `extract_target` (line 684) - needs: Args, Returns. **Done 2026-07-24**: Tier 4 batch (app/core/agent/, sub-batch 2).
 
 ## `app/core/config.py`
 

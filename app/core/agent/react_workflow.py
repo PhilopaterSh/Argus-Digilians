@@ -470,12 +470,30 @@ def _build_prebuilt_workflow(
     llm_with_tools = llm.bind_tools(tools)
 
     def prompt_fn(state: dict) -> list:
-        """Dynamic prompt that injects blackboard context."""
+        """Dynamic prompt that injects blackboard context.
+
+        Args:
+            state (dict): Current graph state; reads `messages`.
+
+        Returns:
+            list: A `SystemMessage` (built via `build_prebuilt_system_prompt`)
+            followed by `state["messages"]`.
+        """
         msg = build_prebuilt_system_prompt(state)
         return [SystemMessage(content=msg)] + state["messages"]
 
     def pre_hook(state: dict) -> dict:
-        """Refresh blackboard before LLM call."""
+        """Refresh blackboard before LLM call.
+
+        Args:
+            state (dict): Current graph state; reads `iteration_count`.
+
+        Returns:
+            dict: `{"iteration_count": <incremented>}`, plus
+            `"blackboard_summary"` if `memory` is set and has a
+            non-empty summary to offer (silently omitted on any
+            memory-read failure).
+        """
         update = {"iteration_count": state.get("iteration_count", 0) + 1}
         if memory is not None:
             try:
@@ -558,7 +576,15 @@ def _build_custom_workflow(
     def agent_node(state: ArgusAgentState) -> dict:
         """LLM generates the next Action: format=json structured decoding first
         (012 FR-C9), falling back to free-text ReAct output for parse_node's
-        regex parser when structured decoding is unavailable/fails (FR-C10)."""
+        regex parser when structured decoding is unavailable/fails (FR-C10).
+
+        Args:
+            state (ArgusAgentState): Current graph state; reads `messages`
+                and `iteration_count`.
+
+        Returns:
+            dict: `{"messages": [response], "iteration_count": <incremented>}`.
+        """
         system_text = build_react_system_prompt({**state, "_tools": tool_map})
         structured_content = _try_structured_action(llm, system_text, state["messages"])
         if structured_content is not None:
@@ -1144,7 +1170,17 @@ def _build_multi_role_workflow(
 # Helpers
 # =======================================================
 def _build_tool_map(tools: list) -> Dict[str, Callable]:
-    """Convert a list of tools/callables to a name -> func dict."""
+    """Convert a list of tools/callables to a name -> func dict.
+
+    Args:
+        tools (list): A mix of `BaseTool` instances, plain callables (with
+            an optional `.name` attribute), or `{"name": ..., "func": ...}`
+            dicts.
+
+    Returns:
+        Dict[str, Callable]: Tool name to callable, ready for lookup by
+        name during action execution.
+    """
     tool_map = {}
     for t in tools:
         if isinstance(t, BaseTool):
@@ -1158,7 +1194,16 @@ def _build_tool_map(tools: list) -> Dict[str, Callable]:
 
 
 def extract_target(query: str) -> str:
-    """Extract target URL/domain from a user query."""
+    """Extract target URL/domain from a user query.
+
+    Args:
+        query (str): The user's request text.
+
+    Returns:
+        str: The first whitespace-separated token that starts with
+        `http://`/`https://`, or the first token containing a `.` with
+        no internal space; the whole `query` unchanged if neither is found.
+    """
     for part in query.split():
         part = part.strip(".,;!?\"'")
         if part.startswith(("http://", "https://")):
