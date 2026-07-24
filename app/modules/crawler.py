@@ -2,6 +2,8 @@ import re
 import requests
 
 def main():
+    """Fetch testasp.vulnweb.com and print every unique non-fragment,
+    non-javascript href found on the page."""
     target = "http://testasp.vulnweb.com"
     print(f"[*] Crawling {target} for valid links...")
     try:

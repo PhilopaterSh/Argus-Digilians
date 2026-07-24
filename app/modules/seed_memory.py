@@ -3,6 +3,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 from app.core.memory import ArgusMemory
 
 def populate_clean_memory():
+    """Wipe the Blackboard and seed it with a fixed set of demo findings/
+    entities/relations for testasp.vulnweb.com, for manual GUI testing."""
     mem = ArgusMemory()
     mem.clear_memory()
     

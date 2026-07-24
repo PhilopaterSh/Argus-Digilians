@@ -5,6 +5,9 @@ from langchain_core.tools import Tool
 import os
 
 def run_autonomous_reasoning():
+    """Run ArgusBrain against testasp.vulnweb.com with a fixed instruction
+    to consult existing memory first, then request exploit suggestions and
+    web research, and print the resulting report."""
     bridge = WSLBridgeTools()
     model = ArgusConfig.load().model_name
     
