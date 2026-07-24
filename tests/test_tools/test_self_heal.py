@@ -164,3 +164,44 @@ class TestSystemSelfHeal:
             mock_run.return_value = MagicMock(returncode=1, stdout="", stderr="error")
             result = healer.system_self_heal("pip install requests")
             assert "failed" in result.lower()
+
+    def test_apt_install_succeeds_when_runner_reports_setting_up(self, healer):
+        """A tool_info string with no "pip install"/"import" hint must route
+        to the apt-get branch via self.runner.run(), not the pip branch.
+
+        Args:
+            healer: test parameter provided by this test's own setup (a
+                pytest fixture or a mock/patch injected via a decorator -
+                see the test's parameters/decorators for which).
+        """
+        healer.runner.run.return_value = "Setting up nmap (7.94-1) ..."
+        result = healer.system_self_heal("nmap")
+        assert "successfully installed/verified" in result.lower()
+        healer.runner.run.assert_called_once()
+        assert "apt-get install -y nmap" in healer.runner.run.call_args[0][0]
+
+    def test_apt_install_succeeds_when_already_newest_version(self, healer):
+        """Verify Apt install succeeds when already newest version.
+
+        Args:
+            healer: test parameter provided by this test's own setup (a
+                pytest fixture or a mock/patch injected via a decorator -
+                see the test's parameters/decorators for which).
+        """
+        healer.runner.run.return_value = "nmap is already the newest version (7.94-1)."
+        result = healer.system_self_heal("nmap")
+        assert "successfully installed/verified" in result.lower()
+
+    def test_apt_install_falls_back_to_generic_failure_message(self, healer):
+        """Neither success indicator present must produce the generic
+        "check logs or install manually" fallback, not a raised error.
+
+        Args:
+            healer: test parameter provided by this test's own setup (a
+                pytest fixture or a mock/patch injected via a decorator -
+                see the test's parameters/decorators for which).
+        """
+        healer.runner.run.return_value = "E: Unable to locate package totally-fake-tool"
+        result = healer.system_self_heal("totally-fake-tool")
+        assert "self-heal failed" in result.lower()
+        assert "install manually" in result.lower()
