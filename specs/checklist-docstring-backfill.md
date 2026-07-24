@@ -184,64 +184,64 @@ Auto-generated inventory of functions this PR's diff touches that need a real, h
 
 ## `app/core/rag/config.py`
 
-- [ ] `from_central` (line 25) - needs: Returns
-- [ ] `from_dict` (line 41) - needs: Args, Returns
+- [x] `from_central` (line 25) - needs: Returns. **Done 2026-07-24**: Tier 2 batch (app/core/rag/).
+- [x] `from_dict` (line 41) - needs: Args, Returns. **Done 2026-07-24**: Tier 2 batch (app/core/rag/) - caught and fixed an inaccurate first draft (claimed missing-key fallback was to `from_central()`; it's actually `cls()`'s own dataclass defaults) before committing.
 
 ## `app/core/rag/document_processor.py`
 
-- [ ] `load_from_directory` (line 16) - needs: Args, Returns
-- [ ] `load_file` (line 38) - needs: Args, Returns
-- [ ] `_load_csv` (line 58) - needs: Args, Returns
-- [ ] `_load_json` (line 72) - needs: Args, Returns
-- [ ] `_load_pdf` (line 100) - needs: Args, Returns
-- [ ] `split_documents` (line 107) - needs: Args, Returns
-- [ ] `process_directory` (line 154) - needs: Args, Returns
+- [x] `load_from_directory` (line 16) - needs: Args, Returns. **Done 2026-07-24**: Tier 2 batch (app/core/rag/).
+- [x] `load_file` (line 38) - needs: Args, Returns. **Done 2026-07-24**: Tier 2 batch (app/core/rag/).
+- [x] `_load_csv` (line 58) - needs: Args, Returns. **Done 2026-07-24**: Tier 2 batch (app/core/rag/).
+- [x] `_load_json` (line 72) - needs: Args, Returns. **Done 2026-07-24**: Tier 2 batch (app/core/rag/).
+- [x] `_load_pdf` (line 100) - needs: Args, Returns. **Done 2026-07-24**: Tier 2 batch (app/core/rag/).
+- [x] `split_documents` (line 107) - needs: Args, Returns. **Done 2026-07-24**: Tier 2 batch (app/core/rag/).
+- [x] `process_directory` (line 154) - needs: Args, Returns. **Done 2026-07-24**: Tier 2 batch (app/core/rag/).
 
 ## `app/core/rag/embeddings.py`
 
-- [ ] `__new__` (line 11) - needs: Returns
-- [ ] `get_embeddings` (line 17) - needs: Args, Raises, Returns
-- [ ] `reset` (line 101) - needs: summary
+- [x] `__new__` (line 11) - needs: Returns. **Done 2026-07-24**: Tier 2 batch (app/core/rag/).
+- [x] `get_embeddings` (line 17) - needs: Args, Raises, Returns. **Done 2026-07-24**: Tier 2 batch (app/core/rag/).
+- [x] `reset` (line 101) - needs: summary. **Done 2026-07-24**: Tier 2 batch (app/core/rag/).
 
 ## `app/core/rag/local_kb.py`
 
-- [ ] `get_tech_context` (line 148) - needs: Args, Returns
-- [ ] `analyze_timeout_pattern` (line 169) - needs: Args, Returns
-- [ ] `_load_scenario_engine` (line 192) - needs: Returns
-- [ ] `retrieve_scenario_context` (line 246) - needs: Args, Returns
+- [x] `get_tech_context` (line 148) - needs: Args, Returns. **Done 2026-07-24**: Tier 2 batch (app/core/rag/).
+- [x] `analyze_timeout_pattern` (line 169) - needs: Args, Returns. **Done 2026-07-24**: Tier 2 batch (app/core/rag/).
+- [x] `_load_scenario_engine` (line 192) - needs: Returns. **Done 2026-07-24**: Tier 2 batch (app/core/rag/).
+- [x] `retrieve_scenario_context` (line 246) - needs: Args, Returns. **Done 2026-07-24**: Tier 2 batch (app/core/rag/).
 
 ## `app/core/rag/manifest.py`
 
-- [ ] `compute_kb_hash` (line 56) - needs: Args, Returns
-- [ ] `write_manifest` (line 89) - needs: Args, Returns
-- [ ] `read_manifest` (line 106) - needs: Args, Returns
-- [ ] `needs_rebuild` (line 118) - needs: Args, Returns
+- [x] `compute_kb_hash` (line 56) - needs: Args, Returns. **Done 2026-07-24**: Tier 2 batch (app/core/rag/).
+- [x] `write_manifest` (line 89) - needs: Args, Returns. **Done 2026-07-24**: Tier 2 batch (app/core/rag/).
+- [x] `read_manifest` (line 106) - needs: Args, Returns. **Done 2026-07-24**: Tier 2 batch (app/core/rag/).
+- [x] `needs_rebuild` (line 118) - needs: Args, Returns. **Done 2026-07-24**: Tier 2 batch (app/core/rag/).
 
 ## `app/core/rag/rag_engine.py`
 
-- [ ] `__init__` (line 61) - needs: Args
-- [ ] `initialize` (line 69) - needs: Args
-- [ ] `retrieve` (line 83) - needs: Args, Returns
-- [ ] `retrieve_with_scores` (line 95) - needs: Args, Returns
-- [ ] `augment` (line 99) - needs: Args, Returns
-- [ ] `query` (line 107) - needs: Args, Returns
-- [ ] `query_relevant` (line 144) - needs: Args, Returns
-- [ ] `add_document` (line 148) - needs: Args, Returns
-- [ ] `rebuild_index` (line 174) - needs: summary
-- [ ] `format_context` (line 179) - needs: Args, Returns
-- [ ] `format_combined_context` (line 189) - needs: Args, Returns
+- [x] `__init__` (line 61) - needs: Args. **Done 2026-07-24**: Tier 2 batch (app/core/rag/).
+- [x] `initialize` (line 69) - needs: Args. **Done 2026-07-24**: Tier 2 batch (app/core/rag/).
+- [x] `retrieve` (line 83) - needs: Args, Returns. **Done 2026-07-24**: Tier 2 batch (app/core/rag/).
+- [x] `retrieve_with_scores` (line 95) - needs: Args, Returns. **Done 2026-07-24**: Tier 2 batch (app/core/rag/).
+- [x] `augment` (line 99) - needs: Args, Returns. **Done 2026-07-24**: Tier 2 batch (app/core/rag/).
+- [x] `query` (line 107) - needs: Args, Returns. **Done 2026-07-24**: Tier 2 batch (app/core/rag/).
+- [x] `query_relevant` (line 144) - needs: Args, Returns. **Done 2026-07-24**: Tier 2 batch (app/core/rag/).
+- [x] `add_document` (line 148) - needs: Args, Returns. **Done 2026-07-24**: Tier 2 batch (app/core/rag/).
+- [x] `rebuild_index` (line 174) - needs: summary. **Done 2026-07-24**: Tier 2 batch (app/core/rag/).
+- [x] `format_context` (line 179) - needs: Args, Returns. **Done 2026-07-24**: Tier 2 batch (app/core/rag/).
+- [x] `format_combined_context` (line 189) - needs: Args, Returns. **Done 2026-07-24**: Tier 2 batch (app/core/rag/).
 
 ## `app/core/rag/vector_store.py`
 
-- [ ] `__init__` (line 19) - needs: Args
-- [ ] `build_index` (line 32) - needs: Args, Returns
-- [ ] `rebuild_from_directory` (line 51) - needs: Args, Returns
-- [ ] `load_index` (line 56) - needs: Returns
-- [ ] `_persist` (line 92) - needs: summary
-- [ ] `similarity_search` (line 98) - needs: Args, Returns
-- [ ] `similarity_search_with_score` (line 105) - needs: Args, Returns
-- [ ] `get_retriever` (line 112) - needs: Args, Raises, Returns
-- [ ] `index_size` (line 123) - needs: Returns
+- [x] `__init__` (line 19) - needs: Args. **Done 2026-07-24**: Tier 2 batch (app/core/rag/).
+- [x] `build_index` (line 32) - needs: Args, Returns. **Done 2026-07-24**: Tier 2 batch (app/core/rag/).
+- [x] `rebuild_from_directory` (line 51) - needs: Args, Returns. **Done 2026-07-24**: Tier 2 batch (app/core/rag/).
+- [x] `load_index` (line 56) - needs: Returns. **Done 2026-07-24**: Tier 2 batch (app/core/rag/).
+- [x] `_persist` (line 92) - needs: summary. **Done 2026-07-24**: Tier 2 batch (app/core/rag/).
+- [x] `similarity_search` (line 98) - needs: Args, Returns. **Done 2026-07-24**: Tier 2 batch (app/core/rag/).
+- [x] `similarity_search_with_score` (line 105) - needs: Args, Returns. **Done 2026-07-24**: Tier 2 batch (app/core/rag/).
+- [x] `get_retriever` (line 112) - needs: Args, Raises, Returns. **Done 2026-07-24**: Tier 2 batch (app/core/rag/).
+- [x] `index_size` (line 123) - needs: Returns. **Done 2026-07-24**: Tier 2 batch (app/core/rag/).
 
 ## `app/core/registry/tool_registry.py`
 

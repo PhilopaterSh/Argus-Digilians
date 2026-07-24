@@ -17,6 +17,11 @@ logger = logging.getLogger(__name__)
 
 class VectorStore:
     def __init__(self, config: Optional[RAGConfig] = None):
+        """Set up config/embeddings and ensure the vector store directory exists.
+
+        Args:
+            config (RAGConfig | None): Defaults to `RAGConfig.from_central()`.
+        """
         self.config = config or RAGConfig.from_central()
         self.embeddings = EmbeddingFactory.get_embeddings(self.config)
         self._store: Optional["FAISS"] = None
@@ -32,6 +37,16 @@ class VectorStore:
         return os.path.join(self.config.vector_store_dir, 'index.faiss')
 
     def build_index(self, chunks: List[Document]) -> int:
+        """Build a fresh FAISS index from document chunks, persist it, and
+        write its embedding manifest.
+
+        Args:
+            chunks (List[Document]): Chunks to index.
+
+        Returns:
+            int: Number of chunks indexed; 0 if `chunks` is empty (no
+            index is built in that case).
+        """
         if not chunks:
             logger.warning('[RAG] No chunks to index')
             return 0
@@ -51,11 +66,30 @@ class VectorStore:
         return len(chunks)
 
     def rebuild_from_directory(self, directory: Optional[str] = None) -> int:
+        """Reprocess a directory into chunks and build a fresh index from them.
+
+        Args:
+            directory (str | None): Defaults to
+                `self.config.knowledge_base_dir` (see `DocumentProcessor.
+                process_directory`).
+
+        Returns:
+            int: Number of chunks indexed (see `build_index`).
+        """
         processor = DocumentProcessor(self.config)
         chunks = processor.process_directory(directory)
         return self.build_index(chunks)
 
     def load_index(self) -> bool:
+        """Load a persisted FAISS index from disk, if its manifest is still valid.
+
+        Returns:
+            bool: True if an existing, manifest-valid index was loaded
+            into `self._store`; False if no index file exists, the
+            manifest says a rebuild is needed (embedder or knowledge base
+            changed), the pinned provider no longer matches the active
+            one, or loading raised an exception.
+        """
         if not os.path.exists(self._index_path):
             return False
 
@@ -92,12 +126,24 @@ class VectorStore:
             return False
 
     def _persist(self):
+        """Save the current in-memory FAISS index to `config.vector_store_dir`, if one exists."""
         if self._store is None:
             return
         self._store.save_local(self.config.vector_store_dir)
         logger.info('[RAG] Saved FAISS index to %s', self.config.vector_store_dir)
 
     def similarity_search(self, query: str, k: Optional[int] = None) -> List[Document]:
+        """Search the index for the most similar documents, lazily loading it if needed.
+
+        Args:
+            query (str): The search query text.
+            k (int | None): Max results; defaults to
+                `self.config.retriever_k`.
+
+        Returns:
+            List[Document]: Matching documents, most similar first;
+            empty if no index exists/can be loaded.
+        """
         if self._store is None and not self.load_index():
             return []
         assert self._store is not None
@@ -105,6 +151,17 @@ class VectorStore:
         return self._store.similarity_search(query, k=k)
 
     def similarity_search_with_score(self, query: str, k: Optional[int] = None) -> List[tuple]:
+        """Like `similarity_search`, but each result is paired with its raw score.
+
+        Args:
+            query (str): The search query text.
+            k (int | None): Max results; defaults to
+                `self.config.retriever_k`.
+
+        Returns:
+            List[tuple]: `(Document, score)` pairs, most similar first;
+            empty if no index exists/can be loaded.
+        """
         if self._store is None and not self.load_index():
             return []
         assert self._store is not None
@@ -112,6 +169,18 @@ class VectorStore:
         return self._store.similarity_search_with_score(query, k=k)
 
     def get_retriever(self, k: Optional[int] = None):
+        """Return a LangChain retriever bound to this vector store, lazily loading it if needed.
+
+        Args:
+            k (int | None): Retriever's `search_kwargs["k"]`; defaults to
+                `self.config.retriever_k`.
+
+        Returns:
+            A LangChain retriever (`FAISS.as_retriever(...)`).
+
+        Raises:
+            ValueError: If no index exists and none could be loaded.
+        """
         if self._store is None and not self.load_index():
             raise ValueError('Vector store has not been initialized or loaded.')
         assert self._store is not None
@@ -124,6 +193,11 @@ class VectorStore:
 
     @property
     def index_size(self) -> int:
+        """The number of vectors in the loaded index.
+
+        Returns:
+            int: `self._store.index.ntotal`, or 0 if no index is loaded.
+        """
         if self._store is None:
             return 0
         return self._store.index.ntotal

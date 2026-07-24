@@ -146,7 +146,18 @@ ATTACK_HINTS = {
 
 
 def get_tech_context(tech_string: str) -> dict:
-    """Return relevant CVEs and attack hints for a detected technology string."""
+    """Return relevant CVEs and attack hints for a detected technology string.
+
+    Args:
+        tech_string (str): A detected tech/stack string (e.g. from
+            `whatweb`), matched case-insensitively against TECH_VULNS/
+            ATTACK_HINTS keys.
+
+    Returns:
+        dict: `{"cves": [...], "hints": [...]}`, deduplicated (by CVE id
+        for cves, by exact text for hints); both empty if no known tech
+        key matched.
+    """
     ts = tech_string.lower()
     result = {"cves": [], "hints": []}
     for tech_key, cves in TECH_VULNS.items():
@@ -167,7 +178,19 @@ def get_tech_context(tech_string: str) -> dict:
 
 
 def analyze_timeout_pattern(timeout_count: int, total_probes: int, baseline_ok: bool) -> dict:
-    """Classify the path traversal timeout pattern and return analysis + bypass payloads."""
+    """Classify the path traversal timeout pattern and return analysis + bypass payloads.
+
+    Args:
+        timeout_count (int): Number of probes that timed out.
+        total_probes (int): Total probes sent.
+        baseline_ok (bool): Whether a baseline (non-payload) request
+            succeeded, ruling out a generally-slow/down target.
+
+    Returns:
+        dict: One of `PATTERN_RULES`'s entries ("no_timeouts",
+        "all_timeouts_baseline_ok", or "partial_timeouts"), chosen by the
+        timeout ratio and `baseline_ok`.
+    """
     if total_probes == 0:
         return PATTERN_RULES["no_timeouts"]
     ratio = timeout_count / total_probes
@@ -192,7 +215,14 @@ _scenario_state = {"model": None, "index": None, "meta": None, "unavailable": Fa
 def _load_scenario_engine():
     """Lazily load (or build once, then cache to disk) the FAISS index over
     the labeled scenario dataset. Returns (model, index, meta), or
-    (None, None, None) if unavailable. NEVER raises."""
+    (None, None, None) if unavailable. NEVER raises.
+
+    Returns:
+        tuple: `(model, index, meta)` - a loaded/built `SentenceTransformer`,
+        `faiss.Index`, and scenario-dict list - or `(None, None, None)` if
+        the scenarios file, `faiss`, or `sentence_transformers` isn't
+        available, or building/loading fails for any reason.
+    """
     if _scenario_state["unavailable"]:
         return None, None, None
     if _scenario_state["index"] is not None:
@@ -247,7 +277,17 @@ def retrieve_scenario_context(query: str, k: int = 3) -> list:
     """Semantic search over the 1,040 labeled Argus test scenarios.
 
     `query` is normally a detected tech/target description. Returns up to `k`
-    scenario dicts, most-similar first. Returns [] if unavailable."""
+    scenario dicts, most-similar first. Returns [] if unavailable.
+
+    Args:
+        query (str): A tech/target description to search for; empty/
+            whitespace-only returns [] immediately.
+        k (int): Max scenarios to return, clamped to the dataset size.
+
+    Returns:
+        list: Up to `k` scenario dicts, most-similar first, or `[]` if
+        `query` is empty or the scenario engine is unavailable.
+    """
     query = (query or "").strip()
     if not query:
         return []

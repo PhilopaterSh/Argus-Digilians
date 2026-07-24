@@ -59,6 +59,14 @@ Summary:"""
 
 class RAGEngine:
     def __init__(self, config: Optional[RAGConfig] = None, model_name: Optional[str] = None):
+        """Wire up the config, embeddings, document processor, and vector store.
+
+        Args:
+            config (RAGConfig | None): Defaults to `RAGConfig.from_central()`.
+            model_name (str | None): If given, builds an LLM (via
+                `build_llm`) for `augment()`'s answer synthesis; if
+                omitted, `augment()` falls back to returning raw context.
+        """
         self.config = config or RAGConfig.from_central()
         self.embeddings = EmbeddingFactory.get_embeddings(self.config)
         self.processor = DocumentProcessor(self.config)
@@ -67,6 +75,16 @@ class RAGEngine:
         self._initialized = False
 
     def initialize(self, rebuild: Optional[bool] = None):
+        """Load (or rebuild) the vector store index, once per instance.
+
+        A no-op if already initialized. Marks the engine initialized only
+        if an index was loaded, or a rebuild produced at least one chunk.
+
+        Args:
+            rebuild (bool | None): Force a rebuild from the knowledge base
+                directory; defaults to `self.config.auto_rebuild` if
+                omitted.
+        """
         if self._initialized:
             return
 
@@ -87,16 +105,48 @@ class RAGEngine:
         relevance gate as query() applies here too - format_context() and
         format_combined_context() (used on every live ArgusBrain query) were
         previously bypassing the threshold entirely.
+
+        Args:
+            query (str): The search query text.
+            k (int | None): Max results to consider before filtering;
+                defaults to `self.config.retriever_k`.
+
+        Returns:
+            List[Document]: Documents whose similarity score is `<=` the
+            configured `similarity_threshold` (lower is more similar).
         """
         self.initialize()
         results = self.vector_store.similarity_search_with_score(query, k=k)
         return [doc for doc, score in results if score <= self.config.similarity_threshold]
 
     def retrieve_with_scores(self, query: str, k: Optional[int] = None) -> List[tuple]:
+        """Like `retrieve()`, but returns every result with its raw score,
+        unfiltered by the similarity threshold.
+
+        Args:
+            query (str): The search query text.
+            k (int | None): Max results; defaults to
+                `self.config.retriever_k`.
+
+        Returns:
+            List[tuple]: `(Document, score)` pairs, most similar first.
+        """
         self.initialize()
         return self.vector_store.similarity_search_with_score(query, k=k)
 
     def augment(self, query: str, context_chunks: List[str]) -> str:
+        """Synthesize an answer from retrieved context chunks via the configured LLM.
+
+        Args:
+            query (str): The original question.
+            context_chunks (List[str]): Retrieved chunk texts to ground
+                the answer in.
+
+        Returns:
+            str: The LLM's synthesized answer, or the raw joined
+            `context_chunks` verbatim if no LLM was configured
+            (`model_name` was omitted at construction).
+        """
         context = "\n\n---\n\n".join(context_chunks)
         if self.llm is None:
             return context
@@ -105,6 +155,19 @@ class RAGEngine:
         return chain.invoke({"context": context, "question": query})
 
     def query(self, query: str, k: Optional[int] = None) -> RAGResult:
+        """Retrieve threshold-passing chunks and synthesize an answer from them.
+
+        Args:
+            query (str): The question to answer.
+            k (int | None): Max results to consider; defaults to
+                `self.config.retriever_k`.
+
+        Returns:
+            RAGResult: `answer`/`sources`/`chunks` reflect only the
+            similarity-threshold-passing results (an explicit "No
+            relevant information found" answer if none pass); `all_chunks`
+            always holds every retrieved chunk regardless of threshold.
+        """
         self.initialize()
 
         results = self.vector_store.similarity_search_with_score(query, k=k)
@@ -142,10 +205,30 @@ class RAGEngine:
         )
 
     def query_relevant(self, query: str, k: Optional[int] = None) -> str:
+        """Convenience wrapper returning just `query()`'s answer text.
+
+        Args:
+            query (str): The question to answer.
+            k (int | None): Max results to consider; defaults to
+                `self.config.retriever_k`.
+
+        Returns:
+            str: `self.query(query, k=k).answer`.
+        """
         result = self.query(query, k=k)
         return result.answer
 
     def add_document(self, file_path: str) -> bool:
+        """Load, chunk, and index a single new document into the vector store.
+
+        Args:
+            file_path (str): Path to the document to ingest.
+
+        Returns:
+            bool: True if at least one chunk was indexed; False if the
+            file couldn't be loaded (unsupported extension, missing file,
+            or empty) or produced zero chunks.
+        """
         # DocumentProcessor.load_file() returns Optional[List[Document]] -
         # one input file can legitimately produce multiple Document chunks
         # (e.g. a markdown file split by H1/H2/H3 headers, a CSV split
@@ -172,11 +255,25 @@ class RAGEngine:
         return count > 0
 
     def rebuild_index(self):
+        """Force a full rebuild: discard the current vector store and
+        reprocess the whole knowledge base directory from scratch."""
         self._initialized = False
         self.vector_store = VectorStore(self.config)
         self.initialize(rebuild=True)
 
     def format_context(self, query: str, k: Optional[int] = None) -> str:
+        """Retrieve threshold-passing chunks and format them as labeled context text.
+
+        Args:
+            query (str): The search query text.
+            k (int | None): Max results to consider; defaults to
+                `self.config.retriever_k`.
+
+        Returns:
+            str: Chunks joined with "---" separators, each prefixed with
+            its `[Source: ...]` basename; "" if nothing passed the
+            threshold.
+        """
         results = self.retrieve(query, k=k)
         if not results:
             return ""
@@ -187,6 +284,20 @@ class RAGEngine:
         )
 
     def format_combined_context(self, query: str, blackboard_context: str = "", k: Optional[int] = None) -> str:
+        """Combine static RAG context with live Blackboard findings into one labeled block.
+
+        Args:
+            query (str): The search query text, passed to `format_context`.
+            blackboard_context (str): Live recon/finding text to append
+                under its own "LIVE TARGET STATE" section; omitted
+                entirely if empty.
+            k (int | None): Max RAG results to consider; defaults to
+                `self.config.retriever_k`.
+
+        Returns:
+            str: The RAG context section, the Blackboard section, both,
+            or "" if both are empty.
+        """
         rag_context = self.format_context(query, k=k)
         parts = []
 

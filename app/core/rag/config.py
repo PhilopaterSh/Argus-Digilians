@@ -23,6 +23,13 @@ class RAGConfig:
 
     @classmethod
     def from_central(cls) -> "RAGConfig":
+        """Build a RAGConfig from the project-wide ArgusConfig's `rag` section.
+
+        Returns:
+            RAGConfig: A new instance populated from ArgusConfig.load().rag,
+            with `vector_store_dir` always forced to the fixed
+            `app/core/rag/store` path regardless of what ArgusConfig says.
+        """
         from app.core.config import ArgusConfig
         cfg = ArgusConfig.load()
         return cls(
@@ -39,6 +46,19 @@ class RAGConfig:
 
     @classmethod
     def from_dict(cls, config_dict: Optional[dict] = None) -> "RAGConfig":
+        """Build a RAGConfig from a plain dict, falling back field-by-field
+        to this dataclass's own hardcoded defaults for any missing key.
+
+        Args:
+            config_dict (dict | None): Overrides, keyed by field name; if
+                `None` entirely, delegates to `from_central()` instead (not
+                to the dataclass defaults used for a partial dict).
+
+        Returns:
+            RAGConfig: A new instance with each field taken from
+            `config_dict` if present, else from `cls()`'s dataclass
+            defaults.
+        """
         if config_dict is None:
             return cls.from_central()
 

@@ -9,12 +9,33 @@ class EmbeddingFactory:
     _model_name = None
 
     def __new__(cls):
+        """Return the process-wide singleton instance, creating it once.
+
+        Returns:
+            EmbeddingFactory: The single shared instance.
+        """
         if cls._instance is None:
             cls._instance = super().__new__(cls)
         return cls._instance
 
     @classmethod
     def get_embeddings(cls, config: Optional[RAGConfig] = None):
+        """Return the shared embedding model, trying Ollama, then
+        HuggingFace, then OpenAI, caching whichever succeeds first.
+
+        Args:
+            config (RAGConfig | None): Used for `embedding_model`/
+                `embedding_device` on the Ollama/HuggingFace attempts;
+                defaults to `RAGConfig.from_central()` if omitted.
+
+        Returns:
+            The cached embedding model instance (subsequent calls return
+            the same object without retrying providers).
+
+        Raises:
+            ImportError: If none of langchain-ollama, langchain-huggingface,
+                or langchain-openai is installed/usable.
+        """
         if cls._embedding_model is not None:
             return cls._embedding_model
 
@@ -102,6 +123,8 @@ class EmbeddingFactory:
 
     @classmethod
     def reset(cls):
+        """Clear the cached embedding model/provider/model-name, forcing
+        the next get_embeddings() call to re-try each provider."""
         cls._embedding_model = None
         cls._provider = None
         cls._model_name = None

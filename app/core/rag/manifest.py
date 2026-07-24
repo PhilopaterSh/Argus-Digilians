@@ -61,6 +61,12 @@ def compute_kb_hash(knowledge_base_dir: str) -> str:
     Hashes relative paths + file bytes for all recognised source files, in sorted
     order, so the same content always yields the same hash regardless of walk order.
     A missing directory hashes to a fixed sentinel (empty knowledge base).
+
+    Args:
+        knowledge_base_dir (str): Directory to hash.
+
+    Returns:
+        str: A SHA-256 hex digest.
     """
     h = hashlib.sha256()
     if not os.path.isdir(knowledge_base_dir):
@@ -91,7 +97,20 @@ def manifest_path(store_dir: str) -> str:
 
 def write_manifest(store_dir: str, embedder_name: str, embedder_provider: str,
                    dimension: int, knowledge_base_dir: str) -> EmbeddingManifest:
-    """Build and persist a manifest for a freshly built index."""
+    """Build and persist a manifest for a freshly built index.
+
+    Args:
+        store_dir (str): Directory to write `manifest.json` into (created
+            if missing).
+        embedder_name (str): Name of the embedder used to build the index.
+        embedder_provider (str): "ollama" | "huggingface" | "openai".
+        dimension (int): The index's vector dimensionality.
+        knowledge_base_dir (str): Source directory to hash via
+            `compute_kb_hash`.
+
+    Returns:
+        EmbeddingManifest: The manifest that was written.
+    """
     os.makedirs(store_dir, exist_ok=True)
     manifest = EmbeddingManifest(
         embedder_name=embedder_name,
@@ -107,7 +126,15 @@ def write_manifest(store_dir: str, embedder_name: str, embedder_provider: str,
 
 
 def read_manifest(store_dir: str) -> EmbeddingManifest | None:
-    """Load a manifest, or None if it is absent or unreadable/corrupt."""
+    """Load a manifest, or None if it is absent or unreadable/corrupt.
+
+    Args:
+        store_dir (str): Directory to look for `manifest.json` in.
+
+    Returns:
+        EmbeddingManifest | None: The parsed manifest, or `None` if the
+        file doesn't exist or fails to parse (OSError/ValueError/KeyError).
+    """
     path = manifest_path(store_dir)
     if not os.path.isfile(path):
         return None
@@ -124,6 +151,17 @@ def needs_rebuild(store_dir: str, embedder_name: str, knowledge_base_dir: str) -
     Rebuild is required when: no manifest exists, the schema version differs, the
     pinned embedder differs from the requested one, or the knowledge base content
     hash has changed.
+
+    Args:
+        store_dir (str): Directory containing (or missing) `manifest.json`.
+        embedder_name (str): The embedder currently in use, compared
+            against the manifest's pinned `embedder_name`.
+        knowledge_base_dir (str): Source directory to re-hash for
+            comparison against the manifest's stored hash.
+
+    Returns:
+        bool: True if a rebuild is needed, False if the existing index
+        can be safely reused as-is.
     """
     manifest = read_manifest(store_dir)
     if manifest is None:
