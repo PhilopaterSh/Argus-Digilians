@@ -24,14 +24,24 @@ class CommandRunner:
     """Responsible only for executing commands through WSL or SSH fallback."""
 
     def __init__(self, bridge: WSLBridge):
+        """Store the WSLBridge used to reach the target shell (WSL or SSH)."""
         self.bridge = bridge
 
     @property
     def config(self):
+        """The active WSLConfig, delegated from the underlying bridge."""
         return self.bridge.config
 
     def _is_waf_blocked(self, text):
-        """Detects if the target has restricted access based on common block pages."""
+        """Detects if the target has restricted access based on common block pages.
+
+        Args:
+            text (str): Command output or HTTP response body to scan.
+
+        Returns:
+            bool: True if any known WAF/block-page indicator string is
+            found (case-insensitive), False otherwise.
+        """
         indicators = [
             "Access Temporarily Restricted",
             "possibly malicious",
@@ -50,6 +60,18 @@ class CommandRunner:
         `timeout` bounds a single command so one slow/unresponsive tool call
         can't silently consume the entire outer agent-run budget (see
         scripts/run_agent.py's AGENT_TIMEOUT_SECONDS).
+
+        Args:
+            command (str): The shell command to run.
+            show_prompt (bool): If True, prefix the returned output with a
+                fake shell prompt line showing the command that was run.
+            timeout (int): Seconds to allow the command to run before
+                giving up.
+
+        Returns:
+            str: The command's cleaned stdout/stderr, or a human-readable
+            error/suggestion message (WAF block, tool not found, timeout,
+            etc.) - never raises for a normal command failure.
         """
         if self.config.host in ["127.0.0.1", "localhost"]:
             return self._run_direct_wsl(command, show_prompt, timeout=timeout)
@@ -65,6 +87,13 @@ class CommandRunner:
         interactive shell. Explicitly guarantee the common tool-install
         locations (go install, pip --user, etc.) are on PATH instead of
         depending on dotfiles that never get read here.
+
+        Args:
+            command (str): The command to run, unmodified.
+
+        Returns:
+            str: `command` prefixed with an `export PATH=...;` statement
+            that appends the common tool-install locations.
         """
         path_prefix = (
             'export PATH="$PATH:$HOME/go/bin:$HOME/.local/bin:'
@@ -132,6 +161,19 @@ class CommandRunner:
             return f"Bridge Error: {exc}"
 
     def _run_ssh(self, command: str, timeout: int = DEFAULT_COMMAND_TIMEOUT) -> str:
+        """Run a command over SSH (paramiko), retrying the connection on failure.
+
+        Args:
+            command (str): The shell command to run remotely.
+            timeout (int): Seconds to allow the remote command to run
+                before giving up (applied both to the exec request and,
+                via `channel.settimeout`, to reading its output).
+
+        Returns:
+            str: The command's cleaned stdout (or stderr if stdout is
+            empty), or a human-readable error message (connection
+            failure after retries, SSH timeout, WAF block) - never raises.
+        """
         max_retries = 2
         for attempt in range(max_retries):
             self.bridge.ensure_ssh_service()

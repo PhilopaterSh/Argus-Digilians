@@ -9,6 +9,13 @@ class SmartWebSearch:
     """Provides internet search capabilities for CVEs and security research."""
 
     def __init__(self, memory):
+        """Load search-attempt limits/timeout from config and reset the
+        per-instance attempt counter.
+
+        Args:
+            memory: Currently unused by this class's own methods - stored
+                for interface consistency with sibling tool services.
+        """
         self.memory = memory
         self._attempts = 0
         cfg = ArgusConfig.load()

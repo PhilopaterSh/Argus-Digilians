@@ -24,6 +24,7 @@ class SelfHealingService(BaseToolService):
     """Attempts to autonomously install missing libraries or tools."""
 
     def __init__(self, runner):
+        """Store the command runner used for Kali/system-tool installs."""
         self.runner = runner
 
     @property
@@ -36,11 +37,29 @@ class SelfHealingService(BaseToolService):
         )
 
     def execute(self, **kwargs) -> str:
+        """BaseToolService entry point: extract `tool_info` and self-heal.
+
+        Args:
+            **kwargs: Must include `tool_info` (str); missing it defaults
+                to an empty string.
+
+        Returns:
+            str: The result of `system_self_heal(tool_info)`.
+        """
         tool_info = kwargs.get("tool_info", "")
         return self.system_self_heal(tool_info)
 
     def system_self_heal(self, tool_info: str) -> str:
-        """Attempts to autonomously install missing libraries or tools (Self-Healing)."""
+        """Attempts to autonomously install missing libraries or tools (Self-Healing).
+
+        Args:
+            tool_info (str): Either a pip-install-style hint (containing
+                "pip install" or "import") naming a Python package, or a
+                Kali/system tool name to install via `apt-get`.
+
+        Returns:
+            str: A human-readable success/failure message.
+        """
         print(f"[*] [Argus-SelfHeal] AI requested repair for: {tool_info}")
         
         # 1. Check if it's a Python library
@@ -118,6 +137,15 @@ class SelfHealingService(BaseToolService):
             return f"failed: {e}"
 
     def restart_service(self, name: str) -> str:
+        """Restart a named managed service.
+
+        Args:
+            name (str): Service name - "ollama" or "wsl" (case-insensitive).
+
+        Returns:
+            str: A human-readable success/failure message, or
+            "Unknown service: <name>" for any other name.
+        """
         name = name.lower().strip()
         if name == "ollama":
             return self._restart_ollama()
@@ -127,6 +155,12 @@ class SelfHealingService(BaseToolService):
             return f"Unknown service: {name}"
 
     def _restart_ollama(self) -> str:
+        """Kill any running `ollama.exe` and relaunch it via `ollama serve`.
+
+        Returns:
+            str: A human-readable success/failure message (including when
+            `ollama.exe` isn't on PATH).
+        """
         try:
             subprocess.run(
                 ["taskkill", "/f", "/im", "ollama.exe"],

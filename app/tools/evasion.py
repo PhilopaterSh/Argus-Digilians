@@ -8,6 +8,15 @@ class EvasionService:
     """Performs targeted, WAF-evasive probes for SQLi and Path Traversal."""
 
     def __init__(self, runner, memory):
+        """Set up the probe with its command runner, memory sink, and a
+        pool of user-agent strings to rotate through for stealth headers.
+
+        Args:
+            runner: Object with a `run(command, timeout=None)` method
+                (shared CommandRunner).
+            memory: ArgusMemory-like object with an `add_finding(...)`
+                method, used to record confirmed findings.
+        """
         self.runner = runner
         self.memory = memory
         self.user_agents = [
@@ -17,6 +26,13 @@ class EvasionService:
         ]
 
     def _get_stealth_headers(self):
+        """Build curl `-H` flags with a random User-Agent and a spoofed
+        X-Forwarded-For IP, to vary the fingerprint of each probe.
+
+        Returns:
+            str: A string of `-H '...'` flags ready to splice into a curl
+            command.
+        """
         ua = random.choice(self.user_agents)
         ip = f"{random.randint(1,255)}.{random.randint(1,255)}.{random.randint(1,255)}.{random.randint(1,255)}"
         return f"-H 'User-Agent: {ua}' -H 'X-Forwarded-For: {ip}'"
@@ -29,6 +45,16 @@ class EvasionService:
         of these run sequentially in advanced_vuln_probe(), so a generous
         per-call timeout can stack up to consume the whole exploit-node
         budget (scripts/run_agent.py's AGENT_TIMEOUT_SECONDS) on its own.
+
+        Args:
+            command (str): The command to run - stealth headers are only
+                added when it contains "curl ".
+            delay (bool): If True, sleep a random 1-3s before running, to
+                avoid a suspiciously regular request cadence.
+            timeout (int): Seconds to allow the command to run.
+
+        Returns:
+            str: The underlying runner's output for `command`.
         """
         if delay:
             time.sleep(random.uniform(1, 3))
@@ -52,6 +78,15 @@ class EvasionService:
         labs, actually test for) as well as the original Windows/IIS-style
         `web.config`, since recon doesn't always confirm the target OS
         before this runs.
+
+        Args:
+            url (str): Target URL to probe (a `?item=`/`?id=` query
+                parameter is appended per payload).
+
+        Returns:
+            str: A formatted report of confirmed findings, or
+            "No vulnerabilities detected with advanced evasion probes." if
+            none of the traversal/SQLi payloads produced a signal.
         """
         print(f"[*] [Argus-Core] Starting Advanced Evasion Probes for: {url}")
         results = []

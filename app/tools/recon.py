@@ -8,6 +8,20 @@ class ReconService:
     """Handles subdomain enumeration, prioritization, and broad reconnaissance suites."""
 
     def __init__(self, runner, memory, fuzzer=None, secret_analyzer=None, report_writer=None):
+        """Wire up the collaborators this service delegates to.
+
+        Args:
+            runner: Object with a `run(command, timeout=None)` method
+                (shared CommandRunner).
+            memory: ArgusMemory-like object used to record findings and
+                upsert targets.
+            fuzzer: Optional fuzzing collaborator (currently unused by any
+                method on this class).
+            secret_analyzer: Optional SecretAnalyzer-like collaborator
+                (currently unused by any method on this class).
+            report_writer: Optional object with a `save_json_report(...)`
+                method, used by `recon_suite` if provided.
+        """
         self.runner = runner
         self.memory = memory
         self.fuzzer = fuzzer
@@ -16,7 +30,16 @@ class ReconService:
         self.last_recon_results = None
 
     def enumerate_subdomains(self, domain):
-        """Discovers subdomains using subfinder and assetfinder in parallel."""
+        """Discovers subdomains using subfinder and assetfinder in parallel.
+
+        Args:
+            domain (str): The root domain to enumerate subdomains for.
+
+        Returns:
+            str: A fenced code block of the raw discovered-subdomain
+            output, or "No subdomains discovered or tool failed." if
+            nothing came back.
+        """
         print(f"[*] Starting Subdomain Enumeration for: {domain}")
         
         # Parallel execution in background via WSL
@@ -40,7 +63,17 @@ class ReconService:
         return "No subdomains discovered or tool failed."
 
     def prioritize_targets(self, targets):
-        """Uses HTTP probing (httpx) to find alive targets and identify high-value ones."""
+        """Uses HTTP probing (httpx) to find alive targets and identify high-value ones.
+
+        Args:
+            targets (list[str] | str): Target hosts, either as a list or
+                an already comma-separated string.
+
+        Returns:
+            str: A fenced code block of the raw httpx output, or
+            "No targets provided for prioritization." if `targets` is
+            empty.
+        """
         if not targets:
             return "No targets provided for prioritization."
             
@@ -70,6 +103,16 @@ class ReconService:
         probing through a filtering proxy), and nmap completing "cleanly"
         but reporting the host down because its default ICMP/TCP
         host-discovery ping got dropped, which -Pn below skips entirely.
+
+        Args:
+            nmap_output (str): The primary `-sV` scan's raw output (or
+                error message).
+
+        Returns:
+            bool: True if a lighter `-Pn` fallback scan should be tried
+            (empty/error output, a "host seems down"/"0 hosts up" report,
+            or no `/tcp` port line at all); False if the output already
+            has a usable port list.
         """
         if not nmap_output:
             return True
@@ -81,7 +124,18 @@ class ReconService:
         return "/tcp" not in nmap_output
 
     def recon_suite(self, url, selected_targets=None):
-        """Runs expanded recon with smart target prioritization and parallel execution."""
+        """Runs expanded recon with smart target prioritization and parallel execution.
+
+        Args:
+            url (str): Target URL/domain to run tech-stack, port-scan, and
+                DNS recon against.
+            selected_targets: Currently unused by this method's own body -
+                accepted for call-site compatibility.
+
+        Returns:
+            str: A fenced code block summarizing the tech stack and port
+            scan results.
+        """
         clean_target = normalize_domain_for_memory(url)
         print(f"[*] Starting Full Recon Suite for: {clean_target}")
 

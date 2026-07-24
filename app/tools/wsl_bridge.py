@@ -19,6 +19,12 @@ class WSLConfig:
 class WSLBridge:
     """Responsible only for WSL/SSH service configuration and readiness."""
     def __init__(self, config: WSLConfig = None):
+        """Store the WSL/SSH connection config and set up the readiness lock.
+
+        Args:
+            config (WSLConfig | None): Connection settings; a fresh
+                `WSLConfig()` (env-var-driven defaults) is used if omitted.
+        """
         self.config = config or WSLConfig()
         self._lock = threading.Lock()
 

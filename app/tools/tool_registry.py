@@ -33,6 +33,15 @@ class _ToolServiceAdapter(BaseToolService):
     """Wraps a legacy tool service as a BaseToolService-compatible adapter."""
 
     def __init__(self, name: str, description: str, service, method_name: str):
+        """Wrap one method of a legacy tool service as a callable tool.
+
+        Args:
+            name (str): Tool name to register under.
+            description (str): Human-readable tool description.
+            service: The legacy service instance owning the method.
+            method_name (str): Name of the method on `service` to call
+                when `execute()` is invoked.
+        """
         self._meta = ToolMetadata(name=name, description=description)
         self._service = service
         self._method_name = method_name
@@ -43,6 +52,14 @@ class _ToolServiceAdapter(BaseToolService):
         return self._meta
 
     def execute(self, **kwargs) -> Any:
+        """Call the wrapped service's method with the given keyword arguments.
+
+        Args:
+            **kwargs: Forwarded as keyword arguments to the wrapped method.
+
+        Returns:
+            Any: Whatever the wrapped method returns.
+        """
         method = getattr(self._service, self._method_name)
         return method(**kwargs)
 
@@ -55,6 +72,8 @@ class WSLBridgeTools:
     """
 
     def __init__(self):
+        """Construct every concrete tool service and register their
+        adapters into a fresh ToolRegistry."""
         self.memory = ArgusMemory()
         self.bridge = WSLBridge(WSLConfig())
         self.runner = CommandRunner(self.bridge)
@@ -80,6 +99,7 @@ class WSLBridgeTools:
         self._register_defaults()
 
     def _register_defaults(self):
+        """Register one _ToolServiceAdapter per tool method onto self.registry."""
         self.registry.register(_ToolServiceAdapter(
             "recon", "Execute advanced reconnaissance suite", self.recon, "recon_suite"
         ))
@@ -135,55 +155,77 @@ class WSLBridgeTools:
 
     # Legacy Properties for compatibility
     @property
-    def host(self): return self.bridge.config.host
+    def host(self):
+        """The configured WSL/SSH host, delegated from self.bridge."""
+        return self.bridge.config.host
     @property
-    def distro(self): return self.bridge.config.distro
+    def distro(self):
+        """The configured WSL distro name, delegated from self.bridge."""
+        return self.bridge.config.distro
     @property
-    def user(self): return self.bridge.config.user
+    def user(self):
+        """The configured WSL/SSH user, delegated from self.bridge."""
+        return self.bridge.config.user
     @property
-    def last_recon_results(self): return self.recon.last_recon_results
+    def last_recon_results(self):
+        """The most recent recon_suite() results dict, delegated from self.recon."""
+        return self.recon.last_recon_results
 
     # Delegated Methods
     def run(self, command, show_prompt=False):
+        """Delegate to CommandRunner.run() - see that method's docstring."""
         return self.runner.run(command, show_prompt)
 
     def check_reachability(self, domain):
+        """Delegate to ReachabilityService.check_reachability()."""
         return self.reachability.check_reachability(domain)
 
     def recon_suite(self, url, selected_targets=None):
+        """Delegate to ReconService.recon_suite() - see that method's docstring."""
         return self.recon.recon_suite(url, selected_targets)
 
     def enumerate_subdomains(self, domain):
+        """Delegate to ReconService.enumerate_subdomains()."""
         return self.recon.enumerate_subdomains(domain)
 
     def prioritize_targets(self, targets):
+        """Delegate to ReconService.prioritize_targets()."""
         return self.recon.prioritize_targets(targets)
 
     def run_nikto(self, url):
+        """Delegate to VulnerabilityScanners.run_nikto()."""
         return self.scanners.run_nikto(url)
 
     def run_ffuf_discovery(self, url):
+        """Delegate to VulnerabilityScanners.run_ffuf_discovery()."""
         return self.scanners.run_ffuf_discovery(url)
 
     def suggest_payloads(self, vulnerability_type):
+        """Delegate to PayloadSuggester.suggest_payloads()."""
         return self.payloads.suggest_payloads(vulnerability_type)
 
     def analyze_secrets(self, url):
+        """Delegate to SecretAnalyzer.analyze_secrets()."""
         return self.secrets.analyze_secrets(url)
 
     def smart_web_search(self, query):
+        """Delegate to SmartWebSearch.smart_web_search()."""
         return self.web.smart_web_search(query)
 
     def archive_research_subagent(self, query):
+        """Delegate to SmartWebSearch.archive_research_subagent()."""
         return self.web.archive_research_subagent(query)
 
     def crawl_target(self, url):
+        """Delegate to CrawlerService.crawl_target()."""
         return self.crawler.crawl_target(url)
 
     def advanced_vuln_probe(self, url):
+        """Delegate to EvasionService.advanced_vuln_probe()."""
         return self.evasion.advanced_vuln_probe(url)
 
     def system_self_heal(self, tool_info):
+        """Delegate to SelfHealingService.system_self_heal()."""
         return self.self_heal.system_self_heal(tool_info)
 
     def verify_command(self, command):
@@ -199,13 +241,26 @@ class WSLBridgeTools:
         return self.verifier.task_difficulty_assessment(targets)
 
     def get_intelligence_summary(self, _=None):
+        """Delegate to ArgusMemory.get_blackboard_summary(). `_` is accepted
+        and ignored for call-site compatibility."""
         return self.memory.get_blackboard_summary()
 
     def query_knowledge_graph(self, _=None):
+        """Delegate to ArgusMemory.get_graph_insights(). `_` is accepted
+        and ignored for call-site compatibility."""
         return self.memory.get_graph_insights()
 
     def run_kali_command(self, command):
-        """Proxy for manual command execution in Kali."""
+        """Proxy for manual command execution in Kali.
+
+        Args:
+            command (str): The shell command to run, with Go tool-install
+                bin directories prepended to PATH.
+
+        Returns:
+            str: The command's output, per CommandRunner.run() (with
+            `show_prompt=True`, so it's prefixed with a fake shell prompt).
+        """
         # Ensure Go bins are in PATH for the command execution
         full_command = f"export PATH=$PATH:/home/kali/go/bin:/home/kali/.pdtm/go/bin && {command}"
         return self.runner.run(full_command, show_prompt=True)

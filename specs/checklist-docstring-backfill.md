@@ -2,6 +2,8 @@
 
 Auto-generated inventory of functions this PR's diff touches that need a real, human-reviewed docstring - NOT auto-applied, per FR-006 ("a docstring asserting an incorrect parameter, return type, or exception is worse than no docstring"). Track backfill progress here per module, same pattern as specs/checklist.md's CHK series.
 
+**Known gap, found 2026-07-24**: this manifest under-counts. `scripts/check_docstrings.py --all app/tools` reported 78 real violations before that directory's backfill batch, not the 28 tracked below for `app/tools/` - the manifest missed every `__init__`, property, and one-line delegator method across `command_runner.py`, `evasion.py`, `payloads.py`, `recon.py`, `self_heal.py`, `tool_registry.py` (17 of them alone), `web_search.py`, and `wsl_bridge.py` (a file this manifest doesn't mention at all). All 78 were fixed in the same batch as the 28 tracked items, verified via `check_docstrings.py --all` returning 0. Other directories not yet backfilled may have the same undercount - re-run `check_docstrings.py --all <dir>` directly before trusting this file's per-directory counts, rather than treating the checked-off items below as the complete picture for that directory.
+
 ## `app/GUI/components/export.py`
 
 - [ ] `generate_html_report` (line 6) - needs: Args, Returns
@@ -344,64 +346,62 @@ Auto-generated inventory of functions this PR's diff touches that need a real, h
 
 ## `app/tools/command_runner.py`
 
-- [ ] `run` (line 47) - needs: Args, Returns
-- [ ] `_with_safe_path` (line 59) - needs: Args, Returns
-- [ ] `_run_ssh` (line 133) - needs: Args, Returns
+- [x] `run` (line 47) - needs: Args, Returns. **Done 2026-07-24**: Tier 1 batch (app/tools/); also fixed `__init__`, `config`, `_is_waf_blocked`, `_with_safe_path`, `_run_ssh` (undercounted by this manifest, see note above).
 
 ## `app/tools/evasion.py`
 
-- [ ] `stealth_run` (line 24) - needs: Args, Returns
-- [ ] `advanced_vuln_probe` (line 42) - needs: Args, Returns
+- [x] `stealth_run` (line 24) - needs: Args, Returns. **Done 2026-07-24**: Tier 1 batch (app/tools/); also fixed `__init__`, `_get_stealth_headers`, `advanced_vuln_probe` (undercounted by this manifest).
 
 ## `app/tools/payloads.py`
 
-- [ ] `suggest_payloads` (line 55) - needs: Args, Returns
+- [x] `suggest_payloads` (line 55) - needs: Args, Returns. **Done 2026-07-24**: Tier 1 batch (app/tools/); also fixed `PayloadSuggester.__init__` (undercounted by this manifest).
 
 ## `app/tools/recon.py`
 
-- [ ] `_nmap_needs_fallback` (line 65) - needs: Args, Returns
-- [ ] `recon_suite` (line 83) - needs: Args, Returns
+- [x] `_nmap_needs_fallback` (line 65) - needs: Args, Returns. **Done 2026-07-24**: Tier 1 batch (app/tools/); also fixed `__init__`, `enumerate_subdomains`, `prioritize_targets`, `recon_suite` (undercounted by this manifest).
 
 ## `app/tools/reflective_verification.py`
 
-- [ ] `__init__` (line 17) - needs: Args
-- [ ] `pre_execute_verify` (line 22) - needs: Args, Returns
-- [ ] `post_execute_verify` (line 66) - needs: Args, Returns
-- [ ] `task_difficulty_assessment` (line 112) - needs: Args, Returns
+- [x] `__init__` (line 17) - needs: Args. **Done 2026-07-24**: Tier 1 batch (app/tools/).
+- [x] `pre_execute_verify` (line 22) - needs: Args, Returns. **Done 2026-07-24**: Tier 1 batch (app/tools/).
+- [x] `post_execute_verify` (line 66) - needs: Args, Returns. **Done 2026-07-24**: Tier 1 batch (app/tools/).
+- [x] `task_difficulty_assessment` (line 112) - needs: Args, Returns. **Done 2026-07-24**: Tier 1 batch (app/tools/).
 
 ## `app/tools/self_heal.py`
 
-- [ ] `execute` (line 37) - needs: Args, Returns
-- [ ] `system_self_heal` (line 41) - needs: Args, Returns
-- [ ] `restart_service` (line 113) - needs: Args, Returns
-- [ ] `_restart_ollama` (line 122) - needs: Returns
+- [x] `execute` (line 37) - needs: Args, Returns. **Done 2026-07-24**: Tier 1 batch (app/tools/); also fixed `__init__` (undercounted by this manifest).
+- [x] `system_self_heal` (line 41) - needs: Args, Returns. **Done 2026-07-24**: Tier 1 batch (app/tools/).
+- [x] `restart_service` (line 113) - needs: Args, Returns. **Done 2026-07-24**: Tier 1 batch (app/tools/).
+- [x] `_restart_ollama` (line 122) - needs: Returns. **Done 2026-07-24**: Tier 1 batch (app/tools/).
 
 ## `app/tools/simulation.py`
 
-- [ ] `__init__` (line 15) - needs: Args
-- [ ] `run_simulation` (line 19) - needs: Args, Returns
+- [x] `__init__` (line 15) - needs: Args. **Done 2026-07-24**: Tier 1 batch (app/tools/).
+- [x] `run_simulation` (line 19) - needs: Args, Returns. **Done 2026-07-24**: Tier 1 batch (app/tools/).
 
 ## `app/tools/tool_registry.py`
 
-- [ ] `__init__` (line 26) - needs: Args
-- [ ] `execute` (line 35) - needs: Args, Returns
-- [ ] `__init__` (line 47) - needs: summary
-- [ ] `_register_defaults` (line 72) - needs: summary
+- [x] `__init__` (line 26) - needs: Args. **Done 2026-07-24**: Tier 1 batch (app/tools/) - `_ToolServiceAdapter.__init__`.
+- [x] `execute` (line 35) - needs: Args, Returns. **Done 2026-07-24**: Tier 1 batch (app/tools/) - `_ToolServiceAdapter.execute`.
+- [x] `__init__` (line 47) - needs: summary. **Done 2026-07-24**: Tier 1 batch (app/tools/) - `WSLBridgeTools.__init__`; also fixed `_register_defaults`, `host`/`distro`/`user`/`last_recon_results` properties, and 14 one-line delegator methods (`run`, `check_reachability`, `recon_suite`, `enumerate_subdomains`, `prioritize_targets`, `run_nikto`, `run_ffuf_discovery`, `suggest_payloads`, `analyze_secrets`, `smart_web_search`, `archive_research_subagent`, `crawl_target`, `advanced_vuln_probe`, `system_self_heal`, `get_intelligence_summary`, `query_knowledge_graph`, `run_kali_command`) - all undercounted by this manifest.
+- [x] `_register_defaults` (line 72) - needs: summary. **Done 2026-07-24**: Tier 1 batch (app/tools/).
 
 ## `app/tools/utils.py`
 
-- [ ] `normalize_domain_for_memory` (line 9) - needs: Args, Returns
+- [x] `normalize_domain_for_memory` (line 9) - needs: Args, Returns. **Done 2026-07-24**: Tier 1 batch (app/tools/); also fixed `clean_ansi_codes` (undercounted by this manifest).
 
 ## `app/tools/web_search.py`
 
-- [ ] `__init__` (line 13) - needs: Args
-- [ ] `smart_web_search` (line 20) - needs: Args, Returns
-- [ ] `archive_research_subagent` (line 42) - needs: Args, Returns
+- [x] `__init__` (line 13) - needs: Args. **Done 2026-07-24**: Tier 1 batch (app/tools/). Note: `smart_web_search`/`archive_research_subagent` were already fully compliant (fixed in an earlier, unrelated commit) - only `__init__` was a real violation.
 
 ## `app/tools/xss_classifier.py`
 
-- [ ] `_snippet` (line 17) - needs: Args, Returns
-- [ ] `classify_xss_reflection` (line 24) - needs: Args, Returns
+- [x] `_snippet` (line 17) - needs: Args, Returns. **Done 2026-07-24**: Tier 1 batch (app/tools/).
+- [x] `classify_xss_reflection` (line 24) - needs: Args, Returns. **Done 2026-07-24**: Tier 1 batch (app/tools/).
+
+## `app/tools/wsl_bridge.py` (not previously tracked by this manifest - found via `check_docstrings.py --all`)
+
+- [x] `__init__` (line 21) - needs: Args. **Done 2026-07-24**: Tier 1 batch (app/tools/).
 
 ## `scripts/_diagnostic_cli_verbose.py`
 

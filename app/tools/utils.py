@@ -1,7 +1,15 @@
 import re
 
 def clean_ansi_codes(text):
-    """Removes ANSI escape codes (colors, bold, etc.) from terminal output."""
+    """Removes ANSI escape codes (colors, bold, etc.) from terminal output.
+
+    Args:
+        text (str): Raw terminal output that may contain ANSI escape
+            sequences.
+
+    Returns:
+        str: `text` with every ANSI escape sequence stripped.
+    """
     ansi_escape = re.compile(r'(?:\x1B[@-_]|[\x80-\x9F])[0-?]*[ -/]*[@-~]')
     return ansi_escape.sub('', text)
 
@@ -19,6 +27,14 @@ def normalize_domain_for_memory(url: str) -> str:
     fragmenting the Knowledge Graph. This is the single canonical form;
     every add_finding()/upsert_target() call site should derive its domain
     key through this function (Constitution IX - Single Source of Truth).
+
+    Args:
+        url (str): A URL, with or without scheme/port (e.g.
+            "http://example.com:80/path").
+
+    Returns:
+        str: The bare host, with scheme and port stripped (e.g.
+        "example.com").
     """
     host = url.replace("https://", "").replace("http://", "").split("/")[0]
     return host.split(":")[0]

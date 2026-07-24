@@ -50,10 +50,23 @@ class PayloadSuggester:
     """Fetches payloads from PayloadsAllTheThings repository in Kali."""
 
     def __init__(self, runner):
+        """Store the command runner used to read the local mirror."""
         self.runner = runner
 
     def suggest_payloads(self, vulnerability_type):
-        """Searches PayloadsAllTheThings for relevant payloads based on the vulnerability type."""
+        """Searches PayloadsAllTheThings for relevant payloads based on the vulnerability type.
+
+        Args:
+            vulnerability_type (str): A vulnerability code or phrase (e.g.
+                "sqli", "SQL authentication bypass injection") - matched
+                against `signal_map`'s keyword lists, most specific first.
+
+        Returns:
+            str: A fenced code block of README methodology/payload text
+            from the matched PayloadsAllTheThings directory, or an
+            explicit "no specialized payload repository found" message if
+            no signal word matched.
+        """
         print(f"[*] Fetching suggested payloads for: {vulnerability_type}")
 
         vt = (vulnerability_type or "").lower()

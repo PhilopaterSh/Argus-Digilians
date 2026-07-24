@@ -15,6 +15,16 @@ EXEC_SIGS = (
 
 
 def _snippet(body: str, needle: str) -> str:
+    """Extract a small window of text around the first occurrence of `needle`.
+
+    Args:
+        body (str): The full text to search.
+        needle (str): The substring to locate.
+
+    Returns:
+        str: Up to 60 characters of context on each side of `needle`
+        (newlines collapsed to spaces), or "" if `needle` isn't found.
+    """
     idx = body.find(needle)
     if idx < 0:
         return ""
@@ -25,6 +35,17 @@ def classify_xss_reflection(body: str, payload: str, content_type: str = "") -> 
     """Return (severity, reason) if `body` shows a reflected-XSS signature for
     `payload`, else None. `content_type` filters out non-HTML responses
     (CSS/JSON/JS/font/image) where a text reflection can't execute as XSS.
+
+    Args:
+        body (str): The HTTP response body to inspect for a reflection.
+        payload (str): The XSS payload that was sent.
+        content_type (str): The response's Content-Type header, if known
+            - used only to short-circuit obviously non-HTML responses.
+
+    Returns:
+        tuple[str, str] | None: `(severity, reason)` where severity is
+        "High" or "Medium", or `None` if no exploitable reflection was
+        found.
     """
     if not body or not isinstance(body, str):
         return None

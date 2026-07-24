@@ -15,6 +15,16 @@ class ReflectiveVerificationService:
     """
 
     def __init__(self, runner, memory: ArgusMemory):
+        """Store collaborators and initialize the recent-command history
+        used for infinite-loop detection.
+
+        Args:
+            runner: Object with a `run(command)` method (shared
+                CommandRunner) - not called directly by this class, kept
+                for interface consistency with sibling tool services.
+            memory (ArgusMemory): Used to look up the blackboard summary
+                and to upsert target priority scores.
+        """
         self.runner = runner
         self.memory = memory
         self._command_history: list[str] = []
@@ -23,6 +33,16 @@ class ReflectiveVerificationService:
         """
         [Phase 1 Reflection] Checks command inputs for syntax validity, parameter structure,
         and dangerous/malformed arguments before execution.
+
+        Args:
+            command (str): The shell command about to be executed.
+
+        Returns:
+            str: A human-readable verification message - "SUCCESS: ..." if
+            the command passes all checks, or a "Verification
+            Warning/Blocked: ..." message naming the specific problem
+            (empty command, blacklisted pattern, missing target/URL, or a
+            repeated-command loop).
         """
         print(f"[*] [Reflector-Phase1] Verifying command: {command}")
         
@@ -67,6 +87,21 @@ class ReflectiveVerificationService:
         """
         [Phase 2 Reflection] Introspects command outputs to identify False Positives, WAF redirects,
         honeypot patterns, and verify actual impact.
+
+        Args:
+            url (str): The target URL the command was run against - used
+                to key any recorded finding.
+            command (str): The command that was executed, recorded
+                alongside a confirmed finding.
+            raw_output (str): The command's raw output to analyze.
+
+        Returns:
+            str: A human-readable analysis message - an "ALERT: ..."
+            message for a WAF block or a suspected false positive, a
+            "SUCCESS: ..." message (and a recorded finding) for a
+            confirmed high-severity signature, or a generic
+            "no immediate false positives or exploit signatures detected"
+            message otherwise.
         """
         print(f"[*] [Reflector-Phase2] Analyzing output for {url}...")
         
@@ -113,8 +148,15 @@ class ReflectiveVerificationService:
         """
         Computes a Task Difficulty Assessment (TDA) score (0.0 to 10.0) for target selection
         based on open ports, version confidence, complexity, and expected path length.
-        
-        Input: 'targets' can be a comma-separated list of target hosts.
+
+        Args:
+            targets (str): A comma-separated list of target hosts.
+
+        Returns:
+            str: A multi-target TDA report (one block per target with its
+            path-length/confidence/WAF scores, computed TDA score, and a
+            recommended action), or "Error: No targets provided." if
+            `targets` has no non-empty entries.
         """
         target_list = [t.strip() for t in targets.split(",") if t.strip()]
         if not target_list:

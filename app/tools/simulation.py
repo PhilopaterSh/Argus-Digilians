@@ -13,6 +13,16 @@ class ZEROAPTSimulation:
     """
 
     def __init__(self, runner, memory: ArgusMemory):
+        """Store collaborators for the simulation.
+
+        Args:
+            runner: Object with a `run(command)` method - not called
+                directly by this class (the attack lifecycle is
+                simulated, not actually executed), kept for interface
+                consistency with sibling tool services.
+            memory (ArgusMemory): Used to record the simulation's final
+                verdict as a finding.
+        """
         self.runner = runner
         self.memory = memory
 
@@ -23,6 +33,18 @@ class ZEROAPTSimulation:
           - L1: Weak perception (Standard logs, high noise, slow response)
           - L2: SOC / Sigma rules (Process tracing, detects standard exploits)
           - L3: Active Adversary Tracking (Threat intelligence matching, aggressive blocking)
+
+        Args:
+            target_url (str): Target URL/domain the simulation is run
+                against (used only to label the report - no real requests
+                are made).
+            defense_level (str): One of "L1"/"L2"/"L3", selecting which
+                defender-detection profile to simulate.
+
+        Returns:
+            str: A multi-section text report (attacker timeline, defender
+            telemetry, judge verdicts, final scores) and the path to a
+            saved STIX 2.0 JSON report file.
         """
         clean_target = normalize_domain_for_memory(target_url)
         print(f"[*] Starting ZERO-APT Simulation against: {clean_target} (Defense: {defense_level})")
