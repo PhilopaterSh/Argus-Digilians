@@ -48,18 +48,32 @@ Structured results of tool runs. Written by
 
 ## Entity 3: entities
 
-Knowledge-graph nodes. Written by `upsert_entity(...)` (e.g. ip / tech / vuln - architecture 6.1).
+Knowledge-graph nodes. Written by `upsert_entity(...)` (e.g. domain / tech - architecture 6.1,
+ADR-22). **Population path corrected 2026-07-24 (ADR-22):** until then, the only code that ever
+called `upsert_entity()`/`add_relation()` live was `ArgusBrain.run_deterministic_recon()`, reachable
+only via `ask_deterministic()` - which no production caller (GUI, Streamlit dashboard,
+`benchmarks/runner.py`) ever invoked, so `entities`/`relations` stayed empty in every real run
+despite `Query_Knowledge_Graph` being a live, callable agent tool. Now also written directly from
+`app/core/agent/react_workflow.py`'s `execute_node`/`_run_specialist_step` (the actual production
+ReAct path) right after a `Subdomain_Enumeration`/`Recon_Suite` call succeeds, via shared helpers in
+`app/tools/utils.py` (`to_bare_hostname`/`parse_subdomains`/`parse_tech_block`/`clean_tech_string`/
+`record_graph_edge` - single source of truth, `brain.py` delegates to the same functions rather
+than duplicating them). `vuln`-typed entities are not yet written anywhere in production (only in
+the manual `app/modules/seed_memory.py` GUI-testing fixture) - `VULNERABLE_TO` edges were
+deliberately deferred (ADR-22) since the only current signal is a heuristic hint, not a confirmed
+finding.
 
 | Column (derived) | Purpose |
 |------------------|---------|
-| type | Entity kind (ip, tech, vuln, ...) |
+| type | Entity kind (`domain`, `tech` in production; `vuln` only in the manual seed fixture) |
 | value | Entity value/identifier |
 
 ---
 
 ## Entity 4: relations
 
-Knowledge-graph edges. Written by `add_relation(entity1, entity2, relation)` (e.g. "HOSTS").
+Knowledge-graph edges. Written by `add_relation(entity1, entity2, relation)` - in production,
+`SUBDOMAIN_OF` and `USES_TECH` only (see Entity 3's note; `VULNERABLE_TO` is seed-fixture-only).
 Returned by `get_graph_insights()` as entity -> relation -> entity triples.
 
 | Column | Purpose |
