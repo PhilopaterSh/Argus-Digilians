@@ -121,6 +121,52 @@ items). See the "Backlog — Proposed Future Phases" section near the end of thi
   (`ollama/ollama:0.3.14`, `juice-shop:v17.1.1`, gobuster 3.6.0, ffuf 2.1.0, subfinder 2.6.6 — FR-006)
 - [x] CHK057 Lab is additive/optional and does not alter the WSL production path (FR-007)
 
+## Phase 016 — Docstring Enforcement
+
+- [x] CHK114 (DONE 2026-07-24) `scripts/check_docstrings.py` (FR-001-005, NFR-001/002) was
+  already in place from an earlier session as the diff-scoped, CI-blocking gate (stdlib `ast`
+  only). This entry tracks FR-006/FR-007's retrospective backfill of the pre-existing 511+
+  non-compliant functions, done per-directory in 15 reviewed batches/commits (not one bulk
+  automated pass, per FR-006's explicit prohibition), tracked live in
+  `specs/checklist-docstring-backfill.md`: `scripts/`, `app/tools/`, `app/core/rag/`, `app/GUI/`,
+  `app/core/agent/` (3 sub-batches, done last given its documented bug history), `app/modules/`
+  incl. `experimental_agent/`, 5 previously-untracked `app/core/` files found via a fresh
+  full-repo scan (`config.py`, `prompts.py`, `safety.py`, `memory/memory_service.py`,
+  `registry/tool_registry.py`), and ~72 test-fixture functions across ~20 test files.
+  `check_docstrings.py --all app scripts tests` now reports **0 violations across all 918
+  scanned functions**, repo-wide (SC-001/SC-002 fully met, not just trending).
+- [x] CHK115 (DONE 2026-07-24) Real inaccuracies caught and fixed *before* committing, each via
+  re-reading the actual code rather than assuming behavior (the discipline FR-006's "worse than
+  no docstring" warning exists for): `RAGConfig.from_dict()`'s per-field fallback is to `cls()`'s
+  own dataclass defaults, not `from_central()` as first drafted; `_tech_probe_succeeded()` returns
+  False (not True) for empty input; `Verifier.verify_xss()`'s no-match fallback returns the bare
+  `{url}{sep}{param}=` with no payload appended, not the last-tried payload's URL. None of these
+  were pre-existing bugs in the code itself - all were docstring-drafting mistakes caught during
+  this backfill, before they shipped.
+- [x] CHK116 (DONE 2026-07-24) A real quirk in `check_docstrings.py`'s own AST walk was found and
+  documented (not fixed - out of scope for a docstring-content task, and changing shared CI
+  enforcement logic wasn't authorized here): `walk_own_body()` doesn't exclude a nested `def`'s
+  own top-level position in the parent function's body before descending into its children, so an
+  outer function containing an inline `def helper(): return x` gets a false "needs Returns" flag
+  for a return that isn't actually its own. Hit repeatedly (`tests/manual/verify_parsing_fix.py`,
+  `tests/test_tools/test_reachability.py`) - worked around by documenting each affected function's
+  real return behavior (often `Returns: None`) rather than papering over it with a fabricated
+  return-value claim. Recorded in `specs/checklist-docstring-backfill.md`'s header for whoever
+  next touches the gate script.
+- [x] CHK117 (DONE 2026-07-24) Alongside the docstring backfill, a full `pytest.mark.unit`/
+  `integration` audit was completed for every collected test file (not part of spec 016 itself,
+  done in the same session on explicit request): unit coverage raised from 10/339 to 279/339,
+  integration from 0 to 36/339, each classification verified by reading the file for real
+  external-boundary calls (not assumed from directory location) - e.g. `test_core/test_safety.py`
+  is split per-class (`TestSafetyLayerPorted` unit, `TestMemoryPorted` integration) since only the
+  second touches a real (if tmp-file-isolated) SQLite DB via `ArgusMemory`, matching this
+  project's own `pytest.ini` wording ("integration: ... ephemeral SQLite ...") rather than
+  guessing from the file's location. 4 GUI test files were deliberately left unmarked
+  (`test_dashboard.py`, `test_dashboard_apptest.py`, `test_imports.py`, `test_session.py`) since
+  they write to the real shared `data/argus_intelligence.db` or run a full Streamlit `AppTest` -
+  confirmed by diffing the DB file's checksum before/after the unit-only run (unchanged) versus
+  the full suite (changed).
+
 ## Phase 017 — Restore ReAct Agent (Canonical Reconciliation)
 
 - [x] CHK064 `app/core/agent/brain_tools.py::build_argus_tools()` — one canonical 12-tool
@@ -866,4 +912,4 @@ team prioritizes.
 | New files created | 20+ (005-009) + 5 (017) + 4 (018: spec/research/plan/tasks.md) |
 | Files refactored | 10+ (005-009) |
 | New files created (backlog spec kits) | +32 (019-026: 4 files each, spec/research/plan/tasks.md — no `app/` code yet) |
-| **Open compliance gaps** | None as of 2026-07-09 — **CHK052** (011 task tracking) and the **CHK058-065** Constitution IX duplication/organization backlog are all resolved; **CHK055** (014 in progress) is expected, not a gap. `019`-`026` are an intentional, tracked backlog (not a gap) — see "Backlog — Proposed Future Phases" above |
+| **Open compliance gaps** | None as of 2026-07-24 — **CHK052** (011 task tracking) and the **CHK058-065** Constitution IX duplication/organization backlog are all resolved; **CHK055** (014 in progress) is expected, not a gap; **CHK114** closes 016's FR-006/FR-007 backfill gap (0 docstring violations repo-wide, up from 511+). `019`-`026` are an intentional, tracked backlog (not a gap) — see "Backlog — Proposed Future Phases" above |
