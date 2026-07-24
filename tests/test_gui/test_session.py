@@ -7,6 +7,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..",
 
 @pytest.fixture
 def setup_gui_tables():
+    """Ensure the gui_sessions/gui_jobs tables exist before each test."""
     from app.GUI.utils.blackboard import init_gui_tables
     try:
         init_gui_tables()

@@ -7,6 +7,11 @@ pytestmark = pytest.mark.unit
 
 @pytest.fixture
 def healer():
+    """Build a SelfHealingService with a mocked runner stubbed to a generic success message.
+
+    Returns:
+        SelfHealingService: Configured with the mocked runner.
+    """
     runner = MagicMock()
     runner.run.return_value = "Setting up tool..."
     return SelfHealingService(runner)

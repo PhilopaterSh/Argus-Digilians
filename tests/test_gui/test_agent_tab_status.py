@@ -14,6 +14,15 @@ pytestmark = pytest.mark.unit
 
 
 def _make_controller(is_running: bool, status: dict):
+    """Build a MagicMock AgentController stubbed to return fixed is_running()/get_status() values.
+
+    Args:
+        is_running (bool): Value `controller.is_running()` will return.
+        status (dict): Value `controller.get_status()` will return.
+
+    Returns:
+        MagicMock: The stubbed controller.
+    """
     controller = MagicMock()
     controller.is_running.return_value = is_running
     controller.get_status.return_value = status

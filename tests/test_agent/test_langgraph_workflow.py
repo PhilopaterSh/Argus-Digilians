@@ -38,10 +38,25 @@ from app.core.agent.react_state import ArgusAgentState
 class MockLLM:
     """A mock LLM that returns predetermined ReAct-format responses."""
     def __init__(self, responses: list[str]):
+        """Store the scripted responses to cycle through.
+
+        Args:
+            responses (list[str]): ReAct-format response texts, cycled
+                in order (wrapping around) on each `invoke()` call.
+        """
         self.responses = responses
         self.call_count = 0
 
     def invoke(self, messages, **kwargs):
+        """Return the next scripted response, cycling back to the start when exhausted.
+
+        Args:
+            messages: Unused - accepted for LLM-interface compatibility.
+            **kwargs: Unused - accepted for LLM-interface compatibility.
+
+        Returns:
+            AIMessage: The next entry in `self.responses`.
+        """
         response = self.responses[self.call_count % len(self.responses)]
         self.call_count += 1
         return AIMessage(content=response)
@@ -65,10 +80,30 @@ def mock_recon(target: str) -> str:
 class StructuredMockLLM:
     """Mock LLM simulating Ollama format=json structured decoding (012 FR-C9)."""
     def __init__(self, structured_response=None, raise_on_structured=False):
+        """Store the canned structured response (or a raise-on-bind flag).
+
+        Args:
+            structured_response: The object `with_structured_output(...)
+                .invoke()` will return.
+            raise_on_structured (bool): If True, `with_structured_output`
+                raises instead, simulating a model without format=json support.
+        """
         self._structured_response = structured_response
         self._raise = raise_on_structured
 
     def with_structured_output(self, schema):
+        """Bind a schema, returning an object whose invoke() yields the canned response.
+
+        Args:
+            schema: Unused - accepted for LLM-interface compatibility.
+
+        Returns:
+            An object with an `invoke(messages)` method returning
+            `self._structured_response`.
+
+        Raises:
+            RuntimeError: If constructed with `raise_on_structured=True`.
+        """
         if self._raise:
             raise RuntimeError("model does not support format=json")
         response = self._structured_response
@@ -93,12 +128,32 @@ class ReflectionAwareMockLLM:
     ("Did this tool call achieve"), so a test can control both independently
     without needing two separate LLM instances."""
     def __init__(self, react_responses: list[str], vote_responses: list[str] = None):
+        """Store the two independent response scripts.
+
+        Args:
+            react_responses (list[str]): Cycled responses for ordinary
+                ReAct action-generation calls.
+            vote_responses (list[str] | None): Cycled responses for
+                `_inter_reflect`'s yes/no majority-vote prompt; defaults
+                to an empty list.
+        """
         self.react_responses = react_responses
         self.vote_responses = vote_responses or []
         self.react_call_count = 0
         self.vote_call_count = 0
 
     def invoke(self, messages, **kwargs):
+        """Answer from vote_responses if this looks like a reflection
+        vote prompt, else cycle through react_responses.
+
+        Args:
+            messages: Message list; the last message's content is
+                checked for the reflection-vote marker text.
+            **kwargs: Unused - accepted for LLM-interface compatibility.
+
+        Returns:
+            AIMessage: The next scripted response from whichever script matched.
+        """
         content = str(messages[-1].content) if messages else ""
         if "Did this tool call achieve" in content:
             resp = self.vote_responses[self.vote_call_count % len(self.vote_responses)]

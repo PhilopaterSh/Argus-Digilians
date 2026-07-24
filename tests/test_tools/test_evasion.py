@@ -16,9 +16,31 @@ def _make_runner(response_map: dict, default: str = ""):
     `fetch_intruder_payloads`) always returns empty by default - as if no
     local mirror were present - so existing tests get the same deterministic
     payload set as before that enrichment existed, unless a test explicitly
-    overrides it via `response_map`."""
+    overrides it via `response_map`.
+
+    Args:
+        response_map (dict): Maps a command substring to the canned
+            response returned when a run() call's command contains it.
+        default (str): Returned when no substring in `response_map`
+            matches and the command isn't a `shuf` call.
+
+    Returns:
+        MagicMock: A mock CommandRunner with `.run` wired to the behavior
+        above.
+    """
 
     def run(command, timeout=None):
+        """Return the canned response for the first matching substring, else the default.
+
+        Args:
+            command (str): The command string being "run".
+            timeout: Currently unused - accepted for call-site
+                compatibility with the real `CommandRunner.run`.
+
+        Returns:
+            str: The matching `response_map` value, `""` for a `shuf`
+            command with no match, or `default` otherwise.
+        """
         for substr, response in response_map.items():
             if substr in command:
                 return response

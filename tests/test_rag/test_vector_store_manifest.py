@@ -18,12 +18,24 @@ pytestmark = pytest.mark.unit
 
 @pytest.fixture(autouse=True)
 def _reset_embedding_factory():
+    """Reset the EmbeddingFactory singleton before and after each test."""
     EmbeddingFactory.reset()
     yield
     EmbeddingFactory.reset()
 
 
 def _make_config(tmp_path, embedding_model="nomic-embed-text"):
+    """Build a RAGConfig with a single-file knowledge base under tmp_path.
+
+    Args:
+        tmp_path: test parameter provided by this test's own setup (a
+            pytest fixture or a mock/patch injected via a decorator - see
+            the test's parameters/decorators for which).
+        embedding_model (str): Embedder name to set on the config.
+
+    Returns:
+        RAGConfig: Configured with the temp knowledge base/store dirs.
+    """
     kb = tmp_path / "kb"
     kb.mkdir()
     (kb / "doc.md").write_text("hello", encoding="utf-8")

@@ -7,6 +7,11 @@ pytestmark = pytest.mark.unit
 
 @pytest.fixture
 def verifier():
+    """Build a ReflectiveVerificationService with mocked runner/memory (empty blackboard summary).
+
+    Returns:
+        ReflectiveVerificationService: Configured with mocked collaborators.
+    """
     runner = MagicMock()
     memory = MagicMock()
     memory.get_blackboard_summary.return_value = "{}"

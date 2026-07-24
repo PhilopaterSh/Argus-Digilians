@@ -7,6 +7,7 @@ from app.core.memory.memory_service import ArgusMemory
 
 @pytest.fixture
 def db_path():
+    """Yield a temp SQLite file path, removed after the test."""
     tmp = tempfile.mktemp(suffix=".db")
     yield tmp
     if os.path.exists(tmp):
@@ -15,6 +16,13 @@ def db_path():
 
 @pytest.fixture
 def mem(db_path):
+    """Yield a real ArgusMemory backed by the temp db_path, cleared after the test.
+
+    Args:
+        db_path: test parameter provided by this test's own setup (a
+            pytest fixture or a mock/patch injected via a decorator - see
+            the test's parameters/decorators for which).
+    """
     m = ArgusMemory(db_path=db_path)
     yield m
     m.clear_memory()

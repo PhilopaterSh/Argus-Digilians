@@ -23,6 +23,7 @@ pytestmark = pytest.mark.unit
 
 @pytest.fixture(autouse=True)
 def _reset_embedding_factory():
+    """Reset the EmbeddingFactory singleton before and after each test."""
     EmbeddingFactory.reset()
     yield
     EmbeddingFactory.reset()
@@ -36,11 +37,29 @@ class _FakeVectorStore:
         self.build_index_calls = []
 
     def build_index(self, chunks):
+        """Record the chunks passed in and return their count, like the real VectorStore.
+
+        Args:
+            chunks: The chunks passed by `add_document()`.
+
+        Returns:
+            int: `len(chunks)`.
+        """
         self.build_index_calls.append(list(chunks))
         return len(chunks)
 
 
 def _make_engine(tmp_path):
+    """Build a RAGEngine with mocked embeddings and a fake vector store, for add_document() tests.
+
+    Args:
+        tmp_path: test parameter provided by this test's own setup (a
+            pytest fixture or a mock/patch injected via a decorator - see
+            the test's parameters/decorators for which).
+
+    Returns:
+        RAGEngine: Configured with a `_FakeVectorStore` and a mocked `initialize`.
+    """
     config = RAGConfig(
         vector_store_dir=str(tmp_path / "store"),
         knowledge_base_dir=str(tmp_path / "kb"),

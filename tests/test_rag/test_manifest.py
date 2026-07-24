@@ -25,6 +25,17 @@ pytestmark = pytest.mark.unit
 
 
 def _make_kb(tmp_path, text="alpha"):
+    """Write a single-file knowledge base directory under tmp_path and return its path.
+
+    Args:
+        tmp_path: test parameter provided by this test's own setup (a
+            pytest fixture or a mock/patch injected via a decorator - see
+            the test's parameters/decorators for which).
+        text (str): Content to write into the sample doc.
+
+    Returns:
+        str: Path to the created knowledge base directory.
+    """
     kb = tmp_path / "knowledge_base"
     kb.mkdir()
     (kb / "doc.md").write_text(text, encoding="utf-8")

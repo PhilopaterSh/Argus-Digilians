@@ -8,6 +8,14 @@ from app.core.agent.react_prompts import (
 
 
 def _make_state(**overrides):
+    """Build a minimal ArgusAgentState dict for prompt-builder tests.
+
+    Args:
+        **overrides: Fields to override on top of the default state.
+
+    Returns:
+        dict: The constructed state.
+    """
     state = {
         "target": "https://example.com",
         "phase": "init",

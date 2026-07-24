@@ -10,6 +10,11 @@ from app.core.agent.brain import ArgusBrain
 
 
 def _make_brain():
+    """Build an ArgusBrain with one fake tool and RAG disabled, for tool-dispatch tests.
+
+    Returns:
+        ArgusBrain: Configured with a single "fake" tool.
+    """
     def fake_func(x: str = "") -> str:
         """Fake func."""
         return f"executed:{x}"

@@ -26,6 +26,11 @@ class AnotherTool(BaseToolService):
 
 
 def _make_registry():
+    """Build a ToolRegistry with two fake registered tools.
+
+    Returns:
+        ToolRegistry: With `FakeTool` and `AnotherTool` registered.
+    """
     r = ToolRegistry()
     r.register(FakeTool())
     r.register(AnotherTool())

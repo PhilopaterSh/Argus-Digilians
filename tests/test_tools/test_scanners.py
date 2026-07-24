@@ -8,6 +8,19 @@ pytestmark = pytest.mark.unit
 
 @pytest.fixture
 def service(tmp_path, monkeypatch):
+    """Build a VulnerabilityScanners with mocked runner/memory, cwd'd into a temp dir.
+
+    Args:
+        tmp_path: test parameter provided by this test's own setup (a
+            pytest fixture or a mock/patch injected via a decorator - see
+            the test's parameters/decorators for which).
+        monkeypatch: test parameter provided by this test's own setup (a
+            pytest fixture or a mock/patch injected via a decorator - see
+            the test's parameters/decorators for which).
+
+    Returns:
+        tuple: `(VulnerabilityScanners, MagicMock runner, MagicMock memory)`.
+    """
     monkeypatch.chdir(tmp_path)
     runner = MagicMock()
     memory = MagicMock()

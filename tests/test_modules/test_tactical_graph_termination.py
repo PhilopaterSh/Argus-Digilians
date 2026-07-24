@@ -14,6 +14,14 @@ pytestmark = pytest.mark.unit
 
 
 def _make_state(**overrides):
+    """Build a minimal AgentState dict for should_continue() tests.
+
+    Args:
+        **overrides: Fields to override on top of the default state.
+
+    Returns:
+        dict: The constructed state.
+    """
     state = {
         "target_ip": "10.0.0.1",
         "retry_count": 0,

@@ -17,6 +17,7 @@ pytestmark = pytest.mark.unit
 
 @pytest.fixture(autouse=True)
 def _reset_embedding_factory():
+    """Reset the EmbeddingFactory singleton before and after each test."""
     EmbeddingFactory.reset()
     yield
     EmbeddingFactory.reset()
@@ -41,6 +42,18 @@ class _FakeVectorStore:
 
 
 def _make_engine(tmp_path, results, similarity_threshold=0.5):
+    """Build a RAGEngine with mocked embeddings and a fake vector store returning `results`.
+
+    Args:
+        tmp_path: test parameter provided by this test's own setup (a
+            pytest fixture or a mock/patch injected via a decorator - see
+            the test's parameters/decorators for which).
+        results: Canned `(Document, score)` pairs for the fake store to return.
+        similarity_threshold (float): Passed to the engine's RAGConfig.
+
+    Returns:
+        RAGEngine: Configured with the fake vector store.
+    """
     config = RAGConfig(
         similarity_threshold=similarity_threshold,
         vector_store_dir=str(tmp_path / "store"),

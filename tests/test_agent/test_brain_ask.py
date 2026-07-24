@@ -35,10 +35,24 @@ class _RepeatingMalformedLLM:
     """
 
     def __init__(self, content="```json\n{\"raw\": \"context dump, no Thought/Action\"}"):
+        """Store the fixed malformed content every invoke() call will return.
+
+        Args:
+            content (str): The fixed non-ReAct content to always return.
+        """
         self._content = content
         self.call_count = 0
 
     def invoke(self, messages, **kwargs):
+        """Always return the same malformed AIMessage, counting calls.
+
+        Args:
+            messages: Unused - accepted for LLM-interface compatibility.
+            **kwargs: Unused - accepted for LLM-interface compatibility.
+
+        Returns:
+            AIMessage: `self._content`, unchanged every call.
+        """
         self.call_count += 1
         return AIMessage(content=self._content)
 
@@ -89,6 +103,15 @@ def test_ask_streams_live_feed_events_via_on_graph_event():
             self.i = 0
 
         def invoke(self, messages, **kwargs):
+            """Return the next scripted response, clamping at the last one once exhausted.
+
+            Args:
+                messages: Unused - accepted for LLM-interface compatibility.
+                **kwargs: Unused - accepted for LLM-interface compatibility.
+
+            Returns:
+                AIMessage: The next entry in `responses`.
+            """
             r = responses[min(self.i, len(responses) - 1)]
             self.i += 1
             return AIMessage(content=r)
@@ -134,7 +157,17 @@ def _make_brain_with_fake_rag(llm, combined_text):
     """ArgusBrain has no constructor seam for injecting a fake RAG engine
     (unlike `llm=`) - built with RAG disabled, then rag_enabled/_rag_engine
     are set directly, matching test_rag_engine_threshold.py's established
-    pattern of swapping `engine.vector_store` post-construction."""
+    pattern of swapping `engine.vector_store` post-construction.
+
+    Args:
+        llm: The (fake) LLM to inject into ArgusBrain.
+        combined_text (str): Fixed text the fake RAG engine's
+            `format_combined_context()` will return.
+
+    Returns:
+        ArgusBrain: With RAG force-enabled and `_rag_engine` swapped to
+        a `_FakeRagEngine(combined_text)`.
+    """
     brain = ArgusBrain("test-model", [_make_tool()], rag_config={"enabled": False}, llm=llm)
     brain.rag_enabled = True
     brain._rag_engine = _FakeRagEngine(combined_text)
@@ -264,7 +297,11 @@ def test_ask_extracts_target_before_blackboard_enrichment_not_after():
     RAG/Blackboard-enriched query - which prepends the Blackboard JSON
     block (containing exactly the kind of dot-separated, space-free token
     extract_target() searches for) BEFORE the actual "Question: ..." text.
-    The real target must come from the raw, pre-enrichment query."""
+    The real target must come from the raw, pre-enrichment query.
+
+    Returns:
+        None
+    """
     memory = MagicMock()
     memory.get_blackboard_summary.return_value = '{"www.example.com:80": {"vulnerability": "x"}}'
     memory.get_graph_insights.return_value = ""
@@ -272,6 +309,14 @@ def test_ask_extracts_target_before_blackboard_enrichment_not_after():
     captured = {}
 
     def fake_tool(x=""):
+        """Record the tool-call input it received.
+
+        Args:
+            x (str): The tool-call input.
+
+        Returns:
+            str: A fixed "ok" string.
+        """
         captured["input"] = x
         return "ok"
 
@@ -305,6 +350,19 @@ class _CrashOnceThenSucceedLLM:
         self.call_count = 0
 
     def invoke(self, messages, **kwargs):
+        """Raise the transient CUDA-crash signature on the first call, then succeed.
+
+        Args:
+            messages: Unused - accepted for LLM-interface compatibility.
+            **kwargs: Unused - accepted for LLM-interface compatibility.
+
+        Returns:
+            AIMessage: A Final Answer message, on the second and later calls.
+
+        Raises:
+            RuntimeError: On the first call only (the transient-infra
+                crash signature `_run_structured_graph` retries on).
+        """
         self.call_count += 1
         if self.call_count == 1:
             raise RuntimeError(
@@ -335,6 +393,16 @@ class _PersistentErrorLLM:
         self.call_count = 0
 
     def invoke(self, messages, **kwargs):
+        """Always raise a persistent (non-transient) error.
+
+        Args:
+            messages: Unused - accepted for LLM-interface compatibility.
+            **kwargs: Unused - accepted for LLM-interface compatibility.
+
+        Raises:
+            ValueError: Every call - not the transient-infra signature,
+                so `_run_structured_graph` must not retry this.
+        """
         self.call_count += 1
         raise ValueError("some unrelated persistent bug")
 

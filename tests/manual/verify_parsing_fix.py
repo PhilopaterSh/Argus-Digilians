@@ -31,7 +31,11 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 def test_brain_initialization():
-    """Test that brain correctly detects WhiteRabbitNeo and defaults to SimpleChain."""
+    """Test that brain correctly detects WhiteRabbitNeo and defaults to SimpleChain.
+
+    Returns:
+        None
+    """
     from app.core.agent.brain import ArgusBrain
     from langchain_core.tools import Tool
     
@@ -58,7 +62,11 @@ def test_brain_initialization():
     print("[PASS] Other models correctly default to ReAct")
 
 def test_output_format():
-    """Test that SimpleChain produces markdown-formatted output."""
+    """Test that SimpleChain produces markdown-formatted output.
+
+    Returns:
+        None
+    """
     from app.core.agent_factory_v2 import SimpleChainExecutor
     from langchain_core.tools import Tool
     from unittest.mock import Mock
@@ -157,7 +165,11 @@ def test_error_detection():
     print("[PASS] use_react flag is properly reset after fallback")
 
 def test_gui_output_handling():
-    """Test that GUI properly handles both dict and string outputs."""
+    """Test that GUI properly handles both dict and string outputs.
+
+    Returns:
+        int: 0 once all simulated output-type checks pass.
+    """
     print("\n" + "="*60)
     print("[TEST 4] GUI Output Handling")
     print("="*60)
@@ -208,7 +220,11 @@ def test_gui_output_handling():
         return 0
 
 def main():
-    """Run all tests."""
+    """Run all tests.
+
+    Returns:
+        int: 0 if every test in `tests` passed, 1 if any failed/errored.
+    """
     print("\n" + "="*60)
     print("[TEST SUITE] ARGUS PARSING FIX")
     print("="*60)

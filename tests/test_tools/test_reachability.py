@@ -8,6 +8,11 @@ pytestmark = pytest.mark.unit
 
 @pytest.fixture
 def service():
+    """Build a ReachabilityService with mocked runner/memory; yields (service, runner, memory).
+
+    Returns:
+        tuple: `(ReachabilityService, MagicMock runner, MagicMock memory)`.
+    """
     runner = MagicMock()
     memory = MagicMock()
     return ReachabilityService(runner, memory), runner, memory
@@ -93,10 +98,27 @@ class TestCheckReachability:
         confirmed HTTP 200), matching the same "WAF/CDN drops ICMP" root
         cause the 2026-07-07 CHANGELOG entry already fixed for
         recon_suite's nmap scan, but check_reachability had no such
-        fallback of its own until now."""
+        fallback of its own until now.
+
+        Args:
+            service: test parameter provided by this test's own setup (a
+                pytest fixture or a mock/patch injected via a decorator -
+                see the test's parameters/decorators for which).
+
+        Returns:
+            None
+        """
         svc, runner, memory = service
 
         def run(command):
+            """Fail ping, succeed curl over HTTP - simulates ICMP blocked but the host being live.
+
+            Args:
+                command (str): The command being "run".
+
+            Returns:
+                str: A canned ping/curl reply, or "" for anything else.
+            """
             if command.startswith("ping"):
                 return "0 received"
             if command.startswith("curl"):
@@ -112,9 +134,27 @@ class TestCheckReachability:
         memory.upsert_target.assert_called_once_with("https://lab.example.com")
 
     def test_tries_opposite_scheme_before_giving_up(self, service):
+        """Verify Tries opposite scheme before giving up.
+
+        Args:
+            service: test parameter provided by this test's own setup (a
+                pytest fixture or a mock/patch injected via a decorator -
+                see the test's parameters/decorators for which).
+
+        Returns:
+            None
+        """
         svc, runner, memory = service
 
         def run(command):
+            """Fail ping and https curl, succeed http curl - the opposite-scheme fallback path.
+
+            Args:
+                command (str): The command being "run".
+
+            Returns:
+                str: A canned ping/curl reply, or "" for anything else.
+            """
             if command.startswith("ping"):
                 return "0 received"
             if command.startswith("curl") and "https://" in command:
@@ -131,9 +171,27 @@ class TestCheckReachability:
         memory.upsert_target.assert_called_once()
 
     def test_still_reports_down_when_both_ping_and_http_fail(self, service):
+        """Verify Still reports down when both ping and http fail.
+
+        Args:
+            service: test parameter provided by this test's own setup (a
+                pytest fixture or a mock/patch injected via a decorator -
+                see the test's parameters/decorators for which).
+
+        Returns:
+            None
+        """
         svc, runner, memory = service
 
         def run(command):
+            """Fail both ping and every curl scheme attempt.
+
+            Args:
+                command (str): The command being "run".
+
+            Returns:
+                str: A canned failing ping/curl reply, or "" for anything else.
+            """
             if command.startswith("ping"):
                 return "0 received"
             if command.startswith("curl"):
