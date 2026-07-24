@@ -172,7 +172,13 @@ def changed_files(base_ref):
 
 
 def main():
-    """CLI entry point: parse args, scan, print duplicate groups, set exit code."""
+    """CLI entry point: parse args, scan, print duplicate groups, set exit code.
+
+    Returns:
+        int: 1 if duplication violations were found and this run was in a
+        blocking mode (`--diff <ref>`, or the default full-scan invocation
+        without `--all`); 0 otherwise.
+    """
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("paths", nargs="*", default=["."])
     parser.add_argument("--diff", metavar="BASE_REF", help="Only flag NEW duplication vs BASE_REF")

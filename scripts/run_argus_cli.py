@@ -28,6 +28,24 @@ try:
     _orig_ws_init = WebSocketCommonProtocol.__init__
 
     def _patched_ws_init(self, *args, **kwargs):
+        """Replace WebSocketCommonProtocol.__init__ to enforce forgiving keepalive defaults.
+
+        Sets `ping_interval`/`ping_timeout` to at least 30/60 seconds
+        (raising them if the caller passed a lower value) before
+        delegating to the original `__init__`, to avoid the spurious
+        keepalive timeouts (close code 1011) some lower-level dependency
+        triggers with tighter defaults.
+
+        Args:
+            *args: Positional arguments forwarded to the original `__init__`.
+            **kwargs: Keyword arguments forwarded to the original
+                `__init__`, with `ping_interval`/`ping_timeout` adjusted as
+                described above.
+
+        Returns:
+            The original `__init__`'s return value (always `None`, per
+            Python's `__init__` convention).
+        """
         kwargs.setdefault("ping_interval", 30)
         kwargs.setdefault("ping_timeout", 60)
         pi = kwargs.get("ping_interval")
@@ -63,6 +81,17 @@ def _write_progress(target_url: str, message: str):
 
 
 def run_analysis(target_url):
+    """Run ArgusBrain's full autonomous security analysis against target_url
+    and print the live reasoning trace plus final report.
+
+    Progress checkpoints are appended to
+    reports/<sanitized-target>_progress.log as the analysis proceeds.
+    Catches KeyboardInterrupt and any other exception, logging and printing
+    a message rather than propagating.
+
+    Args:
+        target_url (str): The URL to analyze.
+    """
     bridge = WSLBridgeTools()
     model = config.model_name
 

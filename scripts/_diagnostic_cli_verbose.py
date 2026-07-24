@@ -21,6 +21,12 @@ config = ArgusConfig.load()
 
 
 def main():
+    """Run a full ArgusBrain security analysis against a target URL, printing
+    the agent's live reasoning trace via ConsoleTraceCallbackHandler.
+
+    Target defaults to https://www.cultbeauty.co.uk/ if not given as the
+    first command-line argument.
+    """
     target_url = sys.argv[1] if len(sys.argv) > 1 else "https://www.cultbeauty.co.uk/"
     bridge = WSLBridgeTools()
     tools = build_argus_tools(bridge)

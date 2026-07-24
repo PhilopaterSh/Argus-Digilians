@@ -37,6 +37,15 @@ SUPERSEDE_TERMS = ("Superseded By", "Replaced By", "Refined By", "Partially Supe
 
 
 def feature_dirs(specs_dir):
+    """List every numbered feature folder directly under specs_dir.
+
+    Args:
+        specs_dir (str): Path to the repository's `specs/` directory.
+
+    Returns:
+        list[str]: Sorted directory names matching FEATURE_RE (a leading
+        digit sequence followed by `-`), e.g. "027-merge-branches".
+    """
     out = []
     for name in sorted(os.listdir(specs_dir)):
         p = os.path.join(specs_dir, name)
@@ -46,6 +55,15 @@ def feature_dirs(specs_dir):
 
 
 def check_duplicate_numbers(dirs):
+    """Find feature folders that share the same leading number prefix.
+
+    Args:
+        dirs (list[str]): Feature folder names, as returned by feature_dirs.
+
+    Returns:
+        list[str]: One error message per duplicated number, naming every
+        folder sharing that number; empty if every number is unique.
+    """
     seen = {}
     errors = []
     for d in dirs:
@@ -58,6 +76,16 @@ def check_duplicate_numbers(dirs):
 
 
 def _read_spec_text(specs_dir, d):
+    """Read a feature folder's spec.md, if it exists.
+
+    Args:
+        specs_dir (str): Path to the repository's `specs/` directory.
+        d (str): Feature folder name.
+
+    Returns:
+        str | None: The full text of `<specs_dir>/<d>/spec.md`, or `None`
+        if that file doesn't exist.
+    """
     spec_path = os.path.join(specs_dir, d, "spec.md")
     if not os.path.isfile(spec_path):
         return None
@@ -66,6 +94,23 @@ def _read_spec_text(specs_dir, d):
 
 
 def _status_tier(spec_text, d, errors):
+    """Determine which artifact tier a feature's spec.md status implies.
+
+    Appends a human-readable message to `errors` (in place) if spec_text
+    is missing a recognizable `**Status**: ...` header or has a status
+    this validator doesn't recognize.
+
+    Args:
+        spec_text (str | None): The feature's spec.md content, or `None`
+            if the file doesn't exist.
+        d (str): Feature folder name, used in any appended error message.
+        errors (list[str]): Error-message accumulator, mutated in place.
+
+    Returns:
+        tuple[str, ...]: The artifact filenames this feature must have -
+        `("spec.md",)` for MINIMAL_STATUSES, `CORE` for CORE_STATUSES or
+        any unrecognized/missing status (the safer, stricter default).
+    """
     if spec_text is None:
         return CORE  # no spec.md at all - fall through to check_required_artifacts's own report
     m = STATUS_RE.search(spec_text)
@@ -82,6 +127,22 @@ def _status_tier(spec_text, d, errors):
 
 
 def check_required_artifacts(specs_dir, dirs):
+    """Verify each feature folder has the artifacts its status tier requires.
+
+    For CORE-tier features, conditional artifacts (data-model.md,
+    quickstart.md) may be omitted only if spec.md explicitly declares them
+    N/A with a reason under an "## Artifact applicability" section
+    (APPLICABILITY_RE).
+
+    Args:
+        specs_dir (str): Path to the repository's `specs/` directory.
+        dirs (list[str]): Feature folder names to check.
+
+    Returns:
+        list[str]: One error message per missing required or
+        undeclared-conditional artifact; empty if every folder satisfies
+        its tier's requirements.
+    """
     errors = []
     for d in dirs:
         spec_text = _read_spec_text(specs_dir, d)
@@ -102,6 +163,17 @@ def check_required_artifacts(specs_dir, dirs):
 
 
 def check_supersession_targets(specs_dir, dirs):
+    """Find supersession markers (e.g. "Superseded By") left without a target.
+
+    Args:
+        specs_dir (str): Path to the repository's `specs/` directory.
+        dirs (list[str]): Feature folder names to scan.
+
+    Returns:
+        list[str]: One error message per line where a SUPERSEDE_TERMS
+        marker has no non-empty text after it; empty if every marker
+        names a target.
+    """
     errors = []
     for d in dirs:
         spec = os.path.join(specs_dir, d, "spec.md")
@@ -118,6 +190,12 @@ def check_supersession_targets(specs_dir, dirs):
 
 
 def main():
+    """CLI entry point: run all three structural checks and print a pass/fail summary.
+
+    Returns:
+        int: 1 if the specs directory is missing or any check reported a
+        violation, 0 if all feature folders are structurally consistent.
+    """
     specs_dir = os.path.abspath(SPECS_DIR)
     if not os.path.isdir(specs_dir):
         print(f"ERROR: specs dir not found: {specs_dir}")

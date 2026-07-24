@@ -11,6 +11,13 @@ CANONICAL_DEFAULT_PORT = 12199
 
 
 def get_port() -> int:
+    """Read the configured Streamlit port, falling back to the canonical default.
+
+    Returns:
+        int: The port from config.yaml's `streamlit.port` key, or
+        `CANONICAL_DEFAULT_PORT` (12199) if the file is missing, unreadable,
+        or does not define that key.
+    """
     config_path = os.path.join(os.path.dirname(__file__), "..", "config", "config.yaml")
     try:
         import yaml  # imported lazily so a missing dep still yields the default

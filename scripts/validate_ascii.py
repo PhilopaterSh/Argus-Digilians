@@ -20,12 +20,30 @@ EXTS = (".py", ".bat", ".ps1", ".sh", ".yaml", ".yml", ".cfg", ".ini", ".toml")
 
 
 def scan_file(path):
+    """Find the byte offsets of any non-ASCII byte in a file.
+
+    Args:
+        path (str): Path to the file to scan, opened in binary mode.
+
+    Returns:
+        list[int]: Byte offset of every byte with value >= 128; empty if
+        the file is pure ASCII.
+    """
     with open(path, "rb") as f:
         data = f.read()
     return [i for i, b in enumerate(data) if b >= 128]
 
 
 def iter_files(root):
+    """Yield every scannable first-party file under root's ROOTS dirs, plus EXTRA_FILES.
+
+    Args:
+        root (str): Absolute path to the repository root.
+
+    Yields:
+        str: Path to each file matching EXTS under app/scripts/tests
+        (skipping SKIP_DIRS), plus any EXTRA_FILES entry that exists.
+    """
     for base in ROOTS:
         base_path = os.path.join(root, base)
         if not os.path.isdir(base_path):
@@ -42,6 +60,12 @@ def iter_files(root):
 
 
 def main():
+    """CLI entry point: scan all first-party files and report any non-ASCII bytes.
+
+    Returns:
+        int: 1 if any scanned file contains a non-ASCII byte, 0 if all
+        scanned files are pure ASCII.
+    """
     root = os.path.abspath(ROOT)
     dirty = []
     total = 0

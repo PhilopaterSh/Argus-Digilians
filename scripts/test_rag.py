@@ -20,6 +20,12 @@ Ollama embeddings are preferred for offline use.
 
 
 def _write_sample_doc() -> str:
+    """Write a small built-in sample document to a fresh temp directory, for
+    use when --smoke is passed or --ingest/--query are omitted.
+
+    Returns:
+        str: Absolute path to the written sample markdown file.
+    """
     tmp_dir = Path(tempfile.mkdtemp(prefix='argus_rag_smoke_'))
     doc_path = tmp_dir / 'sample.md'
     doc_path.write_text(DEFAULT_SAMPLE, encoding='utf-8')
@@ -27,6 +33,14 @@ def _write_sample_doc() -> str:
 
 
 def main():
+    """CLI entry point: ingest a document (or run a self-contained smoke
+    test) and query it against the RAG engine.
+
+    Returns:
+        int: 1 if the document to ingest doesn't exist or fails to ingest,
+        0 otherwise (including when querying the LLM fails and the script
+        falls back to printing raw retrieved chunks).
+    """
     parser = argparse.ArgumentParser(description='Test linear RAG pipeline')
     parser.add_argument('--ingest', help='Path to document to ingest')
     parser.add_argument('--query', help='Query to run against the ingested document')

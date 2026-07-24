@@ -12,6 +12,13 @@ import argparse
 from app.core.agent.graph import build_tactical_graph
 
 def main():
+    """Build the legacy tactical LangGraph and stream it against a --target
+    URL/IP, printing progress to stdout.
+
+    Manual smoke test only - this graph is superseded by
+    app/core/agent/react_workflow.py and is not part of the pytest suite
+    or ArgusBrain's production ReAct loop (see the module docstring).
+    """
     parser = argparse.ArgumentParser(description="Test cyclical LangGraph Pentest Agent")
     parser.add_argument("--target", help="Target URL or IP", required=True)
     args = parser.parse_args()

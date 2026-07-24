@@ -405,49 +405,49 @@ Auto-generated inventory of functions this PR's diff touches that need a real, h
 
 ## `scripts/_diagnostic_cli_verbose.py`
 
-- [ ] `main` (line 23) - needs: summary
+- [x] `main` (line 23) - needs: summary. **Done 2026-07-24**: Tier 0 docstring backfill batch (scripts/).
 
 ## `scripts/check_docstrings.py`
 
-- [ ] `main` (line 160) - needs: Returns
+- [x] `main` (line 160) - needs: Returns. **Done 2026-07-24**: Tier 0 docstring backfill batch (scripts/).
 
 ## `scripts/check_duplication.py`
 
-- [ ] `main` (line 174) - needs: Returns
+- [x] `main` (line 174) - needs: Returns. **Done 2026-07-24**: Tier 0 docstring backfill batch (scripts/).
 
 ## `scripts/diagnose_legacy_tactical_graph.py`
 
-- [ ] `main` (line 14) - needs: summary
+- [x] `main` (line 14) - needs: summary. **Done 2026-07-24**: Tier 0 docstring backfill batch (scripts/).
 
 ## `scripts/get_port.py`
 
-- [ ] `get_port` (line 13) - needs: Returns
+- [x] `get_port` (line 13) - needs: Returns. **Done 2026-07-24**: Tier 0 docstring backfill batch (scripts/).
 
 ## `scripts/run_argus_cli.py`
 
-- [ ] `_patched_ws_init` (line 30) - needs: Args, Returns
-- [ ] `run_analysis` (line 63) - needs: Args
+- [x] `_patched_ws_init` (line 30) - needs: Args, Returns. **Done 2026-07-24**: Tier 0 docstring backfill batch (scripts/).
+- [x] `run_analysis` (line 63) - needs: Args. **Done 2026-07-24**: Tier 0 docstring backfill batch (scripts/).
 
 ## `scripts/test_rag.py`
 
-- [ ] `_write_sample_doc` (line 22) - needs: Returns
-- [ ] `main` (line 29) - needs: Returns
+- [x] `_write_sample_doc` (line 22) - needs: Returns. **Done 2026-07-24**: Tier 0 docstring backfill batch (scripts/).
+- [x] `main` (line 29) - needs: Returns. **Done 2026-07-24**: Tier 0 docstring backfill batch (scripts/).
 
 ## `scripts/validate_ascii.py`
 
-- [ ] `scan_file` (line 22) - needs: Args, Returns
-- [ ] `iter_files` (line 28) - needs: Args
-- [ ] `main` (line 44) - needs: Returns
+- [x] `scan_file` (line 22) - needs: Args, Returns. **Done 2026-07-24**: Tier 0 docstring backfill batch (scripts/).
+- [x] `iter_files` (line 28) - needs: Args. **Done 2026-07-24**: Tier 0 docstring backfill batch (scripts/).
+- [x] `main` (line 44) - needs: Returns. **Done 2026-07-24**: Tier 0 docstring backfill batch (scripts/).
 
 ## `scripts/validate_specs.py`
 
-- [ ] `feature_dirs` (line 39) - needs: Args, Returns
-- [ ] `check_duplicate_numbers` (line 48) - needs: Args, Returns
-- [ ] `_read_spec_text` (line 60) - needs: Args, Returns
-- [ ] `_status_tier` (line 68) - needs: Args, Returns
-- [ ] `check_required_artifacts` (line 84) - needs: Args, Returns
-- [ ] `check_supersession_targets` (line 104) - needs: Args, Returns
-- [ ] `main` (line 120) - needs: Returns
+- [x] `feature_dirs` (line 39) - needs: Args, Returns. **Done 2026-07-24**: Tier 0 docstring backfill batch (scripts/).
+- [x] `check_duplicate_numbers` (line 48) - needs: Args, Returns. **Done 2026-07-24**: Tier 0 docstring backfill batch (scripts/).
+- [x] `_read_spec_text` (line 60) - needs: Args, Returns. **Done 2026-07-24**: Tier 0 docstring backfill batch (scripts/).
+- [x] `_status_tier` (line 68) - needs: Args, Returns. **Done 2026-07-24**: Tier 0 docstring backfill batch (scripts/).
+- [x] `check_required_artifacts` (line 84) - needs: Args, Returns. **Done 2026-07-24**: Tier 0 docstring backfill batch (scripts/).
+- [x] `check_supersession_targets` (line 104) - needs: Args, Returns. **Done 2026-07-24**: Tier 0 docstring backfill batch (scripts/).
+- [x] `main` (line 120) - needs: Returns. **Done 2026-07-24**: Tier 0 docstring backfill batch (scripts/).
 
 ## `tests/manual/ai_benchmark.py`
 

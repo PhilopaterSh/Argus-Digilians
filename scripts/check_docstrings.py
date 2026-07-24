@@ -158,7 +158,14 @@ def check_function(func, filename):
 
 
 def main():
-    """CLI entry point: parse args, scan, print violations, set exit code."""
+    """CLI entry point: parse args, scan, print violations, set exit code.
+
+    Returns:
+        int: 1 if violations were found and this run was in a blocking
+        mode (`--diff <ref>`, or the default full-scan invocation without
+        `--all`); 0 otherwise (no violations, or `--all` was passed for
+        an informational-only report).
+    """
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("paths", nargs="*", default=["app", "scripts"])
     parser.add_argument("--diff", metavar="BASE_REF", help="Only check lines changed vs BASE_REF")
