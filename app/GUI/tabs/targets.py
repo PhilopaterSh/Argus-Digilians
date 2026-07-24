@@ -48,7 +48,7 @@ def render_targets():
     if search:
         filtered = [t for t in targets if search.lower() in t["url"].lower() or any(search.lower() in tag.lower() for tag in t.get("tags", []))]
 
-    for i, target in enumerate(filtered):
+    for _i, target in enumerate(filtered):
         status_icon = {
             "pending": ":gray_circle:",
             "running": ":yellow_circle:",

@@ -191,12 +191,12 @@ def main():
     changed = changed_files(args.diff) if args.diff else None
     violations = []
 
-    for digest, files in dup_files.items():
+    for _digest, files in dup_files.items():
         if changed is not None and not (set(files) & changed):
             continue
         violations.append(f"Duplicate file content ({len(files)} files): {', '.join(files)}")
 
-    for digest, locations in dup_funcs.items():
+    for _digest, locations in dup_funcs.items():
         touched_files = {loc.split(":")[0] for loc in locations}
         if changed is not None and not (touched_files & changed):
             continue

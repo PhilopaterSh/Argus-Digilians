@@ -43,7 +43,7 @@ def main():
     }
 
     # Execute the graph
-    for output in graph.stream(initial_state):
+    for _output in graph.stream(initial_state):
         # We can print node transitions if desired
         pass
     
