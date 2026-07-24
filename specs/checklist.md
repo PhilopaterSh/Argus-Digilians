@@ -198,9 +198,20 @@ referenced test was removed.
   Guide/PortSwigger Web Security Academy-class methodology only, matching
   `exploitation_techniques.md`'s existing style/provenance) covering the 4 vulnerability classes
   `benchmarks/fixtures/` exercises that weren't yet in the knowledge base (XSS, IDOR, SSTI,
-  Information Disclosure) plus CORS misconfiguration. Verified it loads and structurally chunks
-  correctly via the real `DocumentProcessor.process_directory()` (9 new chunks from the new
-  file; 23 total across `knowledge_base/`, up from 14) and passes `validate_ascii.py`.
+  Information Disclosure) plus CORS misconfiguration. User then asked to go as deep/broad as
+  possible on this same file rather than importing anything further from the rejected repo -
+  extended it with the remaining 4 of `app/tools/payloads.py::PayloadSuggester`'s 8 signal-map
+  categories not yet covered (Command Injection, Insecure File Upload, NoSQL Injection, GraphQL
+  Injection/introspection abuse) plus 8 further OWASP Top 10/API Top 10-class sections with no
+  existing Argus tool mapping yet (SSRF, XXE, CSRF, JWT/auth-token attacks, Insecure
+  Deserialization, HTTP Request Smuggling, Open Redirect, Race Conditions) - 12 new sections,
+  same detection/bypass-pattern/verification-pitfall structure as the first 5, same
+  zero-named-real-target discipline. Request Smuggling and Race Condition sections explicitly
+  flag their own testing risk to *other* real users sharing a target's connection pool/rate
+  limiter and recommend cautious, bounded probing - consistent with this project's existing
+  "no destructive testing" stance elsewhere. Verified it loads and structurally chunks correctly
+  via the real `DocumentProcessor.process_directory()` (21 chunks from this file; 35 total
+  across `knowledge_base/`, up from 14 before this session) and passes `validate_ascii.py`.
 
 ## Phase 017 — Restore ReAct Agent (Canonical Reconciliation)
 
