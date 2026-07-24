@@ -133,13 +133,15 @@ class DocumentProcessor:
             return docs
 
         else:
-            content = json.dumps(data, ensure_ascii=False, indent=2)
             from langchain_text_splitters import RecursiveJsonSplitter
-            splitter = RecursiveJsonSplitter(max_doc_size=self.config.chunk_size)
-            texts = splitter.split_json(json.dumps(data, ensure_ascii=False))
+            splitter = RecursiveJsonSplitter(max_chunk_size=self.config.chunk_size)
+            chunks = splitter.split_json(data)
             docs = [
-                Document(page_content=t, metadata={"source": fpath})
-                for t in texts
+                Document(
+                    page_content=json.dumps(chunk, ensure_ascii=False, indent=2),
+                    metadata={"source": fpath},
+                )
+                for chunk in chunks
             ]
             print(f"[RAG] JSON object '{os.path.basename(fpath)}': {len(docs)} chunks")
             return docs
