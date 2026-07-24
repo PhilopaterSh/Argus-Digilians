@@ -176,6 +176,31 @@ referenced test was removed.
   they write to the real shared `data/argus_intelligence.db` or run a full Streamlit `AppTest` -
   confirmed by diffing the DB file's checksum before/after the unit-only run (unchanged) versus
   the full suite (changed).
+- [x] CHK118 (DONE 2026-07-24) Same session, unrelated to 016/pytest-markers: a user question
+  about using `graphify` for target-relationship graphing led to discovering and fixing (ADR-22,
+  `docs/ARGUS_FRAMEWORK_ARCHITECTURE_v2.md`) that `Query_Knowledge_Graph` had no live data
+  behind it - see that ADR for detail. A follow-up question about a specific GitHub repo
+  (`uphiago/recon-skills`, offered as a possible source of recon technique content for RAG)
+  was investigated by cloning and reading it directly rather than trusting its README summary:
+  `SOUL.md` describes "autonomous offensive reconnaissance at scale" selecting SMB targets
+  (bakeries, churches, daycare centers, etc.) by vulnerability "yield rate," with zero mention
+  of authorization/scope anywhere, and field results citing real named domains and government
+  infrastructure ("Monaco government infrastructure," "Brazilian state networks"). A deeper pass
+  found the contamination isn't confined to that framing layer: individual `redteam/hunt-*`
+  technique files (otherwise built from legitimate public bug-bounty-report citations) embed
+  real, unredacted victim domains as recurring case studies (e.g. `hunt-cors/SKILL.md`: "
+  gocarwash.com (car wash...) — CRITICAL CORS", "dogtopia.com (pet grooming...) — CRITICAL
+  CORS", matching `SOUL.md`'s own sector list) alongside dozens of repeated
+  category-anonymized-but-likely-real domains (`retail-chain.com` x30, `mattress-retailer.com`
+  x10, etc. across many files) - concluded no reliable subset could be curated without
+  rewriting most files' substantive content, so nothing from that repo was imported. Instead
+  authored `knowledge_base/vulnerability_class_reference.md` from scratch (public OWASP Testing
+  Guide/PortSwigger Web Security Academy-class methodology only, matching
+  `exploitation_techniques.md`'s existing style/provenance) covering the 4 vulnerability classes
+  `benchmarks/fixtures/` exercises that weren't yet in the knowledge base (XSS, IDOR, SSTI,
+  Information Disclosure) plus CORS misconfiguration. Verified it loads and structurally chunks
+  correctly via the real `DocumentProcessor.process_directory()` (9 new chunks from the new
+  file; 23 total across `knowledge_base/`, up from 14) and passes `validate_ascii.py`.
 
 ## Phase 017 — Restore ReAct Agent (Canonical Reconciliation)
 
