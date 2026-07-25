@@ -121,3 +121,90 @@ prompt/tool configurations, one graph) - not the multi-model variant. Revisit a 
 model only after this version ships and `025`'s benchmark suite (once it exists) shows a
 residual gap large enough to justify the added VRAM/latency/maintenance cost, and if so, prefer
 a non-abliterated model for any judgment-heavy (Verifier/Summarizer) role specifically.
+
+## Addendum (2026-07-25): re-evaluating a 2-model Vision-frontend + WhiteRabbitNeo-backend
+## pipeline
+
+User proposed a narrower multi-model variant than the one rejected above: not 4 models, just 2 -
+a vision/tool-formatting model ("eyes and hands": reads a target UI via Vision, or prepares
+clean tool-call JSON) feeding its output through the Blackboard to WhiteRabbitNeo ("the attack
+brain": deep offensive analysis, unconstrained by refusal behavior), architecturally described
+as a LangGraph pipeline stage hand-off, not a code merge of the two models. Asked to find the
+best-fit approach and check for research grounding, per the same discipline as the 2026-07-11
+addendum above - not accept or reject on priors.
+
+**Web research on the general pattern**: "multi-model routing" (cheap/fast model for
+classification+tool-calls, frontier model for hard reasoning, specialized model for
+extraction/embeddings) is a real, established 2026 agentic-architecture pattern, and the
+Blackboard coordination style this proposal assumes is *exactly* Argus's own existing design
+(`ArgusMemory`) - not a new pattern for this project. However, no dedicated research (paper or
+practitioner write-up) was found validating this *specific* pairing (a vision/tool-formatting
+model handing off to a separate uncensored security-specialist model) for penetration testing
+specifically - this is a plausible application of the general pattern, not an independently
+validated design choice, and should be evaluated on Argus's own merits/measurements rather than
+argued from the pattern's general reputation.
+(Sources: [Beyond the Monolith: Multi-Model Routing 2026 (Mindra)](https://mindra.co/blog/multi-model-routing-llm-orchestration-2026),
+[The Architecture of Agency 2026 (Medium)](https://medium.com/@nraman.n6/the-architecture-of-agency-a-deep-technical-guide-to-agentic-ai-systems-in-2026-9df63b37f6df).)
+
+**VRAM math is now genuinely favorable** (unlike the rejected 4-model proposal above). Confirmed
+live via `nvidia-smi` (2026-07-25, same 16GB RTX 2000 Ada as the original evaluation):
+`qwen3-vl:8b-thinking` (6.1GB) + the current `WhiteRabbitNeo-V3-7B-GGUF:Q5_K_M` (5.4GB) +
+`nomic-embed-text` (0.27GB) totals ~11.8GB resident simultaneously - comfortably under the 16GB
+ceiling, unlike the four-7-8B-model math that clearly didn't fit. Ollama's
+`OLLAMA_MAX_LOADED_MODELS` (concurrent-residency cap) and per-request `keep_alive` parameter are
+the real mechanism (not swapping) for holding exactly 2 models warm at once - confirmed this is
+Ollama's actual documented behavior, not assumed.
+(Source: [Ollama FAQ - concurrent model loading](https://docs.ollama.com/faq).)
+
+**The Verifier/abliteration objection from the 2026-07-11 addendum does not apply to this
+narrower proposal** - neither of the 2 proposed roles is a Verifier judging true/false;
+WhiteRabbitNeo plays the same "attack brain" role it already plays alone today, and the vision
+model's role (perception + tool-call formatting) carries no truthfulness-judgment burden for the
+TruthfulQA-regression finding to bite on. This specific prior objection is moot here, not
+overcome - it simply doesn't apply to this role split.
+
+**Two problems specific to Argus's actual current state make this proposal premature regardless
+of the pattern's general merit, both confirmed directly in this same session rather than
+assumed:**
+
+1. **Argus has no vision-consuming tool anywhere in the codebase today.** A full-repo grep for
+   screenshot/Playwright/Selenium/image-handling code (done earlier this same session, answering
+   a related question about `graphify`) found zero matches. The proposal's "Vision" half of
+   "eyes and hands" has no image ever handed to it in Argus's current tool set - there is nothing
+   for that half of the model's specialization to do. The "hands" half (clean tool-call JSON
+   formatting) is not a capability gap at all: `react_workflow.py::_try_structured_action`
+   already gets schema-constrained `format=json` tool-call decoding from whichever single model
+   is configured today (per `018`'s ADR-18) - a second model is not needed to solve a problem
+   Argus's existing structured-output path already solves.
+2. **The specific candidate model was measured, in this exact session, to be currently
+   non-functional inside Argus's real pipeline.** `qwen3-vl:8b-thinking` was benchmarked against
+   `benchmarks/fixtures/` (the same harness `020`'s own NFR-001 measurement discipline requires)
+   as a full drop-in replacement for `ArgusConfig.model_name`: 2 of 5 fixtures completed before
+   this addendum was written, both `SR=False`, `SCR=0.00`, `error=timeout` at the harness's 280s
+   cap - a complete stall, not a partial result. A step-by-step diagnostic isolated the cause:
+   the same model answers a short, simple ReAct-format prompt correctly and fast (~9.5-9.8s,
+   both plain and `with_structured_output`), but under Argus's actual production system prompt
+   (RAG+Blackboard context fusion, 17-tool descriptions, ~5100 chars) it burned all 25 ReAct
+   iterations over 1646s (27+ minutes) with no further tool call ever printed after the initial
+   recon phase, ending in `"Agent did not produce a Final Answer within 25 iterations"` -
+   consistent with "thinking" mode's reasoning-chain length scaling up sharply with prompt
+   complexity, a known property of reasoning-model architectures, not a one-off fluke. Wiring
+   this exact model into a pipeline stage would import this same stall into every run that
+   reaches it, not just optionally.
+
+**Revised decision**: the *pattern* (Blackboard-mediated pipeline hand-off between two locally-
+hosted models) is architecturally sound and would, if pursued, extend cleanly from
+`_build_multi_role_workflow`'s already-built "shared graph, role-scoped configuration" scaffolding
+(FR-001) - widen "configuration" from `(prompt, tool-subset)` to `(prompt, tool-subset, llm)` per
+role, rather than building a separate pipeline from scratch. That remains the right integration
+approach *if and when* this is pursued. It is not pursued now because two independent
+preconditions are both currently unmet, not because the pattern itself was found unsound:
+(a) no vision-consuming tool exists yet for the Vision role to act on, and (b) the specific
+candidate model stalls in Argus's real harness in its "Thinking" configuration. Concretely
+revisit this once (a) a vision tool exists (e.g. a `022`-style browser-screenshot capability) to
+give the Vision role real work, and (b) either the non-thinking `qwen3-vl:8b-instruct` variant is
+benchmarked (thinking-mode's reasoning-chain-length-vs-prompt-complexity issue would not apply to
+a non-reasoning variant) or `qwen3-vl:8b-thinking` is re-tested with a shortened/summarized
+production prompt rather than the full RAG+Blackboard fusion text. Until then, per `020`'s own
+NFR-001 discipline, no unmeasured architecture change should be treated as an improvement
+(Constitution VIII).
