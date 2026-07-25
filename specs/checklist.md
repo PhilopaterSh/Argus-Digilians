@@ -212,6 +212,28 @@ referenced test was removed.
   "no destructive testing" stance elsewhere. Verified it loads and structurally chunks correctly
   via the real `DocumentProcessor.process_directory()` (21 chunks from this file; 35 total
   across `knowledge_base/`, up from 14 before this session) and passes `validate_ascii.py`.
+- [x] CHK119 (DONE 2026-07-25) Same session: live-benchmarked `qwen3-vl:8b-thinking` (researched
+  earlier in this session as the top vision/tool-use/reasoning candidate to potentially replace
+  `ArgusConfig.model_name`'s default) against the current `WhiteRabbitNeo-V3-7B-GGUF:Q5_K_M`
+  using the real `benchmarks/runner.py` harness (`--configs-json` overriding `model_name` per
+  config, no code changes needed) across all 5 `benchmarks/fixtures/`. Result (full report:
+  `benchmarks/results/20260725T060935Z_report.md`): **WhiteRabbitNeo strictly dominated on every
+  metric** - 0/5 SR for both (neither retrieved a flag), but WhiteRabbitNeo scored 0.33 mean SCR
+  on all 5 fixtures (found the vulnerable endpoint every time; never completed exploitation/
+  verification) in 41-200s each, while `qwen3-vl:8b-thinking` scored 0.00 SCR on all 5 (zero
+  subtask progress) and hit the harness's 280s timeout on every single fixture. Root-caused via
+  a step-by-step diagnostic (`ArgusBrain` construction -> `ask()`) rather than assumed: the model
+  answers a short, simple ReAct-format prompt correctly and fast (~9.5-9.8s, both plain
+  `.invoke()` and `with_structured_output()`), but under Argus's actual production system prompt
+  (RAG+Blackboard fusion, 17-tool descriptions, ~5100 chars) it burned all 25 ReAct iterations
+  over 1646s (27+ minutes) with no further tool call ever printed after the initial recon phase -
+  consistent with "thinking" mode's reasoning-chain length scaling sharply with prompt
+  complexity. Documented in full, including the revised multi-model-pipeline decision this
+  finding also fed into, in `specs/020-multi-agent-role-separation/research.md`'s 2026-07-25
+  addendum and `docs/ARGUS_FRAMEWORK_ARCHITECTURE_v2.md` ADR-20's addendum note. No
+  `ArgusConfig.model_name` change was made - the measured result does not support one
+  (Constitution VIII: a slower, less-capable-in-practice model is not an improvement regardless
+  of its research-backed capability profile in isolation).
 
 ## Phase 017 — Restore ReAct Agent (Canonical Reconciliation)
 
