@@ -66,8 +66,7 @@ class PathTraversalScanner:
             memory (ArgusMemory): Blackboard memory service used to read
                 crawler-discovered links and persist confirmed findings.
         """
-        self.runner = runner
-        self.memory = memory
+        self.runner, self.memory = runner, memory
 
     # ------------------------------------------------------------------
     # Payload / parameter construction
@@ -201,6 +200,17 @@ class PathTraversalScanner:
         tiered: list[tuple[int, str, str]] = []  # (tier, request_url, param)
 
         def add(request_url: str, param: str, tier: int) -> None:
+            """Record one candidate injection point if not already seen.
+
+            Args:
+                request_url (str): The URL to probe `param` on.
+                param (str): Query parameter name to inject into.
+                tier (int): Discovery-source priority (0 = observed, 1 =
+                    static fallback guess); lower sorts first.
+
+            Returns:
+                None
+            """
             key = (request_url, param)
             if param and key not in seen:
                 seen.add(key)

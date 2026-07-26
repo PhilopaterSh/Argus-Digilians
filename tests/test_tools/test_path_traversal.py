@@ -8,8 +8,31 @@ def _make_runner(response_map: dict, default: str = "<html>Not Found</html>"):
     appears in the command, so tests don't couple to payload/param iteration
     order. `shuf` (PayloadsAllTheThings sampling) returns empty by default so
     the payload set is deterministic unless a test overrides it.
+
+    Args:
+        response_map (dict): Maps a command substring to the canned
+            response `.run()` should return when that substring appears
+            in the command. A `"http_code"` key overrides the wake-probe
+            (`_wait_until_awake`) status-only curl reply.
+        default (str): Reply returned when no `response_map` substring
+            matches the command.
+
+    Returns:
+        MagicMock: A mock CommandRunner with `.run` wired to the behavior
+        above.
     """
     def run(command, timeout=None):
+        """Return the canned reply for `command` per `response_map`/`default`.
+
+        Args:
+            command (str): The shell command the scanner issued.
+            timeout: Accepted for signature compatibility with the real
+                CommandRunner.run(); unused by this fake.
+
+        Returns:
+            str: The matching canned response, `""` for a `shuf` sampling
+            call, or `default` otherwise.
+        """
         # Wake probe (`_wait_until_awake`): status-only curl. Default to a
         # healthy 200 so the scan proceeds; a test forces a dead target via an
         # explicit 'http_code' key in response_map.
@@ -28,6 +51,16 @@ def _make_runner(response_map: dict, default: str = "<html>Not Found</html>"):
 
 
 def _memory_with_links(links=None):
+    """Build a mock ArgusMemory whose crawler-discovered links are `links`.
+
+    Args:
+        links (list[str] | None): Crawler-discovered link URLs to expose
+            via `get_detailed_findings()`; defaults to none.
+
+    Returns:
+        MagicMock: A mock memory service with `get_detailed_findings()`
+        returning one `"link"`-typed finding per entry in `links`.
+    """
     memory = MagicMock()
     memory.get_detailed_findings.return_value = [
         {"data_type": "link", "raw_data": link} for link in (links or [])
@@ -39,7 +72,11 @@ class TestPathTraversalScan:
     @patch("app.tools.path_traversal.time.sleep")
     def test_confirms_etc_passwd_read_via_content_signature(self, _sleep):
         """A body containing the /etc/passwd signature is a confirmed finding,
-        recorded in memory with the dedicated 'path_traversal' tool name."""
+        recorded in memory with the dedicated 'path_traversal' tool name.
+
+        Args:
+            _sleep: Patched no-op for time.sleep so the test runs instantly.
+        """
         runner = _make_runner({"etc/passwd": "root:x:0:0:root:/root:/bin/bash"})
         memory = _memory_with_links()
         svc = PathTraversalScanner(runner, memory)
@@ -56,6 +93,11 @@ class TestPathTraversalScan:
 
     @patch("app.tools.path_traversal.time.sleep")
     def test_reports_clean_when_no_signature_found(self, _sleep):
+        """Verify Reports clean when no signature found.
+
+        Args:
+            _sleep: Patched no-op for time.sleep so the test runs instantly.
+        """
         runner = _make_runner({}, default="<html>Nothing here</html>")
         memory = _memory_with_links()
         svc = PathTraversalScanner(runner, memory)
@@ -68,7 +110,11 @@ class TestPathTraversalScan:
     @patch("app.tools.path_traversal.time.sleep")
     def test_emits_multiple_encoding_variants(self, _sleep):
         """The encoding matrix must produce raw, single, and double URL-encoded
-        forms of the same traversal, not just one representation."""
+        forms of the same traversal, not just one representation.
+
+        Args:
+            _sleep: Patched no-op for time.sleep so the test runs instantly.
+        """
         runner = _make_runner({})
         memory = _memory_with_links()
         svc = PathTraversalScanner(runner, memory)
@@ -85,7 +131,11 @@ class TestPathTraversalScan:
     @patch("app.tools.path_traversal.time.sleep")
     def test_hybrid_param_discovery_prefers_crawler_links(self, _sleep):
         """Parameter names mined from crawler-discovered links must be probed,
-        ahead of the static fallback list."""
+        ahead of the static fallback list.
+
+        Args:
+            _sleep: Patched no-op for time.sleep so the test runs instantly.
+        """
         runner = _make_runner({})
         memory = _memory_with_links(["http://example.com/view?report=1&x=2"])
         svc = PathTraversalScanner(runner, memory)
@@ -98,6 +148,11 @@ class TestPathTraversalScan:
 
     @patch("app.tools.path_traversal.time.sleep")
     def test_windows_win_ini_signature_confirmed(self, _sleep):
+        """Verify Windows win.ini signature confirmed.
+
+        Args:
+            _sleep: Patched no-op for time.sleep so the test runs instantly.
+        """
         runner = _make_runner({
             "win.ini": "; for 16-bit app support\n[fonts]",
         })
@@ -113,7 +168,11 @@ class TestPathTraversalScan:
         """Key automated-flow capability: when handed only the site root (the
         agent's exploit node strips the path), the scanner fetches the root
         page, mines the '/image?filename=' endpoint out of an <img src>, and
-        probes it - reproducing the PortSwigger file-path-traversal lab."""
+        probes it - reproducing the PortSwigger file-path-traversal lab.
+
+        Args:
+            _sleep: Patched no-op for time.sleep so the test runs instantly.
+        """
         runner = _make_runner({
             # Root page fetch returns HTML whose image tag exposes the endpoint.
             "http://example.com/'": '<html><body><img src="/image?filename=23.jpg"></body></html>',
@@ -134,7 +193,11 @@ class TestPathTraversalScan:
     @patch("app.tools.path_traversal.time.sleep")
     def test_does_not_probe_external_hosts_from_page_links(self, _sleep):
         """In-scope guard: external links on the page (CDNs, social buttons)
-        must never be probed with traversal payloads."""
+        must never be probed with traversal payloads.
+
+        Args:
+            _sleep: Patched no-op for time.sleep so the test runs instantly.
+        """
         runner = _make_runner({
             "http://example.com/'": (
                 '<html><a href="https://twitter.com/share?text=x">t</a>'
@@ -152,6 +215,11 @@ class TestPathTraversalScan:
 
     @patch("app.tools.path_traversal.time.sleep")
     def test_respects_max_probes_ceiling(self, _sleep):
+        """Verify Respects max probes ceiling.
+
+        Args:
+            _sleep: Patched no-op for time.sleep so the test runs instantly.
+        """
         runner = _make_runner({})
         memory = _memory_with_links()
         svc = PathTraversalScanner(runner, memory)
@@ -169,7 +237,11 @@ class TestUnreachableTarget:
     def test_dead_target_reports_unreachable_not_no_vuln(self, _sleep):
         """A target that only returns 504/000 must be reported as UNREACHABLE,
         distinct from a clean 'no vulnerability' result - and must not record
-        any finding."""
+        any finding.
+
+        Args:
+            _sleep: Patched no-op for time.sleep so the test runs instantly.
+        """
         runner = _make_runner({"http_code": "504"})
         memory = _memory_with_links()
         svc = PathTraversalScanner(runner, memory)
