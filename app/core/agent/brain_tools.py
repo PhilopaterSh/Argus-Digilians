@@ -22,7 +22,7 @@ from app.tools.tool_registry import WSLBridgeTools
 # see config.yaml's enable_multi_agent_roles) FR-002's tool partition, kept
 # here as the one place that lists which tool names belong to which role
 # (Constitution IX) - `build_argus_tools(bridge, role=...)` below filters
-# the full 17-tool list against this mapping rather than maintaining a
+# the full 18-tool list against this mapping rather than maintaining a
 # second, separately-constructed tool list per role.
 # Collector: reconnaissance/discovery only. Exploiter: vulnerability
 # scanning/exploitation only. Planner/Summarizer: read-only memory access,
@@ -40,7 +40,8 @@ ROLE_TOOL_PARTITIONS = {
     },
     "exploiter": {
         "Run_Nikto", "Run_FFUF", "Exploit_Suggester", "Advanced_Evasion_Probe",
-        "Run_Kali_Command", "Reflective_Pre_Verify", "System_Self_Heal",
+        "Path_Traversal_Scan", "Run_Kali_Command", "Reflective_Pre_Verify",
+        "System_Self_Heal",
     },
 }
 _PLANNER_SUMMARIZER_TOOLS = {"Query_Memory", "Query_Knowledge_Graph"}
@@ -56,12 +57,12 @@ def build_argus_tools(bridge: WSLBridgeTools, role: str = None) -> list[Tool]:
             `"planner"`, `"summarizer"` (specs/020, feature-flagged off by
             default) to return only that role's tool subset per
             `ROLE_TOOL_PARTITIONS`/`_PLANNER_SUMMARIZER_TOOLS`. `None`
-            (default) returns the full 17-tool list, unchanged from before
+            (default) returns the full 18-tool list, unchanged from before
             this parameter existed - every existing caller (`019` and
             earlier) is unaffected.
 
     Returns:
-        list[Tool]: The full 17-tool list covering recon, memory/graph
+        list[Tool]: The full 18-tool list covering recon, memory/graph
         queries, scanning, exploitation research, reflective
         self-verification, and raw command execution when `role` is `None`
         (see the module docstring's 2026-07-09 audit for how this list was
@@ -131,6 +132,11 @@ def build_argus_tools(bridge: WSLBridgeTools, role: str = None) -> list[Tool]:
             name="Advanced_Evasion_Probe",
             func=bridge.advanced_vuln_probe,
             description="Perform targeted, WAF-evasive probes for SQL injection and Path Traversal - actually attempts exploitation, not just suggestion.",
+        ),
+        Tool(
+            name="Path_Traversal_Scan",
+            func=bridge.run_traversal_scan,
+            description="Dedicated, in-depth path-traversal / LFI probe. Applies a full encoding matrix (raw, single/double URL-encoding, UTF-8 overlong, backslash, '....//' collapse) across multiple depths and multiple injectable parameters (auto-discovered from crawled links, with a static fallback). Prefer this over Advanced_Evasion_Probe when the target specifically looks vulnerable to file inclusion / directory traversal.",
         ),
         Tool(
             name="Reflective_Pre_Verify",

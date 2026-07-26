@@ -18,6 +18,10 @@ EXPECTED_TOOL_NAMES = {
     # didn't; Secret_Scanner was in neither.
     "Crawl_Target", "Secret_Scanner", "Advanced_Evasion_Probe",
     "Reflective_Pre_Verify", "Task_Difficulty_Assessment",
+    # Dedicated path-traversal / LFI scanner (multi-encoding, hybrid param
+    # discovery) - promoted from a branch inside advanced_vuln_probe to a
+    # first-class tool and exposed to the ReAct exploiter role.
+    "Path_Traversal_Scan",
 }
 
 
@@ -25,7 +29,7 @@ def test_build_argus_tools_returns_expected_tool_set():
     """Verify Build argus tools returns expected tool set."""
     tools = build_argus_tools(MagicMock())
     assert {t.name for t in tools} == EXPECTED_TOOL_NAMES
-    assert len(tools) == 17
+    assert len(tools) == 18
 
 
 def test_each_tool_has_a_description_and_is_callable():
@@ -75,12 +79,12 @@ class TestRolePartitioning:
     """specs/020 (multi-agent role separation, feature-flagged off by
     default) - build_argus_tools(role=...) / partition_tools_by_role()."""
 
-    def test_role_none_returns_the_full_17_tool_set_unchanged(self):
+    def test_role_none_returns_the_full_tool_set_unchanged(self):
         """Every existing caller (specs/017-019) passes no role argument -
-        must be byte-for-byte the same as before this parameter existed."""
+        must remain the full flat list (18 tools after Path_Traversal_Scan)."""
         tools = build_argus_tools(MagicMock())
         assert {t.name for t in tools} == EXPECTED_TOOL_NAMES
-        assert len(tools) == 17
+        assert len(tools) == 18
 
     def test_collector_role_returns_only_recon_tools(self):
         """Verify Collector role returns only recon tools."""

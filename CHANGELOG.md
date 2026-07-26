@@ -2,6 +2,110 @@
 
 All notable changes to this project will be documented in this file.
 
+## Hardened traversal scanner against flaky/sleeping targets (2026-07-20)
+
+Live testing against PortSwigger's shared labs exposed two transport-level flakiness modes that
+made an otherwise-working scan intermittently return nothing: (1) HTTP/2 (negotiated via ALPN)
+over WSL2's NAT intermittently returns curl code **000** - TLS completes, data frames drop; and
+(2) an idle PortSwigger lab puts its backend to sleep and returns **504** / no-response until the
+first request wakes it (then needs a few seconds). Both produced empty probe bodies, so endpoint
+discovery saw a blank page and the scan reported "no vulnerability" for what was really a dead
+target.
+
+Three fixes in `PathTraversalScanner`: (1) all curls now force **`--http1.1`**, eliminating the
+HTTP/2-over-WSL2 `000` failures; (2) new `_wait_until_awake` probes the target root up to 4x with
+backoff, waking a sleeping backend before scanning; (3) if the target only ever returns
+504/502/503/000, the scan returns an explicit **"TARGET UNREACHABLE"** report instead of a
+misleading "no vulnerabilities confirmed" - a dead target is truthfully distinguished from a
+clean scan, and no finding is recorded. New test covers the unreachable path (16 path-traversal
+tests total).
+
+## Made the deterministic report truthful: run-scoped + noise-filtered (2026-07-20)
+
+First live GUI run surfaced two report-integrity bugs (the traversal detection itself worked):
+(1) the report listed 15 findings pulled from the **persistent** SQLite blackboard - stale Nikto
+dumps and a traversal finding from *previous* runs - even though the current fast run only ran 4
+phases and its live probe returned no confirmation that pass; (2) Nikto/recon metadata lines
+(Server banner, Target Port, "1 host tested", "[FAIL] Unable to connect", "No CGI Directories
+found") were being rendered as Medium/Critical vulnerabilities because Nikto stores every "+"
+output line as data_type `vulnerability`.
+
+Fix: `ask_deterministic` now captures the run-start timestamp and passes it as `since` to
+`get_detailed_findings`, so the report contains only **this run's** findings. And
+`_build_deterministic_report` now includes only **content-verified exploit tools**
+(`path_traversal`, `evasion_probe`, `reflective_verification`, `secrets`) - recon/Nikto info
+lines are excluded from the findings list and kept in `_raw_tool_observations` for context, so
+metadata can never masquerade as a vulnerability. Two new tests cover noise exclusion and
+run-scoping (8 tests in `test_deterministic_report.py`).
+
+## Fixed slow / empty deterministic runs; fast profile + deterministic report (2026-07-20)
+
+The GUI "Start Agent" run was slow and often returned no findings. Root cause was structural,
+not the scanner: the deterministic pipeline ran 10 heavyweight phases whose worst-case timeouts
+(nmap -sV 180s, whatweb 90s, Nikto up to 240s with scheme retry, FFUF ~110s, subdomain enum
+30-120s) plus 1-3 slow local-LLM synthesis calls could exceed the 900s kill timeout, so the run
+was terminated before producing a report - and even when it finished, the weak model frequently
+failed to emit valid `SecurityReport` JSON, dropping confirmed findings.
+
+Three fixes: **(1) Fast scan profile** - new `DETERMINISTIC_PHASES_FAST`
+(reachability -> crawl -> Path_Traversal_Scan -> Advanced_Evasion_Probe), selected by
+`ARGUS_SCAN_PROFILE` (default `fast`; set `full` for the deep recon sweep). Trims a ~10-15 min
+run to ~1-2 min while still confirming a real traversal. **(2) Cheaper scanner** - `MAX_DEPTH`
+8->6, default `max_probes` 60->40, per-probe stealth delay cut from 0.5-1.5s to 0.05-0.2s
+(restore via `ARGUS_PT_STEALTH=1`), and injection points now tiered (observed URL/page/crawler
+params before static guesses, file-ish names first) so a real sink like `filename` on `/image`
+is always probed within budget. **(3) Deterministic report** - `ask_deterministic` now builds
+the `SecurityReport` directly from the confirmed `vulnerability` findings the tools recorded in
+memory, with no LLM in the loop: a confirmed `[signature: root:x:0:0:]` traversal always surfaces
+as a High finding, fast and truthfully, regardless of model quality. New
+`tests/test_agent/test_deterministic_report.py` (6 tests) covers report building, dedup,
+severity classification, and profile selection.
+
+## Added dedicated Path Traversal testing feature (2026-07-20)
+
+Promoted path traversal from a single branch inside `EvasionService.advanced_vuln_probe` to a
+first-class, independently registered tool: `app/tools/path_traversal.py::PathTraversalScanner`.
+Its distinguishing value over the shared evasion probe is a full **encoding matrix** (raw,
+single/double URL-encoding, UTF-8 overlong `%c0%af`, backslash, `....//` collapse) applied across
+depths 1..8 over **hybrid-discovered parameters** — crawler-derived from the blackboard's stored
+`link` findings first, then a static candidate fallback (`item`, `file`, `page`, `path`, ...) —
+rather than one payload class against a single fixed `?item=` parameter. A `max_probes` ceiling
+protects the exploit-node time budget.
+
+Wiring: registered as the `path_traversal` tool in `WSLBridgeTools` (with a delegated
+`run_traversal_scan` method); `exploit_node` routes to it when `scanner_node` selects the
+`path_traversal` payload class, keeping `advanced_vuln_probe` for every other payload. Confirmed
+findings embed the raw matched signature token so the shared reflective verifier
+(`post_execute_verify`) independently re-confirms them as SUCCESS and sets `exploit_success`.
+Hardened `SENSITIVE_CONTENT_INDICATORS` with Windows (`win.ini`, `boot.ini`) and privileged
+`/etc/shadow` signatures. New `tests/test_tools/test_path_traversal.py` (6 tests): content-based
+confirmation, clean-scan negative, multi-encoding emission, hybrid param discovery, Windows
+signature, and `max_probes` enforcement. Verified: new tests 6/6 pass, existing
+`test_evasion.py` 7/7 still pass (indicator change is backward-compatible), ruff clean on all
+changed files.
+
+Automated-flow enablement (2026-07-20): the scanner now performs **endpoint auto-discovery** so
+the full agent (GUI "Start Agent") can confirm labs like PortSwigger's file-path-traversal
+without any manual URL. `PathTraversalScanner` fetches the target's root page and mines
+same-host, parameter-bearing endpoints from `href`/`src` (finding `/image?filename=`, which lives
+in an `<img src>` and is invisible to a params-on-root probe), then probes each discovered
+`(endpoint, param)` pair - with a strict in-scope guard that never fires payloads at external
+hosts (CDNs, social buttons). `exploit_node` now runs the dedicated traversal scanner on the
+`generic_probe` path too (in addition to the evasion probe), because a lab that never trips
+nikto/ffuf arrives as `generic_probe` and would otherwise skip a real traversal check. Two new
+tests cover page-`src` endpoint discovery and the external-host guard (8 path-traversal tests
+total). Note: the deterministic graph's `_build_target_url` still strips the path, but discovery
+now re-derives the real endpoint from the live page, so that no longer blocks detection.
+
+Second integration surface: exposed the scanner to the experimental ReAct brain as the
+`Path_Traversal_Scan` LangChain tool in `app/core/agent/brain_tools.py`'s canonical
+`build_argus_tools` list (now 18 tools, up from 17) and added it to the `exploiter` role
+partition. `tests/test_agent/test_brain_tools.py` count assertions updated 17 -> 18 and the
+expected-name set extended. Both agent modes now reach the dedicated scanner: the fixed LangGraph
+pipeline routes to it automatically from `exploit_node`, and the ReAct agent can select
+`Path_Traversal_Scan` autonomously. The Streamlit GUI already invokes it indirectly via the
+Start-Agent subprocess controller (no direct per-tool execution in the UI by design).
+
 ## Fixed the mypy errors surfaced by merging specs/020's core-agent code onto current main (2026-07-19)
 
 Merging `specs/020` (below) into today's `main` required rebasing every touched file onto
