@@ -25,6 +25,8 @@ from app.tools.crawler import CrawlerService
 from app.tools.evasion import EvasionService
 from app.tools.self_heal import SelfHealingService
 from app.tools.reflective_verification import ReflectiveVerificationService
+from app.tools.fuzzing import SensitiveFileFuzzer
+from app.tools.path_traversal import PathTraversalScanner
 
 logger = logging.getLogger(__name__)
 
@@ -81,9 +83,11 @@ class WSLBridgeTools:
         self.registry = ToolRegistry()
 
         self.report_writer = JSONReportWriter()
+        self.fuzzer = SensitiveFileFuzzer(self.runner)
         self.recon = ReconService(
             runner=self.runner,
             memory=self.memory,
+            fuzzer=self.fuzzer,
             report_writer=self.report_writer
         )
         self.scanners = VulnerabilityScanners(self.runner, self.memory)
@@ -95,6 +99,7 @@ class WSLBridgeTools:
         self.evasion = EvasionService(self.runner, self.memory)
         self.self_heal = SelfHealingService(self.runner)
         self.verifier = ReflectiveVerificationService(self.runner, self.memory)
+        self.path_traversal = PathTraversalScanner(self.runner, self.memory)
 
         self._register_defaults()
 
@@ -150,6 +155,13 @@ class WSLBridgeTools:
         ))
         self.registry.register(_ToolServiceAdapter(
             "knowledge_graph", "Query knowledge graph insights", self.memory, "get_graph_insights"
+        ))
+        self.registry.register(_ToolServiceAdapter(
+            "fuzz_sensitive_files", "Fuzz common sensitive file paths", self.fuzzer, "fuzz_sensitive_files"
+        ))
+        self.registry.register(_ToolServiceAdapter(
+            "path_traversal", "Dedicated multi-parameter, multi-encoding path-traversal probe",
+            self.path_traversal, "run_traversal_scan"
         ))
         logger.info("Registered %d tools in registry", len(self.registry))
 
@@ -249,6 +261,14 @@ class WSLBridgeTools:
         """Delegate to ArgusMemory.get_graph_insights(). `_` is accepted
         and ignored for call-site compatibility."""
         return self.memory.get_graph_insights()
+
+    def fuzz_sensitive_files(self, url):
+        """Delegate to SensitiveFileFuzzer.fuzz_sensitive_files()."""
+        return self.fuzzer.fuzz_sensitive_files(url)
+
+    def run_traversal_scan(self, url, params=None, max_probes=40):
+        """Delegate to PathTraversalScanner.run_traversal_scan()."""
+        return self.path_traversal.run_traversal_scan(url, params=params, max_probes=max_probes)
 
     def run_kali_command(self, command):
         """Proxy for manual command execution in Kali.

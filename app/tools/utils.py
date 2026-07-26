@@ -55,6 +55,14 @@ SENSITIVE_CONTENT_INDICATORS = {
     "DB_PASSWORD": "Secret Disclosure Confirmed (Database configuration leaked)",
     "appSettings": "Web Configuration Leak Confirmed (web.config read success)",
     "uid=": "RCE Confirmed (id command executed successfully)",
+    # Windows/IIS traversal targets: win.ini's canonical section header and
+    # boot.ini's loader block prove a genuine read on Windows hosts where
+    # /etc/passwd never exists (dedicated PathTraversalScanner probes both).
+    "; for 16-bit app support": "Path Traversal Confirmed (win.ini read success)",
+    "[boot loader]": "Path Traversal Confirmed (boot.ini read success)",
+    # /etc/shadow: only readable via a privileged/misconfigured sink - a
+    # higher-severity confirmation than /etc/passwd.
+    "root:$": "LFI/Path Traversal Confirmed (/etc/shadow read success - privileged)",
 }
 
 

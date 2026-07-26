@@ -22,6 +22,8 @@ EXPECTED_TOOL_NAMES = {
     # didn't; Secret_Scanner was in neither.
     "Crawl_Target", "Secret_Scanner", "Advanced_Evasion_Probe",
     "Reflective_Pre_Verify", "Task_Difficulty_Assessment",
+    # Dedicated sensitive-file fuzzing and multi-encoding path-traversal probe.
+    "Fuzz_Sensitive_Files", "Path_Traversal_Scan",
 }
 
 
@@ -29,7 +31,7 @@ def test_build_argus_tools_returns_expected_tool_set():
     """Verify Build argus tools returns expected tool set."""
     tools = build_argus_tools(MagicMock())
     assert {t.name for t in tools} == EXPECTED_TOOL_NAMES
-    assert len(tools) == 17
+    assert len(tools) == 19
 
 
 def test_each_tool_has_a_description_and_is_callable():
@@ -74,17 +76,23 @@ def test_new_chk090_tools_delegate_to_the_correct_bridge_methods():
     tool_by_name["Task_Difficulty_Assessment"].func("http://example.com")
     bridge.assess_difficulty.assert_called_once_with("http://example.com")
 
+    tool_by_name["Fuzz_Sensitive_Files"].func("http://example.com")
+    bridge.fuzz_sensitive_files.assert_called_once_with("http://example.com")
+
+    tool_by_name["Path_Traversal_Scan"].func("http://example.com")
+    bridge.run_traversal_scan.assert_called_once_with("http://example.com")
+
 
 class TestRolePartitioning:
     """specs/020 (multi-agent role separation, feature-flagged off by
     default) - build_argus_tools(role=...) / partition_tools_by_role()."""
 
-    def test_role_none_returns_the_full_17_tool_set_unchanged(self):
+    def test_role_none_returns_the_full_tool_set_unchanged(self):
         """Every existing caller (specs/017-019) passes no role argument -
         must be byte-for-byte the same as before this parameter existed."""
         tools = build_argus_tools(MagicMock())
         assert {t.name for t in tools} == EXPECTED_TOOL_NAMES
-        assert len(tools) == 17
+        assert len(tools) == 19
 
     def test_collector_role_returns_only_recon_tools(self):
         """Verify Collector role returns only recon tools."""
