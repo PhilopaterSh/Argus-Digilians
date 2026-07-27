@@ -143,19 +143,49 @@ _VULN_CLASS_KEYWORDS = (
     "request smuggling", "cache poisoning", "information disclosure",
 )
 
+# Evidence-level signal, as opposed to the class-*name* signals above.
+#
+# Live failure, PortSwigger Lab 2 (2026-07-27): Crawl_Target correctly
+# reported `/image?filename=` and `/product?productId=` and handed both
+# parameters off to the blackboard, but its report names no vulnerability
+# class and carries no whatweb `Title[...]` - so `_extract_vulnerability_hints`
+# returned `[]`, the `if vuln_hints:` gate below never opened, and the
+# `_recommended_tool_for` directive naming Path_Traversal_Scan (which DOES
+# match `filename=`) was unreachable. The model was left to guess, guessed
+# "SQL Injection", called Exploit_Suggester with a URL twice, and concluded
+# with zero findings. Path_Traversal_Scan was never invoked in the entire run.
+#
+# Lab 1 only passed because Recon_Suite happened to surface
+# `Title[File path traversal, simple case]`, which hits _VULN_CLASS_KEYWORDS.
+# Relying on a page title to advertise the bug class is not a strategy.
+#
+# Longest alternatives first so `?filename=` reports `filename`, not `file`.
+_FILE_PARAM_RE = re.compile(
+    r"[?&](filename|file|document|download|template|include|path|page|doc|view)=",
+    re.IGNORECASE,
+)
+
 
 def _extract_vulnerability_hints(text: str) -> list[str]:
-    """Scan a tool result for explicit signals of a specific vulnerability
-    class - a page title naming it (whatweb-style `Title[...]` fingerprint
-    output, as real training labs often do) or a known vulnerability-class
-    keyword appearing verbatim.
+    """Scan a tool result for signals of a specific vulnerability class.
+
+    Three independent signal tiers, any of which is enough to open the
+    caller's reflection gate:
+
+      1. A page title naming the class (whatweb-style `Title[...]`
+         fingerprint output, as real training labs often do).
+      2. A known vulnerability-class keyword appearing verbatim.
+      3. *Evidence* rather than a name: a file-ish query parameter
+         (`?filename=`, `?file=`, `?page=`...) observed in the output. This
+         tier exists because the highest-signal producer - Crawl_Target's
+         injection-point report - emits exactly this and never names a class,
+         so tiers 1-2 alone silently dropped it (see `_FILE_PARAM_RE`).
 
     Args:
         text (str): Tool result / observation text to scan.
 
     Returns:
-        list[str]: Human-readable hint strings (one for a title match, one
-        for any matched keywords), or `[]` if neither is present.
+        list[str]: Human-readable hint strings, or `[]` if no tier matched.
     """
     if not text:
         return []
@@ -167,6 +197,13 @@ def _extract_vulnerability_hints(text: str) -> list[str]:
     matched = sorted({kw for kw in _VULN_CLASS_KEYWORDS if kw in lower})
     if matched:
         hints.append(f"the output mentions vulnerability-class keyword(s): {', '.join(matched)}")
+    file_params = sorted({m.lower() for m in _FILE_PARAM_RE.findall(text)})
+    if file_params:
+        hints.append(
+            "exposes file-ish query parameter(s) "
+            f"({', '.join('?' + p + '=' for p in file_params)}), which are the "
+            "classic path-traversal/LFI sink"
+        )
     return hints
 
 
@@ -197,7 +234,11 @@ def _recommended_tool_for(text: str) -> str:
         str: A sentence naming the tool to use next, ending in a period.
     """
     lower = (text or "").lower()
-    if any(sig in lower for sig in _TRAVERSAL_SIGNALS):
+    # `_FILE_PARAM_RE` as well as the literal signals: _TRAVERSAL_SIGNALS only
+    # lists `filename=`, `?file=` and `?page=`, so a crawler-discovered
+    # `?doc=`/`?template=`/`?download=` sink previously fell through to the
+    # generic advice below and steered the model to the WRONG tool.
+    if any(sig in lower for sig in _TRAVERSAL_SIGNALS) or _FILE_PARAM_RE.search(text or ""):
         return (
             "Use Path_Traversal_Scan on the target URL - it is the dedicated "
             "tool for this class: it finds the injectable endpoint itself "
@@ -1152,9 +1193,14 @@ def _build_multi_role_workflow(
 
         vuln_hints = _extract_vulnerability_hints(str(result))
         if vuln_hints:
+            # Name the tool here too. Without it this branch told the model
+            # *that* a class was suggested but not what to do about it, which
+            # is precisely the gap the model filled with a wrong guess.
             hint_note = (
                 f"Reflection: the {name} result above {' and '.join(vuln_hints)} - "
-                f"this strongly suggests the target's likely vulnerability class."
+                f"this strongly suggests the target's likely vulnerability class. "
+                f"{_recommended_tool_for(str(result))} Prioritize that over "
+                f"further generic scanning."
             )
             extra_messages.append(HumanMessage(content=hint_note))
             reflection_notes.append(hint_note)

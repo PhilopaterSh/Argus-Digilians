@@ -26,6 +26,7 @@ from app.core.agent.react_workflow import (
     _extract_vulnerability_hints,
     _inter_reflect,
     _PlannerDecision,
+    _recommended_tool_for,
     _supports_tool_calls,
     _try_planner_decision,
     _try_structured_action,
@@ -370,6 +371,65 @@ def test_extract_vulnerability_hints_handles_empty_input():
     assert _extract_vulnerability_hints("") == []
     assert _extract_vulnerability_hints(None) == []
     print("  [PASS] test_extract_vulnerability_hints_handles_empty_input")
+
+
+# Verbatim Crawl_Target observation from the failed 2026-07-27 run against
+# PortSwigger Lab 2. The crawler did its job - both parameters were found and
+# handed off - but this text names no vulnerability class and carries no
+# whatweb Title[...], so the hint gate stayed shut and Path_Traversal_Scan was
+# never called in the entire run.
+LAB2_CRAWLER_REPORT = (
+    "--- [WEB] CRAWLER REPORT: https://0a96004f04b8868780618013004600f3."
+    "web-security-academy.net/ ---\n"
+    "Pages fetched: 1 | raw links: 47 | injection points: 9 "
+    "(parameterized: 2, params handed off: 2)\n"
+    "Top injection points:\n"
+    "https://0a96004f04b8868780618013004600f3.web-security-academy.net/image?filename=\n"
+    "https://0a96004f04b8868780618013004600f3.web-security-academy.net/product?productId="
+)
+
+
+def test_extract_vulnerability_hints_detects_file_ish_param_evidence():
+    """Regression (live, PortSwigger Lab 2, 2026-07-27): the crawler's
+    injection-point report is the highest-signal producer in the pipeline and
+    names no vulnerability class, so the title/keyword tiers alone returned []
+    and dropped it silently."""
+    hints = _extract_vulnerability_hints(LAB2_CRAWLER_REPORT)
+    assert hints, "crawler report produced no hint - the gate is still shut"
+    assert any("?filename=" in h for h in hints)
+    print("  [PASS] test_extract_vulnerability_hints_detects_file_ish_param_evidence")
+
+
+def test_extract_vulnerability_hints_ignores_non_file_params():
+    """A parameter with no traversal semantics must not trip the evidence
+    tier - otherwise every crawled site looks like an LFI target."""
+    assert _extract_vulnerability_hints("Found https://test.com/product?productId=1") == []
+    print("  [PASS] test_extract_vulnerability_hints_ignores_non_file_params")
+
+
+def test_recommended_tool_for_names_path_traversal_scan_on_crawler_report():
+    """The directive must name the dedicated scanner, not the generic probe."""
+    recommendation = _recommended_tool_for(LAB2_CRAWLER_REPORT)
+    assert "Path_Traversal_Scan" in recommendation
+    print("  [PASS] test_recommended_tool_for_names_path_traversal_scan_on_crawler_report")
+
+
+def test_recommended_tool_for_covers_params_beyond_the_literal_signal_list():
+    """_TRAVERSAL_SIGNALS lists only filename=/?file=/?page=, so a
+    crawler-discovered ?doc=/?template=/?download= sink previously fell
+    through to the generic advice and steered the model to the wrong tool."""
+    for param in ("doc", "template", "download", "include", "view"):
+        recommendation = _recommended_tool_for(f"https://test.com/x?{param}=a")
+        assert "Path_Traversal_Scan" in recommendation, f"?{param}= not routed"
+    print("  [PASS] test_recommended_tool_for_covers_params_beyond_the_literal_signal_list")
+
+
+def test_recommended_tool_for_non_traversal_output_keeps_generic_advice():
+    """Non-traversal results must still route to the evasion probe."""
+    recommendation = _recommended_tool_for("The response body reflects a SQL syntax error.")
+    assert "Path_Traversal_Scan" not in recommendation
+    assert "Advanced_Evasion_Probe" in recommendation
+    print("  [PASS] test_recommended_tool_for_non_traversal_output_keeps_generic_advice")
 
 
 def test_check_early_termination_no_match_returns_none():
@@ -976,6 +1036,11 @@ if __name__ == "__main__":
     test_extract_vulnerability_hints_detects_keyword()
     test_extract_vulnerability_hints_no_match_returns_empty()
     test_extract_vulnerability_hints_handles_empty_input()
+    test_extract_vulnerability_hints_detects_file_ish_param_evidence()
+    test_extract_vulnerability_hints_ignores_non_file_params()
+    test_recommended_tool_for_names_path_traversal_scan_on_crawler_report()
+    test_recommended_tool_for_covers_params_beyond_the_literal_signal_list()
+    test_recommended_tool_for_non_traversal_output_keeps_generic_advice()
     test_build_reflection_note_blocked_response_suggests_bypass()
     test_build_reflection_note_generic_response_suggests_different_input()
     test_inter_reflect_majority_yes()
