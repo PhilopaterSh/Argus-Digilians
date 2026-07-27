@@ -267,18 +267,19 @@ class WSLBridgeTools:
         return self.fuzzer.fuzz_sensitive_files(url)
 
     def run_traversal_scan(self, url, params=None, max_probes=None,
-                           max_guess_probes=16, max_total_probes=720):
+                           max_guess_probes=27, max_total_probes=720):
         """Delegate to PathTraversalScanner.run_traversal_scan().
 
         Budgets are *per injection point*: `max_probes` for observed params
-        (`None` = the full payload list, mirror enrichment included),
+        (`None` = the full payload list returned by `_build_payloads()`,
+        i.e. the capped Payloads.db read or the generated fallback),
         `max_guess_probes` for blind static guesses. `max_total_probes` is the
         global ceiling.
 
-        `max_guess_probes` must track PathTraversalScanner's own default (16,
-        raised from 12 when the `absolute` payload class was added) - this
-        signature re-declares it, so leaving it at 12 here would silently
-        override the scanner's default on every agent-initiated scan.
+        `max_guess_probes` must track PathTraversalScanner's own default (27,
+        three round-robin rows over the nine payload classes) - this signature
+        re-declares it, so a stale value here would silently override the
+        scanner's default on every agent-initiated scan.
         """
         return self.path_traversal.run_traversal_scan(
             url, params=params, max_probes=max_probes,

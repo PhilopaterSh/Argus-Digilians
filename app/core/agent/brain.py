@@ -470,6 +470,10 @@ class ArgusBrain:
 
             if isinstance(output, dict):
                 output["_raw_tool_observations"] = observations
+            # Same provenance repair the ReAct path gets: this synthesis call
+            # is one LLM turn over a text blob of tool output, so it drops
+            # concrete evidence at least as readily.
+            self._reconcile_findings_with_blackboard(processed, clean_target)
             return processed
 
         return {
@@ -1101,7 +1105,161 @@ class ArgusBrain:
             # returning the raw text.
             result = self._process_output(raw_answer, raw_answer)
         self._attach_rag_sources(result)
+        # `target` lives on the graph state here, not as a parameter - this
+        # method only receives `state` (see `_run_structured_graph`, which
+        # seeds `initial_state["target"]`).
+        self._reconcile_findings_with_blackboard(result, state.get("target", ""))
         return result
+
+    @staticmethod
+    def _parse_vulnerability_finding(raw_data: str) -> Dict[str, str]:
+        """Split a recorded `vulnerability` row into endpoint/param/payload.
+
+        Tools store the proof as a single string - `path_traversal.py` writes
+        `"Traversal: https://host/image?filename=....//etc/passwd"`,
+        `evasion.py` writes `"Traversal: <payload>"` or `"SQLi: <payload>"`.
+        Only the parts actually present are returned.
+
+        Args:
+            raw_data (str): The finding's `raw_data` column.
+
+        Returns:
+            Dict[str, str]: Any of `kind`, `endpoint`, `param`, `payload`.
+        """
+        parsed: Dict[str, str] = {}
+        text = (raw_data or "").strip()
+        if ":" in text:
+            kind, _, remainder = text.partition(":")
+            parsed["kind"] = kind.strip()
+            text = remainder.strip()
+        if text.startswith("http") and "?" in text:
+            endpoint, _, query = text.partition("?")
+            parsed["endpoint"] = endpoint
+            name, sep, value = query.partition("=")
+            if sep:
+                parsed["param"] = name
+                parsed["payload"] = value
+            else:
+                parsed["payload"] = query
+        elif text:
+            parsed["payload"] = text
+        return parsed
+
+    def _reconcile_findings_with_blackboard(
+        self, result: Dict[str, Any], target: str
+    ) -> None:
+        """Restore tool-recorded evidence the model dropped from its report.
+
+        `SecurityReport.findings` is written free-hand by the LLM in its Final
+        Answer and copied verbatim by `scripts/run_agent.py::_build_final_state`.
+        Nothing previously checked it against the Blackboard, and the model
+        summarises rather than transcribes. Observed live 2026-07-27 against a
+        PortSwigger lab: `Path_Traversal_Scan` confirmed
+        `/image?filename=....//....//....//etc/passwd` with a real
+        `root:x:0:0:` read and recorded it, yet the delivered finding carried
+        `suggested_payload: ""`, `tool_source: null` and the bare site root as
+        its target - so the UI showed "Suggested payload: n/a" and the one
+        piece of reproducible proof the whole run existed to produce was lost.
+        An earlier run on the same class dropped the finding entirely.
+
+        This is provenance repair, not generation (Constitution VIII -
+        Truthful Runtime): every value written here was recorded by a tool
+        that actually confirmed it. Nothing is invented, and a field the model
+        already filled is never overwritten.
+
+        Args:
+            result (Dict[str, Any]): The `{"output": ...}` dict to mutate in
+                place.
+            target (str): The analyzed target, used to key the Blackboard.
+
+        Returns:
+            None
+        """
+        output = result.get("output")
+        if self.memory is None or not isinstance(output, dict) or "error" in output:
+            return
+
+        try:
+            from app.tools.utils import normalize_domain_for_memory
+            recorded = self.memory.get_detailed_findings(
+                normalize_domain_for_memory(target)
+            ) or []
+        except Exception as exc:
+            print(f"[BRAIN] Blackboard reconciliation skipped: {exc}")
+            return
+
+        confirmed = [
+            row for row in recorded
+            if str(row.get("data_type", "")).endswith("vulnerability")
+        ]
+        if not confirmed:
+            return
+
+        findings = output.get("findings")
+        if not isinstance(findings, list):
+            findings = []
+            output["findings"] = findings
+
+        for row in confirmed:
+            evidence = self._parse_vulnerability_finding(row.get("raw_data", ""))
+            payload = evidence.get("payload", "")
+            endpoint = evidence.get("endpoint", "")
+            tool_name = row.get("tool_name") or "unknown"
+            summary = row.get("summary") or "Confirmed by tool evidence."
+
+            # Match on the payload, which is unique per confirmation; fall back
+            # to the vulnerability class so a differently-worded finding for
+            # the same issue is enriched rather than duplicated.
+            match = None
+            for finding in findings:
+                if not isinstance(finding, dict):
+                    continue
+                blob = " ".join(
+                    str(finding.get(k, "")) for k in
+                    ("issue", "description", "suggested_payload", "target")
+                ).lower()
+                if payload and payload.lower() in blob:
+                    match = finding
+                    break
+                if evidence.get("kind", "").lower() in blob:
+                    match = finding
+                    break
+
+            if match is None:
+                # The model omitted a vulnerability a tool genuinely confirmed.
+                findings.append({
+                    "target": endpoint or target,
+                    "issue": evidence.get("kind") or "Confirmed vulnerability",
+                    "severity": row.get("severity") or "High",
+                    "description": (
+                        f"{summary} Recorded by {tool_name} during this run; "
+                        f"omitted from the model's own report and restored "
+                        f"from the Blackboard."
+                    ),
+                    "suggested_payload": payload,
+                    "remediation": "",
+                    "tool_source": tool_name,
+                })
+                print(f"[BRAIN] Restored dropped finding from Blackboard: "
+                      f"{tool_name} -> {row.get('raw_data', '')[:120]}")
+                continue
+
+            # Fill only what the model left blank.
+            if payload and not str(match.get("suggested_payload") or "").strip():
+                match["suggested_payload"] = payload
+            if not str(match.get("tool_source") or "").strip():
+                match["tool_source"] = tool_name
+            current_target = str(match.get("target") or "").strip().rstrip("/")
+            if endpoint and current_target in ("", target.rstrip("/")):
+                # The model names the site root; the tool knows the endpoint.
+                match["target"] = endpoint
+            if evidence.get("param") and "param" not in str(
+                match.get("description", "")
+            ).lower():
+                match["description"] = (
+                    f"{str(match.get('description', '')).rstrip()} "
+                    f"Vulnerable parameter: `{evidence['param']}`."
+                ).strip()
 
     def _attach_rag_sources(self, result: Dict[str, Any]) -> None:
         """Record which knowledge_base/ documents this run's RAG context

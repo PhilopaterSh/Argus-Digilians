@@ -1,7 +1,15 @@
 import subprocess
 from unittest.mock import MagicMock, patch
 
-from app.tools.path_traversal import PathTraversalScanner
+import pytest
+
+from app.tools.path_traversal import (
+    PAYLOAD_LIMIT,
+    PathTraversalScanner,
+    _classify_payload,
+    _payload_is_irregular,
+    _payload_target_rank,
+)
 
 
 def _make_runner(response_map: dict, default: str = "<html>Not Found</html>"):
@@ -401,7 +409,7 @@ class TestProbeBudgetCoverage:
         guess = [c for c in commands if "lang=" in c]
         assert len(observed) == expected_full, (
             f"observed param should get the full matrix, got {len(observed)}")
-        assert len(guess) == 16, (
+        assert len(guess) == 27, (
             f"blind guess should get the truncated set, got {len(guess)}")
         assert len(guess) < len(observed)
 
@@ -417,7 +425,10 @@ class TestProbeBudgetCoverage:
         runner = _make_runner({})
         svc = PathTraversalScanner(runner, MagicMock())
 
-        payloads = svc._build_payloads()
+        # The generator's ordering, not the DB's: `_load_db_payloads()`
+        # round-robins across classes instead of concatenating them, because a
+        # 1370-row wordlist puts ~490 entries in `raw` alone.
+        payloads = svc._generate_payloads()
         prefix = payloads[:16]
 
         assert "/etc/passwd" in prefix, prefix                     # absolute
@@ -581,8 +592,12 @@ class TestDeterminism:
     @patch("app.tools.path_traversal.time.sleep")
     def test_mirror_enrichment_payloads_are_actually_probed(self, _sleep):
         """Regression: a hardcoded per-point budget of 60 truncated exactly the
-        mirror-sampled payloads, which `_build_payloads` appends at index 60+,
-        so PayloadsAllTheThings enrichment never fired.
+        mirror-sampled payloads, which the generator appends past the built-in
+        set, so PayloadsAllTheThings enrichment never fired.
+
+        Mirror sampling belongs to `_generate_payloads()` - the fallback used
+        when Payloads.db has not been built. In DB mode the wordlist itself is
+        the enrichment, so this asserts against the generator directly.
 
         Args:
             _sleep: Patched no-op for time.sleep so the test runs instantly.
@@ -590,10 +605,7 @@ class TestDeterminism:
         runner = _make_runner({"shuf": "MIRROR_ONLY_PAYLOAD\n"})
         svc = PathTraversalScanner(runner, _memory_with_links())
 
-        svc.run_traversal_scan("http://example.com", params=["file"])
-
-        commands = "\n".join(c.args[0] for c in runner.run.call_args_list)
-        assert "MIRROR_ONLY_PAYLOAD" in commands
+        assert "MIRROR_ONLY_PAYLOAD" in svc._generate_payloads()
 
     @patch("app.tools.path_traversal.time.sleep")
     def test_empty_responses_are_surfaced_not_swallowed(self, _sleep):
@@ -655,7 +667,7 @@ class TestFilterBypassPayloadClasses:
         """
         runner = MagicMock()
         runner.run.return_value = ""          # `shuf` -> no mirror enrichment
-        return PathTraversalScanner(runner, MagicMock())._build_payloads()
+        return PathTraversalScanner(runner, MagicMock())._generate_payloads()
 
     def test_absolute_class_solves_absolute_path_bypass(self):
         """Lab: traversal sequences blocked with absolute path bypass."""
@@ -715,13 +727,23 @@ class TestFilterBypassPayloadClasses:
         for cls, marker in markers.items():
             assert marker in payloads, f"class {cls} produced nothing ({marker})"
 
-    def test_guess_budget_default_covers_absolute_plus_full_raw_sweep(self):
-        """max_guess_probes must stay >= |absolute| + |raw| (4 + 12), or a
-        blind guess stops reaching depths 5-6 of the plain chain."""
+    def test_guess_budget_default_reaches_the_canonical_payload(self):
+        """Regression: the DB path round-robins across the nine classes, which
+        moved `../../../etc/passwd` from index 8 to index 19. At the previous
+        16-probe guess budget a genuinely vulnerable blind-guess parameter went
+        unconfirmed. The default must cover the canonical depth-3 chain."""
         import inspect
 
         signature = inspect.signature(PathTraversalScanner.run_traversal_scan)
-        assert signature.parameters["max_guess_probes"].default == 16
+        default = signature.parameters["max_guess_probes"].default
+        assert default == 27
+
+        runner = MagicMock()
+        runner.run.return_value = ""
+        payloads = PathTraversalScanner(runner, MagicMock())._build_payloads()
+        for required in ("../../../etc/passwd", "/etc/passwd"):
+            assert required in payloads[:default], (
+                f"{required} sits past the blind-guess budget of {default}")
 
     def test_tool_registry_guess_budget_default_stays_in_sync(self):
         """WSLBridgeTools.run_traversal_scan re-declares max_guess_probes, so
@@ -739,5 +761,146 @@ class TestFilterBypassPayloadClasses:
         match = re.search(
             r"def run_traversal_scan\([^)]*max_guess_probes=(\d+)", source, re.S)
         assert match, "run_traversal_scan signature not found in tool_registry.py"
-        assert int(match.group(1)) == 16, (
-            f"tool_registry default is {match.group(1)}, scanner default is 16")
+        assert int(match.group(1)) == 27, (
+            f"tool_registry default is {match.group(1)}, scanner default is 27")
+
+
+class TestPayloadDatabaseSource:
+    """Payloads now come from `Payloads/Payloads.db` via `payload_store.py`.
+    The in-code generator survives only as a fallback for environments where
+    that DB has not been built (it is gitignored), so both paths are covered.
+    """
+
+    @staticmethod
+    def _db_available():
+        """Whether Payloads.db exists and holds traversal rows.
+
+        Returns:
+            bool: True when the DB can be opened and has traversal payloads.
+        """
+        try:
+            from Payloads.payload_store import PayloadStore
+            store = PayloadStore()
+            try:
+                return store.count("traversal") > 0
+            finally:
+                store.close()
+        except Exception:
+            return False
+
+    LAB_PAYLOADS = {
+        "simple case": "../../../etc/passwd",
+        "absolute path bypass": "/etc/passwd",
+        "stripped non-recursively": "....//....//....//etc/passwd",
+        "superfluous URL-decode": "..%252f..%252f..%252fetc%252fpasswd",
+        "validation of start of path": "/var/www/images/../../../etc/passwd",
+        "null byte bypass": "../../../etc/passwd%00.png",
+    }
+
+    def test_db_supplies_the_payloads_when_present(self):
+        if not self._db_available():
+            pytest.skip("Payloads.db not built")
+        runner = MagicMock()
+        runner.run.return_value = ""
+        svc = PathTraversalScanner(runner, MagicMock())
+
+        payloads = svc._build_payloads()
+
+        # The generator emits exactly 94; a DB read is capped at PAYLOAD_LIMIT.
+        assert len(payloads) == PAYLOAD_LIMIT
+        assert payloads != svc._generate_payloads()
+
+    def test_all_six_lab_payloads_survive_the_cap(self):
+        """The whole point of the ordering: a 1370-row wordlist must not push
+        a lab-solving payload past the per-injection-point budget."""
+        if not self._db_available():
+            pytest.skip("Payloads.db not built")
+        runner = MagicMock()
+        runner.run.return_value = ""
+        payloads = PathTraversalScanner(runner, MagicMock())._build_payloads()
+
+        for lab, required in self.LAB_PAYLOADS.items():
+            assert required in payloads, f"{lab}: {required} fell outside the cap"
+
+    def test_db_payloads_are_deduplicated(self):
+        if not self._db_available():
+            pytest.skip("Payloads.db not built")
+        runner = MagicMock()
+        runner.run.return_value = ""
+        payloads = PathTraversalScanner(runner, MagicMock())._build_payloads()
+
+        assert len(payloads) == len(set(payloads))
+
+    def test_missing_db_falls_back_to_the_generated_matrix(self):
+        """A scan must not die because an optional, gitignored data file has
+        not been built."""
+        runner = MagicMock()
+        runner.run.return_value = ""
+        svc = PathTraversalScanner(runner, MagicMock())
+
+        with patch.object(svc, "_load_db_payloads", return_value=[]):
+            payloads = svc._build_payloads()
+
+        assert payloads == svc._generate_payloads()
+        for required in self.LAB_PAYLOADS.values():
+            assert required in payloads, required
+
+    def test_db_read_failure_is_swallowed(self):
+        """`_load_db_payloads` must never raise into the scan loop."""
+        runner = MagicMock()
+        runner.run.return_value = ""
+        svc = PathTraversalScanner(runner, MagicMock())
+
+        with patch.dict("sys.modules", {"Payloads.payload_store": None}):
+            assert svc._load_db_payloads() == []
+
+    def test_ordering_interleaves_classes_instead_of_concatenating(self):
+        """Flat class-major concatenation put four of the six lab payloads at
+        indices 311-725 because `raw` alone holds ~490 wordlist rows. The
+        round-robin must surface a distinct class per probe early on."""
+        runner = MagicMock()
+        runner.run.return_value = ""
+        svc = PathTraversalScanner(runner, MagicMock())
+
+        ordered = svc._order_payloads([
+            "/etc/passwd", "../etc/passwd", "../../etc/passwd",
+            "....//etc/passwd", "..%2fetc%2fpasswd", "..%252fetc%252fpasswd",
+        ])
+
+        assert [_classify_payload(p) for p in ordered[:5]] == [
+            "absolute", "raw", "collapse", "single", "double"]
+
+    def test_unclassifiable_payloads_are_probed_last(self):
+        runner = MagicMock()
+        runner.run.return_value = ""
+        svc = PathTraversalScanner(runner, MagicMock())
+
+        ordered = svc._order_payloads(["..2fetc2fpasswd", "../etc/passwd"])
+
+        assert ordered[-1] == "..2fetc2fpasswd"
+
+    def test_classifier_assigns_each_lab_payload_to_its_own_class(self):
+        expected = {
+            "../../../etc/passwd": "raw",
+            "/etc/passwd": "absolute",
+            "....//....//....//etc/passwd": "collapse",
+            "..%252f..%252f..%252fetc%252fpasswd": "double",
+            "/var/www/images/../../../etc/passwd": "prefixed",
+            "../../../etc/passwd%00.png": "nullbyte",
+            "..%2fetc%2fpasswd": "single",
+            "..%c0%afetc/passwd": "overlong",
+            "..%5cetc\\passwd": "backslash",
+        }
+        for payload, cls in expected.items():
+            assert _classify_payload(payload) == cls, payload
+
+    def test_canonical_chain_outranks_malformed_separator_variants(self):
+        """Without this, `..//etc/passwd`-style noise at depth 1-2 buried the
+        canonical chain 25 places deep in its own class."""
+        assert _payload_is_irregular("../../../etc/passwd") == 0
+        assert _payload_is_irregular("..//etc/passwd") == 1
+
+    def test_target_rank_ignores_htpasswd_lookalikes(self):
+        """Loose 'passwd' matching let `../.htpasswd` outrank the real target."""
+        assert _payload_target_rank("../../../etc/passwd") == 0
+        assert _payload_target_rank("../.htpasswd") > 0

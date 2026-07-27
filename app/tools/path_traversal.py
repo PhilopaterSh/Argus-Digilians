@@ -11,6 +11,13 @@ static candidate fallback), rather than one payload class hitting one fixed
 Verification is content-based via `SENSITIVE_CONTENT_INDICATORS` (a real
 `/etc/passwd` / `web.config` read), never HTTP status alone - a bare 200/500
 proves nothing about *what* came back.
+
+Payloads come from `Payloads/Payloads.db` through `Payloads/payload_store.py`,
+so the wordlist is maintained in one place (`Payload_data/path_traversal.txt`,
+ingested by `Payloads/build_payload_db.py`) rather than in code. The in-code
+generator survives only as a fallback for environments where that DB has not
+been built - it is gitignored - and every payload it emits is also stored in
+the wordlist, so both paths defeat the same filters.
 """
 import os
 import random
@@ -80,6 +87,138 @@ _ENCODING_CLASS_ORDER = (
     "absolute", "raw", "collapse", "single", "double",
     "nullbyte", "prefixed", "overlong", "backslash",
 )
+
+# Bucket for a stored payload that matches no known class (malformed wordlist
+# entries such as `..2fetc2fpasswd`). Probed last, never interleaved.
+_UNCLASSIFIED = "other"
+
+# Per-scan ceiling on how many payloads are drawn from Payloads.db. The
+# traversal table holds ~1370 rows; the scan loop gives an *observed* injection
+# point `full_budget = len(payloads)`, so passing the whole table through would
+# let the first parameter consume the entire `max_total_probes` ceiling and
+# starve every parameter after it - the exact regression the per-point budget
+# was introduced to fix. 150 is ~35 payloads of headroom over the deepest
+# lab-solving payload (index 110 under the ordering below).
+PAYLOAD_LIMIT = 150
+
+# ---- Payload ranking helpers -------------------------------------------
+# The DB's own `encoding` column cannot drive ordering: build_payload_db.py's
+# `infer_encoding` tests for "%2f"/"%2e"/"%5c", none of which occur in a
+# double-encoded "%252f" string, so it labels the entire double-encoded class
+# "none". Classification is therefore derived from the payload text here.
+_DEPTH_TOKEN_RE = re.compile(
+    r"\.\.[\\/]|\.\.%2f|\.\.%252f|\.\.%5c|\.\.%c0%af", re.IGNORECASE)
+# A canonical chain is a single traversal token repeated, then the target -
+# `../../../etc/passwd`, not a mixed-separator variant like `..//etc/passwd`.
+_CANONICAL_CHAIN_RE = re.compile(
+    r"^(?:\.\./|\.\.\\|\.\.%2f|\.\.%252f|\.\.%5c|\.\.%c0%af|\.\.\.\.//)+",
+    re.IGNORECASE)
+_CHAIN_TOKEN_RE = re.compile(
+    r"\.\./|\.\.\\|\.\.%2f|\.\.%252f|\.\.%5c|\.\.%c0%af|\.\.\.\.//",
+    re.IGNORECASE)
+# Confirmable targets, best-first. Matched tightly on the full `etc/passwd`
+# form rather than a bare "passwd" substring, so wordlist noise like
+# `../.htpasswd` cannot outrank the real thing.
+_TARGET_RANK_RES = tuple(
+    (re.compile(pattern, re.IGNORECASE), rank) for pattern, rank in (
+        (r"etc(?:[\\/]|%2f|%252f|%5c|%c0%af)passwd", 0),
+        (r"win\.ini", 1),
+        (r"boot\.ini", 2),
+        (r"etc(?:[\\/]|%2f)shadow", 3),
+        (r"web\.config", 4),
+    )
+)
+
+
+def _payload_depth(payload: str) -> int:
+    """Count the traversal tokens in `payload`.
+
+    Args:
+        payload (str): A payload string.
+
+    Returns:
+        int: Number of `../`-equivalent tokens; 0 for an absolute path.
+    """
+    return len(_DEPTH_TOKEN_RE.findall(payload))
+
+
+def _payload_target_rank(payload: str) -> int:
+    """Rank `payload` by which confirmable target file it references.
+
+    Args:
+        payload (str): A payload string.
+
+    Returns:
+        int: 0 for `/etc/passwd` (the canonical, most universally readable
+        target) through 4 for `web.config`; one past the end when the payload
+        names no target this scanner can confirm a read of.
+    """
+    for regex, rank in _TARGET_RANK_RES:
+        if regex.search(payload):
+            return rank
+    return len(_TARGET_RANK_RES)
+
+
+def _payload_is_irregular(payload: str) -> int:
+    """Sort key preferring a clean, uniform traversal chain.
+
+    Args:
+        payload (str): A payload string.
+
+    Returns:
+        int: 0 when the leading traversal run is one token repeated and is
+        followed directly by the target, 1 for a mixed-separator or otherwise
+        malformed variant. Without this, `..//etc/passwd`-style noise at depth
+        1-2 buries the canonical `../../../etc/passwd` deep in its own class.
+    """
+    body = payload[1:] if payload.startswith("/") else payload
+    match = _CANONICAL_CHAIN_RE.match(body)
+    if not match:
+        return 0 if _payload_depth(payload) == 0 else 1
+    run = match.group(0)
+    remainder = body[len(run):]
+    tokens = set(token.lower() for token in _CHAIN_TOKEN_RE.findall(run))
+    if len(tokens) == 1 and not remainder.startswith(("/", "\\")):
+        return 0
+    return 1
+
+
+def _classify_payload(payload: str) -> str:
+    """Assign `payload` to the encoding class whose filter it defeats.
+
+    Check order is significant: `%00` and `%c0%af` are decided first because
+    they can co-occur with any separator; `%252f` is tested before `%2f`
+    because the latter is not a substring of the former but the intent is to
+    keep the double-encoded class distinct; and a leading `/` combined with a
+    `../` run means a start-of-path bypass, not a plain absolute path.
+
+    Args:
+        payload (str): A payload string, from the DB or the generator.
+
+    Returns:
+        str: A name from `_ENCODING_CLASS_ORDER`, or `_UNCLASSIFIED`.
+    """
+    low = payload.lower()
+    if "%00" in low:
+        return "nullbyte"
+    if "%c0%af" in low:
+        return "overlong"
+    if "%252f" in low or "%255c" in low or "%252e" in low:
+        return "double"
+    relative = "../" in payload or "..\\" in payload
+    if low.startswith(("/", "%2f")):
+        return "prefixed" if relative else "absolute"
+    if "....//" in payload or "....\\\\" in payload:
+        return "collapse"
+    if "%5c" in low:
+        return "backslash"
+    if "%2f" in low or "%2e" in low:
+        return "single"
+    if "..\\" in payload:
+        return "backslash"
+    if "../" in payload:
+        return "raw"
+    return _UNCLASSIFIED
 
 # The root-page fetch is the single point of failure for *all* tier-0 endpoint
 # discovery: one transient stall there and `/image?filename=` is never found,
@@ -156,8 +295,109 @@ class PathTraversalScanner:
         }
 
     def _build_payloads(self) -> list[str]:
-        """Assemble the full payload set: the depth-scaled encoding matrix for
-        the Unix and Windows targets, the three filter-bypass classes that
+        """Return the ordered payload set for this scan.
+
+        Primary source is `Payloads/Payloads.db` via `PayloadStore` - the
+        single place payloads are maintained. `_generate_payloads()` is the
+        fallback for environments where that DB has not been built (it is
+        gitignored, so a fresh clone has no copy until
+        `Payloads/build_payload_db.py` is run); every payload the generator
+        emits is also stored in `Payload_data/path_traversal.txt`, so the two
+        paths solve the same labs.
+
+        Returns:
+            list[str]: Ordered, deduplicated payload strings.
+        """
+        payloads = self._load_db_payloads()
+        return payloads if payloads else self._generate_payloads()
+
+    def _order_payloads(self, payloads) -> list[str]:
+        """Order stored payloads highest-yield first.
+
+        Two-level scheme, because a flat class-major concatenation does not
+        survive contact with a real wordlist: the traversal table's 1370 rows
+        put ~490 entries in the `raw` class alone, so simply emitting one whole
+        class before the next pushed four of the six lab-solving payloads past
+        any sane probe budget (measured: indices 311-725).
+
+          1. Within a class, sort by target file (`/etc/passwd` first), then
+             chain regularity, then depth, then length.
+          2. Round-robin ACROSS classes in `_ENCODING_CLASS_ORDER`, so every
+             filter-bypass class is represented in the first few probes rather
+             than one class monopolising the budget. Unclassifiable rows are
+             appended last, never interleaved.
+
+        Args:
+            payloads (Iterable[str]): Raw payload strings.
+
+        Returns:
+            list[str]: Deduplicated, ordered payloads.
+        """
+        buckets: dict[str, list[str]] = {}
+        seen: set[str] = set()
+        for payload in payloads:
+            if not payload or payload in seen:
+                continue
+            seen.add(payload)
+            buckets.setdefault(_classify_payload(payload), []).append(payload)
+
+        for bucket in buckets.values():
+            bucket.sort(key=lambda p: (
+                _payload_target_rank(p),
+                _payload_is_irregular(p),
+                _payload_depth(p),
+                len(p),
+                p,
+            ))
+
+        ordered: list[str] = []
+        index = 0
+        while any(index < len(buckets.get(c, ())) for c in _ENCODING_CLASS_ORDER):
+            for cls in _ENCODING_CLASS_ORDER:
+                bucket = buckets.get(cls, ())
+                if index < len(bucket):
+                    ordered.append(bucket[index])
+            index += 1
+        ordered.extend(buckets.get(_UNCLASSIFIED, ()))
+        return ordered
+
+    def _load_db_payloads(self) -> list[str]:
+        """Read traversal payloads from `Payloads.db`, ordered and capped.
+
+        Uses `PayloadStore.iter_type()` - the store's own cursor walk - so the
+        table is streamed one row at a time rather than loaded wholesale.
+
+        Returns:
+            list[str]: Up to `PAYLOAD_LIMIT` ordered payloads, or `[]` when the
+            database is missing or unreadable, which makes the caller fall back
+            to `_generate_payloads()`. Never raises: a scan must not die
+            because an optional data file has not been built.
+        """
+        try:
+            # Imported lazily so a missing/!built DB can never break module
+            # import for the rest of the tool package.
+            from Payloads.payload_store import PayloadStore
+
+            store = PayloadStore()
+            try:
+                rows = [record.payload for record in store.iter_type("traversal")]
+            finally:
+                store.close()
+        except Exception as exc:
+            print(f"[*] [Argus-Core] Payload DB unavailable ({exc}); "
+                  f"falling back to the generated matrix.")
+            return []
+
+        if not rows:
+            return []
+        ordered = self._order_payloads(rows)
+        print(f"[*] [Argus-Core] Loaded {len(rows)} traversal payloads from "
+              f"Payloads.db; probing the top {min(len(ordered), PAYLOAD_LIMIT)}.")
+        return ordered[:PAYLOAD_LIMIT]
+
+    def _generate_payloads(self) -> list[str]:
+        """Assemble the fallback payload set: the depth-scaled encoding matrix
+        for the Unix and Windows targets, the three filter-bypass classes that
         need no `../` prefix scaling, plus a real sample from the local
         PayloadsAllTheThings mirror (deduplicated).
 
@@ -609,7 +849,7 @@ class PathTraversalScanner:
         return sent
 
     def run_traversal_scan(self, url, params=None, max_probes=None,
-                           max_guess_probes=16, max_total_probes=720,
+                           max_guess_probes=27, max_total_probes=720,
                            attack_surface=None, path_segment_probes=10):
         """Run a hybrid, multi-encoding path-traversal scan against `url`.
 
@@ -635,14 +875,14 @@ class PathTraversalScanner:
                 the entire payload list, so anything real gets the complete
                 depth x encoding sweep.
 
-                Do not hardcode this to a literal: `_build_payloads()` emits 94
-                built-in payloads (4 absolute + 10/depth x MAX_DEPTH=6 encoding
-                variants, being 6 Unix-style + 4 deduplicated Windows-style
-                each, + 3 prefixed and 2 nullbyte per depth) and then *appends*
-                up to 8 sampled from the PayloadsAllTheThings mirror. A literal
-                ceiling silently truncated exactly those mirror entries - they
-                sit past the generated set - so the enrichment never fired on
-                any host that had the mirror installed.
+                Do not hardcode this to a literal: the payload count is not
+                fixed. `_build_payloads()` returns up to `PAYLOAD_LIMIT` (150)
+                rows read from `Payloads/Payloads.db`, or - when that DB has
+                not been built - 94 generated payloads plus up to 8 sampled
+                from the PayloadsAllTheThings mirror. A literal ceiling
+                silently truncated exactly those mirror entries, so the
+                enrichment never fired on any host that had the mirror
+                installed.
 
                 This was previously a *global* ceiling of 120, which silently
                 capped a scan at the first two injection points: a bare host
@@ -651,13 +891,14 @@ class PathTraversalScanner:
                 probed at all and the scan returned a false "no vulnerability"
                 verdict. Budgeting per point removes that starvation.
             max_guess_probes (int): Probe budget for each tier-1 *blind static
-                guess* from DEFAULT_CANDIDATE_PARAMS. Default 16 = the whole
-                `absolute` class (4) plus the plain `../` chains for both OS
-                families across all six depths (12); payloads are ordered
-                encoding-class-major, so a truncated budget keeps the
-                high-yield ones. Raised from 12 when the `absolute` class was
-                added: at 12 a blind guess no longer reached depths 5-6 of the
-                raw chain. Giving blind guesses the full 94-payload matrix cost
+                guess* from DEFAULT_CANDIDATE_PARAMS. Default 27 = three full
+                round-robin rows across the nine classes in
+                `_ENCODING_CLASS_ORDER`, i.e. roughly depth 1-3 of every
+                filter-bypass class. That is the smallest budget that still
+                reaches the canonical `../../../etc/passwd` (index 19 in the
+                DB-ordered set) and `/windows/win.ini` (index 18); at the
+                previous 16 a genuinely vulnerable blind-guess parameter went
+                unconfirmed. Giving blind guesses the full payload set cost
                 ~6x the scan time for almost no yield - on a bare host, eleven
                 of the twelve guesses are parameters the application never
                 reads. Raise this when a target is known to sit behind a filter
