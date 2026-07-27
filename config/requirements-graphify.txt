@@ -1,0 +1,5 @@
+# Optional structure-graph tool (Constitution Principle XII).
+# NOT installed by CI or scripts/ARGUS_INSTALLER.ps1 - install manually with:
+#   pip install -r config/requirements-graphify.txt
+# PyPI package name is `graphifyy`; the installed CLI command is `graphify`.
+graphifyy

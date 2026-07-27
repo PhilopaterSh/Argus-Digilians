@@ -1,0 +1,1 @@
+Test {target_url}/download for Path Traversal. The download feature is meant to only expose files inside a "public" folder (try /download?file=welcome.txt first). Check whether you can access files outside that folder, and report any flag found.

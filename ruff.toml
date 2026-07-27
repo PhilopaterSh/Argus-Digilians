@@ -1,0 +1,14 @@
+# Ruff lint configuration (specs/012-spec-reconciliation section 7, stage 1).
+# Conservative starting rule set: syntax errors and undefined names only, so the
+# gate is green-able on the existing codebase. Expand `select` over time.
+line-length = 120
+target-version = "py312"
+extend-exclude = ["Argus_venv", "node_modules", "archive", ".opencode", "__pycache__"]
+
+[lint]
+# E9  : syntax errors
+# F63 : invalid comparisons / assertions
+# F7  : misplaced statements (break/continue/return outside function, etc.)
+# F82 : undefined name
+select = ["E9", "F63", "F7", "F82"]
+ignore = []

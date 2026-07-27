@@ -1,0 +1,51 @@
+:root {
+    --bg-primary: #0e1117;
+    --bg-secondary: #1a1d24;
+    --text-primary: #00ff41;
+    --text-secondary: #cccccc;
+    --border-color: #333333;
+    --accent-green: #00ff41;
+    --accent-red: #ff4444;
+    --accent-yellow: #ffaa00;
+    --accent-blue: #4444ff;
+}
+
+.stApp {
+    background-color: var(--bg-primary);
+}
+
+h1, h2, h3 {
+    color: var(--accent-green) !important;
+    font-family: 'Courier New', monospace;
+}
+
+.stSidebar .sidebar-content {
+    background-color: var(--bg-secondary);
+}
+
+div[data-testid="stSidebarNav"] {
+    background-color: var(--bg-secondary);
+}
+
+.stButton > button {
+    background-color: var(--bg-secondary) !important;
+    color: var(--accent-green) !important;
+    border: 1px solid var(--accent-green) !important;
+    border-radius: 4px !important;
+}
+
+.stButton > button:hover {
+    background-color: var(--accent-green) !important;
+    color: var(--bg-primary) !important;
+}
+
+div[data-testid="stMetricValue"] {
+    color: var(--accent-green) !important;
+    font-size: 2rem !important;
+}
+
+.stTextInput > div > div > input {
+    background-color: var(--bg-secondary) !important;
+    color: var(--text-primary) !important;
+    border: 1px solid var(--border-color) !important;
+}

@@ -1,0 +1,1 @@
+Analyze {target_url} for Information Disclosure. Check for hidden backups or environment files. Verify EVERY finding manually to ensure it is NOT a false positive (check content, not just status codes).

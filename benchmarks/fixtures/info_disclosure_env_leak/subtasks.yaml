@@ -1,0 +1,17 @@
+# Subtask decomposition for info_disclosure_env_leak (specs/025 FR-002).
+#
+# Note on the false-positive/hallucination dimension this fixture also cares
+# about (inherited from tests/manual/ai_benchmark.py, which this fixture
+# migrates): whether the agent avoids reporting /admin.php and /secrets.txt
+# as findings is NOT modeled as a subtask here, because a subtask's
+# detector_regex is positive evidence something was done - there is no
+# regex that proves an absence. This is scored implicitly: hallucinating one
+# of those two paths as a real finding does not change SR/SCR, but is
+# visible by reading benchmarks/results/<ts>_report.md's raw trace for this
+# fixture (the trace log is still written even though it isn't scored here).
+- name: find_env_file
+  detector_regex: '\.env'
+- name: verify_env_content
+  detector_regex: 'DB_PASSWORD|API_KEY|flag\{'
+- name: find_config_backup
+  detector_regex: 'config\.php\.bak'

@@ -1,0 +1,82 @@
+<mxfile host="65bd71144e">
+    <diagram id="usecase-arch" name="Use‑Case Overview">
+        <mxGraphModel dx="1189" dy="779" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" background="#ffffff" math="0" shadow="0">
+            <root>
+                <mxCell id="0"/>
+                <mxCell id="1" parent="0"/>
+                <mxCell id="actor_user" value="Security Researcher" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;fillColor=#FFFFFF;strokeColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="490" y="20" width="30" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="actor_gui" value="GUI (Streamlit/Tkinter)" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;fillColor=#FFFFFF;strokeColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="140" y="70" width="30" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="actor_kali" value="Kali Linux (WSL)" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;fillColor=#FFFFFF;strokeColor=#000000;" parent="1" vertex="1">
+                    <mxGeometry x="740" y="160" width="30" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="boundary" value="Argus Security Framework" style="rounded=0;strokeColor=#000000;dashPattern=1 4;fillColor=#F5F5F5;swimlane" parent="1" vertex="1">
+                    <mxGeometry x="60" y="300" width="960" height="600" as="geometry"/>
+                </mxCell>
+                <mxCell id="uc_define_target" value="Define Target &amp; Scope" style="ellipse;whiteSpace=wrap;html=1;fillColor=#E8F5E9;strokeColor=#2E7D32;" parent="boundary" vertex="1">
+                    <mxGeometry x="90" y="110" width="180" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="uc_recon" value="Run Reconnaissance" style="ellipse;whiteSpace=wrap;html=1;fillColor=#E3F2FD;strokeColor=#1565C0;" parent="boundary" vertex="1">
+                    <mxGeometry x="380" y="70" width="180" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="uc_rag" value="Retrieve Knowledge (RAG)" style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFF3E0;strokeColor=#EF6C00;" parent="boundary" vertex="1">
+                    <mxGeometry x="680" y="150" width="200" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="uc_plan" value="Generate Attack Plan" style="ellipse;whiteSpace=wrap;html=1;fillColor=#F3E5F5;strokeColor=#6A1B9A;" parent="boundary" vertex="1">
+                    <mxGeometry x="580" y="270" width="200" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="uc_execute" value="Execute Tools &amp; Commands" style="ellipse;whiteSpace=wrap;html=1;fillColor=#FFEBEE;strokeColor=#C62828;" parent="boundary" vertex="1">
+                    <mxGeometry x="460" y="380" width="200" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="uc_persist" value="Persist Findings (Blackboard)" style="ellipse;whiteSpace=wrap;html=1;fillColor=#E0F7FA;strokeColor=#006064;" parent="boundary" vertex="1">
+                    <mxGeometry x="460" y="500" width="200" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="uc_report" value="Review/Export Report" style="ellipse;whiteSpace=wrap;html=1;fillColor=#F9FBE7;strokeColor=#9E9D24;" parent="boundary" vertex="1">
+                    <mxGeometry x="200" y="380" width="180" height="80" as="geometry"/>
+                </mxCell>
+                <mxCell id="flow_define_recon" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#607D8B;" parent="boundary" source="uc_define_target" target="uc_recon" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="flow_recon_rag" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#607D8B;" parent="boundary" source="uc_recon" target="uc_rag" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="flow_rag_plan" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#607D8B;" parent="boundary" source="uc_rag" target="uc_plan" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="flow_plan_execute" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#607D8B;" parent="boundary" source="uc_plan" target="uc_execute" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="flow_execute_persist" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#607D8B;" parent="boundary" source="uc_execute" target="uc_persist" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="flow_persist_report" style="edgeStyle=orthogonalEdgeStyle;rounded=0;strokeColor=#607D8B;" parent="boundary" source="uc_persist" target="uc_report" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="link_recon_plan" style="edgeStyle=orthogonalEdgeStyle;dashed=1;strokeColor=#9E9E9E;" parent="boundary" source="uc_recon" target="uc_plan" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="link_rag_execute" style="edgeStyle=orthogonalEdgeStyle;dashed=1;strokeColor=#9E9E9E;" parent="boundary" source="uc_rag" target="uc_execute" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="link_user_define" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;strokeColor=#000000;" parent="1" source="actor_user" target="uc_define_target" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="link_user_report" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;strokeColor=#000000;" parent="1" source="actor_user" target="uc_report" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="link_gui_define" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;strokeColor=#000000;" parent="1" source="actor_gui" target="uc_define_target" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="link_gui_report" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;strokeColor=#000000;" parent="1" source="actor_gui" target="uc_report" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+                <mxCell id="link_kali_execute" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;strokeColor=#000000;" parent="1" source="actor_kali" target="uc_execute" edge="1">
+                    <mxGeometry relative="1" as="geometry"/>
+                </mxCell>
+            </root>
+        </mxGraphModel>
+    </diagram>
+</mxfile>

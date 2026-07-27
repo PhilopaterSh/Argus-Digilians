@@ -1,0 +1,49 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "command": {
+    "speckit.agent-context.update": {
+      "template": ".opencode/commands/speckit.agent-context.update.md",
+      "description": "Refresh the managed Spec Kit section in coding agent context file(s)"
+    },
+    "speckit.analyze": {
+      "template": ".opencode/commands/speckit.analyze.md",
+      "description": "Perform cross-artifact consistency and quality analysis across spec, plan, and tasks"
+    },
+    "speckit.checklist": {
+      "template": ".opencode/commands/speckit.checklist.md",
+      "description": "Generate a custom checklist for the current feature based on user requirements"
+    },
+    "speckit.clarify": {
+      "template": ".opencode/commands/speckit.clarify.md",
+      "description": "Identify underspecified areas in the current feature spec by asking targeted clarification questions"
+    },
+    "speckit.constitution": {
+      "template": ".opencode/commands/speckit.constitution.md",
+      "description": "Create or update the project constitution from interactive or provided principle inputs"
+    },
+    "speckit.converge": {
+      "template": ".opencode/commands/speckit.converge.md",
+      "description": "Assess the current codebase against the feature's spec, plan, and tasks, then append remaining unbuilt work"
+    },
+    "speckit.implement": {
+      "template": ".opencode/commands/speckit.implement.md",
+      "description": "Execute the implementation plan by processing and executing all tasks defined in tasks.md"
+    },
+    "speckit.plan": {
+      "template": ".opencode/commands/speckit.plan.md",
+      "description": "Execute the implementation planning workflow using the plan template to generate design artifacts"
+    },
+    "speckit.specify": {
+      "template": ".opencode/commands/speckit.specify.md",
+      "description": "Create or update the feature specification from a natural language feature description"
+    },
+    "speckit.tasks": {
+      "template": ".opencode/commands/speckit.tasks.md",
+      "description": "Generate an actionable, dependency-ordered tasks.md for the feature based on available design artifacts"
+    },
+    "speckit.taskstoissues": {
+      "template": ".opencode/commands/speckit.taskstoissues.md",
+      "description": "Convert existing tasks into actionable, dependency-ordered GitHub issues"
+    }
+  }
+}
