@@ -25,6 +25,8 @@ from app.core.agent.react_workflow import (
     _check_early_termination,
     _extract_vulnerability_hints,
     _inter_reflect,
+    _live_test_directive,
+    _matched_vuln_keywords,
     _PlannerDecision,
     _supports_tool_calls,
     _try_planner_decision,
@@ -243,21 +245,22 @@ def test_target_extraction():
 def test_custom_graph_full_cycle():
     """Verify custom ReAct graph runs a complete scan->search->report cycle.
 
-    Neither mock_scan nor mock_search is a Phase 5/6 tool, so the first
-    "Final Answer" gets the specs/019 phase5/6 nudge once (4th mock response
-    absorbs it) before the second Final Answer is accepted."""
+    Neither mock_scan nor mock_search is a Phase 1-2 or Phase 5/6 tool, so
+    the first "Final Answer" absorbs the 2026-07-26 phase12 nudge, the
+    second absorbs the specs/019 phase5/6 nudge, before the third Final
+    Answer is finally accepted."""
     llm = MockLLM([
         "Thought: Scan first.\nAction: mock_scan\nAction Input: https://test.com",
         "Thought: Now search CVEs.\nAction: mock_search\nAction Input: nginx",
         "Thought: Done.\nFinal Answer: Security report here.",
+        "Thought: Still nothing else to add.\nFinal Answer: Security report here (again).",
         "Thought: Understood, no further scanning applies.\nFinal Answer: Security report here (confirmed).",
     ])
 
     graph = _build_custom_workflow(llm, [mock_scan, mock_search])
     result = graph.invoke(dict(BASE_STATE))
 
-    assert result["iteration_count"] == 4, f"Expected 4, got {result['iteration_count']}"
-    assert len(result["messages"]) == 8, f"Expected 8 messages, got {len(result['messages'])}"
+    assert result["iteration_count"] == 5, f"Expected 5, got {result['iteration_count']}"
 
     last = result["messages"][-1]
     assert "Final Answer:" in last.content, "Last message should contain Final Answer"
@@ -293,13 +296,18 @@ def test_custom_graph_allows_one_retry_before_blocking_third_identical_call():
     app/core/prompts.py design explicitly allowed a tool+input pair to run
     "not more than TWICE" - a model that doubts a result (e.g. a transient
     network blip) needs room for one real retry. Only a THIRD identical
-    attempt should be blocked."""
+    attempt should be blocked.
+
+    mock_scan isn't a Phase 1-2 or Phase 5/6 tool, so the first Final
+    Answer absorbs the 2026-07-26 phase12 nudge, the second absorbs the
+    specs/019 phase5/6 nudge, before the third is finally accepted."""
     llm = MockLLM([
         "Thought: Scan first.\nAction: mock_scan\nAction Input: https://test.com",
         "Thought: Scan again just to be safe.\nAction: mock_scan\nAction Input: https://test.com",
         "Thought: Scan a third time.\nAction: mock_scan\nAction Input: https://test.com",
         "Thought: Understood, wrapping up.\nFinal Answer: Security report here.",
-        "Thought: Confirmed, no further scanning applies.\nFinal Answer: Security report here.",
+        "Thought: Still nothing else to add.\nFinal Answer: Security report here (again).",
+        "Thought: Confirmed, no further scanning applies.\nFinal Answer: Security report here (confirmed).",
     ])
 
     graph = _build_custom_workflow(llm, [mock_scan])
@@ -320,6 +328,51 @@ def test_custom_graph_allows_one_retry_before_blocking_third_identical_call():
     print("  [PASS] test_custom_graph_allows_one_retry_before_blocking_third_identical_call")
 
 
+def test_custom_graph_blocks_near_duplicate_call_differing_only_by_trailing_slash():
+    """2026-07-25 regression (web-research-backed follow-up to
+    MAX_CONSECUTIVE_DUPLICATE_BLOCKS, see _normalize_call_input()'s own
+    comment): the duplicate-call guard used to compare tool_input via exact
+    string equality only, so "https://test.com" and "https://test.com/" (a
+    trailing slash - a real, common way an LLM restates the same target)
+    never registered as the same call at all, silently bypassing the guard
+    rather than tripping it - one credible way a real run could reach 18
+    Recon_Suite calls despite the guard's own "block the 3rd identical
+    attempt" design. _normalize_call_input() now strips a single trailing
+    slash before comparison, so this must be caught exactly like an exact
+    repeat."""
+    # Three trailing "Final Answer" entries (mirroring
+    # test_custom_graph_allows_one_retry_before_blocking_third_identical_call's
+    # own pattern): mock_scan is neither a Phase 1-2 nor a Phase 5/6 tool, so
+    # the first Final Answer absorbs the 2026-07-26 phase12 nudge, the
+    # second absorbs the specs/019 phase5/6 nudge, before the third can
+    # truly end the run - without enough queued up, MockLLM's cycling would
+    # replay the scan actions again and confound this test with an unrelated
+    # 3rd-consecutive-block scenario.
+    llm = MockLLM([
+        "Thought: Scan first.\nAction: mock_scan\nAction Input: https://test.com",
+        "Thought: Scan again, just with a trailing slash.\nAction: mock_scan\nAction Input: https://test.com/",
+        "Thought: One more identical attempt.\nAction: mock_scan\nAction Input: https://test.com/",
+        "Thought: Understood, wrapping up.\nFinal Answer: Security report here.",
+        "Thought: Still nothing else to add.\nFinal Answer: Security report here (again).",
+        "Thought: Confirmed, no further scanning applies.\nFinal Answer: Security report here (confirmed).",
+    ])
+
+    graph = _build_custom_workflow(llm, [mock_scan])
+    result = graph.invoke(dict(BASE_STATE))
+
+    # mock_scan's real result should appear exactly twice (the allowed
+    # retry) even though the 2nd call's raw tool_input string differs from
+    # the 1st by a trailing slash - normalization must recognise them as
+    # the same call, so the 3rd (identical to the 2nd) gets blocked.
+    tool_messages = [m for m in result["messages"] if "Open ports" in str(m.content)]
+    assert len(tool_messages) == 2, f"trailing-slash near-duplicate should still count as the same call, got {len(tool_messages)}"
+
+    blocked_msgs = [m for m in result["messages"] if "already called" in str(m.content)]
+    assert len(blocked_msgs) == 1, "the near-duplicate (trailing slash) call should have been blocked"
+
+    print("  [PASS] test_custom_graph_blocks_near_duplicate_call_differing_only_by_trailing_slash")
+
+
 def test_custom_graph_duplicate_call_loop_respects_max_iterations():
     """A model that keeps re-proposing the same call forever - even past its
     one allowed retry - must still terminate at max_iterations, same as the
@@ -337,6 +390,81 @@ def test_custom_graph_duplicate_call_loop_respects_max_iterations():
     assert result["iteration_count"] <= state["max_iterations"]
     assert result["phase"] != "done"
     print(f"  [PASS] test_custom_graph_duplicate_call_loop_respects_max_iterations (stopped at {result['iteration_count']})")
+
+
+def test_custom_graph_gives_up_early_after_consecutive_duplicate_blocks():
+    """2026-07-25 regression: a live run against a real PortSwigger lab
+    called Recon_Suite twice (the guard's own allowed retry), got blocked
+    on the third identical attempt as designed, then kept re-proposing the
+    same blocked call ~15 times in a row - each block producing the exact
+    same guidance message, since the guard's own hard block guarantees an
+    identical outcome every time - burning the entire max_iterations=25
+    budget before finally reporting a bare "no_final_answer" error with no
+    indication of what was actually tried.
+
+    With a generous max_iterations budget (25, matching the live incident),
+    the graph must now conclude early - once
+    MAX_CONSECUTIVE_DUPLICATE_BLOCKS consecutive blocks occur - with an
+    honest, partial Final Answer describing what was tried, rather than
+    exhausting the full budget on a conversation that provably cannot
+    change outcome."""
+    llm = MockLLM([
+        "Thought: Scan.\nAction: mock_scan\nAction Input: https://test.com",
+    ])
+    state = dict(BASE_STATE)
+    state["max_iterations"] = 25
+
+    graph = _build_custom_workflow(llm, [mock_scan])
+    result = graph.invoke(state)
+
+    assert result["phase"] == "done", "Should conclude early with an honest partial answer, not spin to max_iterations"
+    last_content = result["messages"][-1].content
+    assert "Final Answer:" in last_content
+    assert "stopped early" in last_content
+    assert "mock_scan" in last_content
+    # 2 allowed real executions + a small, bounded number of blocked turns
+    # before giving up - well under the 25-iteration budget this regression
+    # previously exhausted completely.
+    assert result["iteration_count"] < 10, (
+        f"Expected to give up well before max_iterations=25, got {result['iteration_count']}"
+    )
+    print(f"  [PASS] test_custom_graph_gives_up_early_after_consecutive_duplicate_blocks (stopped at {result['iteration_count']})")
+
+
+def test_custom_graph_recovering_between_blocks_resets_consecutive_counter():
+    """A model that gets blocked once, then genuinely recovers with a
+    different real action, then later gets blocked again on a (possibly
+    different) repeat must NOT have its consecutive-block count carried
+    over from the earlier, already-resolved block - only a truly
+    uninterrupted streak of blocks should trigger the early give-up."""
+    # mock_scan/mock_search are neither Phase 1-2 nor Phase 5/6 tools, so the
+    # first Final Answer absorbs the 2026-07-26 phase12 nudge and the second
+    # absorbs the specs/019 phase5/6 nudge before the third is accepted.
+    llm = MockLLM([
+        "Thought: Scan.\nAction: mock_scan\nAction Input: https://test.com",       # 1: real exec #1
+        "Thought: Scan again.\nAction: mock_scan\nAction Input: https://test.com",  # 2: real exec #2 (allowed retry)
+        "Thought: Scan once more.\nAction: mock_scan\nAction Input: https://test.com",  # 3: BLOCKED (consecutive=1)
+        "Thought: Search instead.\nAction: mock_search\nAction Input: nginx",       # 4: real, different action - resets counter
+        "Thought: Done.\nFinal Answer: Security report here.",
+        "Thought: Still nothing else to add.\nFinal Answer: Security report here (still).",
+        "Thought: Confirmed.\nFinal Answer: Security report here (confirmed).",
+    ])
+    state = dict(BASE_STATE)
+    state["max_iterations"] = 15
+
+    graph = _build_custom_workflow(llm, [mock_scan, mock_search])
+    result = graph.invoke(state)
+
+    assert result["phase"] == "done"
+    last_content = result["messages"][-1].content
+    assert "Final Answer:" in last_content
+    # The real Final Answer text must be present - NOT the early-give-up
+    # synthesized note, proving the single intervening block didn't
+    # accumulate toward MAX_CONSECUTIVE_DUPLICATE_BLOCKS once real progress
+    # (mock_search) happened in between.
+    assert "stopped early" not in last_content
+    assert "Security report here" in last_content
+    print("  [PASS] test_custom_graph_recovering_between_blocks_resets_consecutive_counter")
 
 
 def test_check_early_termination_detects_flag():
@@ -451,15 +579,17 @@ def test_duplicate_call_reflection_note_is_response_aware():
         "Thought: probe again.\nAction: mock_probe\nAction Input: https://test.com",
         "Thought: probe third time.\nAction: mock_probe\nAction Input: https://test.com",
         "Thought: done.\nFinal Answer: report",
-        "Thought: confirmed, no further scanning applies.\nFinal Answer: report",
+        "Thought: still nothing else.\nFinal Answer: report (again)",
+        "Thought: confirmed, no further scanning applies.\nFinal Answer: report (confirmed)",
     ])
     graph = _build_custom_workflow(llm, [mock_probe], enable_inter_reflection=False)
     result = graph.invoke(dict(BASE_STATE))
 
-    # 2 reflection notes now: the duplicate-call Intra-reflection note (FR-005)
-    # and the phase5/6 nudge (mock_probe isn't a Phase 5/6 tool either).
+    # 3 reflection notes now: the duplicate-call Intra-reflection note
+    # (FR-005), the 2026-07-26 phase12 nudge, and the phase5/6 nudge
+    # (mock_probe is neither a Phase 1-2 nor a Phase 5/6 tool).
     reflection_notes = result.get("reflection_notes", [])
-    assert len(reflection_notes) == 2
+    assert len(reflection_notes) == 3
     assert "blocked" in reflection_notes[0].lower() or "bypass" in reflection_notes[0].lower()
 
     blocked_msgs = [m for m in result["messages"] if "already called" in str(m.content)]
@@ -469,11 +599,16 @@ def test_duplicate_call_reflection_note_is_response_aware():
 
 
 def test_inter_reflection_majority_success_appends_note():
-    """Verify Inter reflection majority success appends note."""
+    """Verify Inter reflection majority success appends note.
+
+    Run_Nikto is a Phase 5/6 tool but not a Phase 1-2 tool, so the first
+    Final Answer now absorbs the 2026-07-26 phase12 nudge before the
+    second is accepted."""
     llm = ReflectionAwareMockLLM(
         react_responses=[
             "Thought: scan.\nAction: Run_Nikto\nAction Input: https://test.com",
             "Thought: done.\nFinal Answer: report",
+            "Thought: confirmed.\nFinal Answer: report (confirmed)",
         ],
         vote_responses=["yes", "yes", "no"],
     )
@@ -488,11 +623,16 @@ def test_inter_reflection_majority_success_appends_note():
 
 
 def test_inter_reflection_majority_inconclusive_appends_note():
-    """Verify Inter reflection majority inconclusive appends note."""
+    """Verify Inter reflection majority inconclusive appends note.
+
+    Run_Nikto is a Phase 5/6 tool but not a Phase 1-2 tool, so the first
+    Final Answer now absorbs the 2026-07-26 phase12 nudge before the
+    second is accepted."""
     llm = ReflectionAwareMockLLM(
         react_responses=[
             "Thought: scan.\nAction: Run_Nikto\nAction Input: https://test.com",
             "Thought: done.\nFinal Answer: report",
+            "Thought: confirmed.\nFinal Answer: report (confirmed)",
         ],
         vote_responses=["no", "no", "yes"],
     )
@@ -525,10 +665,15 @@ def test_inter_reflection_disabled_skips_majority_vote():
 
 
 def test_early_termination_flag_detection_adds_nudge():
-    """Verify Early termination flag detection adds nudge."""
+    """Verify Early termination flag detection adds nudge.
+
+    mock_flag_tool isn't a Phase 1-2 or Phase 5/6 tool, so the first Final
+    Answer absorbs the 2026-07-26 phase12 nudge, the second absorbs the
+    specs/019 phase5/6 nudge, before the third is accepted."""
     llm = MockLLM([
         "Thought: read file.\nAction: mock_flag_tool\nAction Input: https://test.com",
         "Thought: done.\nFinal Answer: flag{argus_test_flag_123}",
+        "Thought: still nothing else.\nFinal Answer: flag{argus_test_flag_123}",
         "Thought: confirmed, no further scanning applies.\nFinal Answer: flag{argus_test_flag_123}",
     ])
     graph = _build_custom_workflow(llm, [mock_flag_tool], enable_inter_reflection=False)
@@ -546,10 +691,14 @@ def test_vulnerability_hint_in_tool_result_adds_directive_nudge():
     title, and the model never acted on it. This locks in the fix:
     execute_node now surfaces that signal as an explicit reflection note
     instead of relying on the model to notice it unprompted."""
+    # mock_title_tool/Run_Nikto together aren't Phase 1-2 tools, so the
+    # first Final Answer now absorbs the 2026-07-26 phase12 nudge before
+    # the second is accepted.
     llm = MockLLM([
         "Thought: fingerprint the target.\nAction: mock_title_tool\nAction Input: https://test.com",
         "Thought: taking the hint into account.\nAction: Run_Nikto\nAction Input: https://test.com",
         "Thought: done.\nFinal Answer: complete",
+        "Thought: confirmed.\nFinal Answer: complete (confirmed)",
     ])
     graph = _build_custom_workflow(llm, [mock_title_tool, Run_Nikto], enable_inter_reflection=False)
     result = graph.invoke(dict(BASE_STATE))
@@ -557,7 +706,52 @@ def test_vulnerability_hint_in_tool_result_adds_directive_nudge():
     hint_msgs = [m for m in result["messages"] if "likely vulnerability class" in str(m.content)]
     assert len(hint_msgs) == 1
     assert "File path traversal, simple case" in hint_msgs[0].content
+    # 2026-08-01: the directive must name the real live-test tool and must
+    # not present Exploit_Suggester as an equivalent way to "test it
+    # directly" - see _live_test_directive's docstring for the live-run
+    # failure (run bc915491) this locks in the fix for.
+    assert "Advanced_Evasion_Probe" in hint_msgs[0].content
+    assert "does NOT touch the target" in hint_msgs[0].content
     print("  [PASS] test_vulnerability_hint_in_tool_result_adds_directive_nudge")
+
+
+def test_matched_vuln_keywords_extracts_raw_keywords():
+    """_matched_vuln_keywords is the keyword-matching logic factored out of
+    _extract_vulnerability_hints (2026-08-01) so _live_test_directive can
+    build a tool-specific instruction from the same matched set."""
+    assert _matched_vuln_keywords("Title[File path traversal, simple case]") == ["path traversal"]
+    assert _matched_vuln_keywords("classic SQL Injection error") == ["sql injection"]
+    assert _matched_vuln_keywords("Host is up. Port 80 open, Apache 2.4.") == []
+    assert _matched_vuln_keywords("") == []
+    assert _matched_vuln_keywords(None) == []
+    print("  [PASS] test_matched_vuln_keywords_extracts_raw_keywords")
+
+
+def test_live_test_directive_names_advanced_evasion_probe_for_path_traversal():
+    """2026-08-01: locks in the fix for the bc915491 live-run failure - the
+    directive for path traversal / SQL injection must name
+    Advanced_Evasion_Probe specifically and must explicitly rule out
+    Exploit_Suggester as a substitute, since Exploit_Suggester only returns
+    reference payload text and never touches the target."""
+    directive = _live_test_directive(["path traversal"])
+    assert "Advanced_Evasion_Probe" in directive
+    assert "Exploit_Suggester" in directive
+    assert "does NOT touch the target" in directive
+
+    directive_sqli = _live_test_directive(["sql injection"])
+    assert "Advanced_Evasion_Probe" in directive_sqli
+    print("  [PASS] test_live_test_directive_names_advanced_evasion_probe_for_path_traversal")
+
+
+def test_live_test_directive_falls_back_for_uncovered_vuln_class():
+    """Vulnerability classes with no dedicated live-test tool (e.g.
+    cross-site scripting) must still steer toward a real live probe
+    (Run_Kali_Command/Run_Nikto/Run_FFUF), not silently say nothing, and
+    must not falsely claim Advanced_Evasion_Probe covers them."""
+    directive = _live_test_directive(["cross-site scripting"])
+    assert "Run_Kali_Command" in directive
+    assert "Advanced_Evasion_Probe" not in directive
+    print("  [PASS] test_live_test_directive_falls_back_for_uncovered_vuln_class")
 
 
 def test_final_answer_without_phase56_tool_gets_nudged_once_then_accepted():
@@ -566,12 +760,17 @@ def test_final_answer_without_phase56_tool_gets_nudged_once_then_accepted():
     Check_Reachability/Subdomain_Enumeration/Recon_Suite, never touching
     Run_Nikto/Run_FFUF/Exploit_Suggester/Advanced_Evasion_Probe, because
     nothing enforced it. This is a one-time nudge, not a hard block: the
-    model gets one chance to reconsider, then its second Final Answer is
-    accepted even without a Phase 5/6 tool call."""
+    model gets one chance to reconsider, then its Final Answer is accepted
+    even without a Phase 5/6 tool call.
+
+    mock_scan is also not a Phase 1-2 tool, so the first Final Answer now
+    absorbs the 2026-07-26 phase12 nudge first, then the phase5/6 nudge,
+    before the third is accepted."""
     llm = MockLLM([
         "Thought: scan.\nAction: mock_scan\nAction Input: https://test.com",
         "Thought: done already.\nFinal Answer: first attempt",
-        "Thought: ok, taking that into account.\nFinal Answer: second attempt",
+        "Thought: still nothing else.\nFinal Answer: second attempt",
+        "Thought: ok, taking that into account.\nFinal Answer: third attempt",
     ])
     graph = _build_custom_workflow(llm, [mock_scan], enable_inter_reflection=False)
     result = graph.invoke(dict(BASE_STATE))
@@ -579,12 +778,19 @@ def test_final_answer_without_phase56_tool_gets_nudged_once_then_accepted():
     nudge_msgs = [m for m in result["messages"] if "vulnerability scanning or exploitation" in str(m.content)]
     assert len(nudge_msgs) == 1, "should nudge exactly once, not repeatedly"
     assert result["phase"] == "done"
-    assert "second attempt" in result["messages"][-1].content
+    assert "third attempt" in result["messages"][-1].content
     print("  [PASS] test_final_answer_without_phase56_tool_gets_nudged_once_then_accepted")
 
 
 def test_final_answer_with_phase56_tool_is_not_nudged():
-    """Verify Final answer with phase56 tool is not nudged."""
+    """Verify Final answer with phase56 tool is not nudged.
+
+    Run_Nikto is a Phase 5/6 tool but not a Phase 1-2 tool, so the
+    2026-07-26 phase12 nudge still fires once here - the model's identical
+    Run_Nikto retry is allowed (the guard's own "twice" tolerance) and the
+    2nd Final Answer is then accepted since Run_Nikto already satisfies
+    Phase 5/6. The `nudge_msgs` check below is specifically for the
+    phase5/6 message text, which correctly never fires."""
     llm = MockLLM([
         "Thought: scan.\nAction: Run_Nikto\nAction Input: https://test.com",
         "Thought: done.\nFinal Answer: report after nikto",
@@ -599,20 +805,56 @@ def test_final_answer_with_phase56_tool_is_not_nudged():
     print("  [PASS] test_final_answer_with_phase56_tool_is_not_nudged")
 
 
-def test_final_answer_with_zero_tool_calls_is_not_nudged():
-    """A Final Answer with no tool calls at all is a different, broader
-    problem (skipping every phase) - out of scope for this specific check,
-    so it must not be nudged by this mechanism."""
+def test_final_answer_with_zero_tool_calls_gets_nudged_to_investigate_first():
+    """2026-07-26 regression: this test used to assert the OPPOSITE (not
+    nudged) - that was itself the live bug, hit independently on two real
+    runs (a PortSwigger lab, then a real production site,
+    cultbeauty.co.uk, a different day): the model wrote "Final Answer:"
+    directly inside/after its very first Thought, before ever executing a
+    single tool, and the synthesized report that followed contained
+    fabricated findings (specific paths, payloads, severities) with zero
+    real tool_result backing any of it - a direct Constitution VIII
+    ("never fabricate a report") violation this specific check used to
+    explicitly declare out of scope. Now nudged exactly once per run
+    (mirroring the Phase 5/6 nudge's own one-time design) instead of
+    accepted outright."""
     llm = MockLLM([
         "Thought: I already know enough.\nFinal Answer: immediate answer",
+        "Thought: fine, taking that into account.\nFinal Answer: immediate answer",
     ])
     graph = _build_custom_workflow(llm, [mock_scan], enable_inter_reflection=False)
     result = graph.invoke(dict(BASE_STATE))
 
-    nudge_msgs = [m for m in result["messages"] if "vulnerability scanning or exploitation" in str(m.content)]
-    assert len(nudge_msgs) == 0
+    nudge_msgs = [m for m in result["messages"] if "without executing a single tool" in str(m.content)]
+    assert len(nudge_msgs) == 1, "should nudge exactly once for a zero-tool-call Final Answer"
     assert result["phase"] == "done"
-    print("  [PASS] test_final_answer_with_zero_tool_calls_is_not_nudged")
+    print("  [PASS] test_final_answer_with_zero_tool_calls_gets_nudged_to_investigate_first")
+
+
+def test_zero_tool_call_nudge_is_skipped_once_a_real_tool_executes():
+    """After the one-time zero-tool-call nudge, if the model recovers by
+    actually calling a tool before its next Final Answer, the zero-tool
+    check does not fire again (tried_names is no longer empty) - proving
+    the guard only intervenes on a genuinely evidence-free conclusion, not
+    every Final Answer forever. mock_scan is also neither a Phase 1-2 nor a
+    Phase 5/6 tool, so this also has to absorb the 2026-07-26 phase12
+    nudge and the pre-existing phase56 nudge before its "verified" Final
+    Answer is finally accepted."""
+    llm = MockLLM([
+        "Thought: I already know enough.\nFinal Answer: immediate answer",
+        "Thought: ok, checking first.\nAction: mock_scan\nAction Input: https://test.com",
+        "Thought: now I have real data.\nFinal Answer: verified answer",
+        "Thought: still nothing else to add.\nFinal Answer: verified answer (still)",
+        "Thought: confirmed, no further scanning applies.\nFinal Answer: verified answer (confirmed)",
+    ])
+    graph = _build_custom_workflow(llm, [mock_scan], enable_inter_reflection=False)
+    result = graph.invoke(dict(BASE_STATE))
+
+    zero_tool_nudges = [m for m in result["messages"] if "without executing a single tool" in str(m.content)]
+    assert len(zero_tool_nudges) == 1, "zero-tool-call guard should fire exactly once, not again after a real tool call"
+    assert result["phase"] == "done"
+    assert "verified answer" in result["messages"][-1].content
+    print("  [PASS] test_zero_tool_call_nudge_is_skipped_once_a_real_tool_executes")
 
 
 def test_custom_graph_handles_unknown_tool():
@@ -632,8 +874,17 @@ def test_custom_graph_handles_unknown_tool():
     print("  [PASS] test_custom_graph_handles_unknown_tool")
 
 
-def test_custom_graph_immediate_final_answer():
-    """Verify graph ends immediately if LLM outputs Final Answer first."""
+def test_custom_graph_immediate_final_answer_gets_nudged_first():
+    """2026-07-26: an immediate Final Answer with zero tool calls no longer
+    ends the run on iteration 1 - see
+    test_final_answer_with_zero_tool_calls_gets_nudged_to_investigate_first's
+    docstring for the live incident this fixes. MockLLM only has one
+    canned response here, so it repeats verbatim on the 2nd attempt - the
+    guard only fires once per run (mirroring the Phase 5/6 nudge), so the
+    repeated Final Answer is accepted on attempt 2 even though still zero
+    real tool calls happened; a model that never calls anything even after
+    being told why that's a problem is a separate, broader failure this
+    specific check isn't meant to solve alone."""
     llm = MockLLM([
         "Final Answer: Target is clean. No issues found.",
     ])
@@ -641,26 +892,28 @@ def test_custom_graph_immediate_final_answer():
     graph = _build_custom_workflow(llm, [mock_scan])
     result = graph.invoke(dict(BASE_STATE))
 
-    assert result["iteration_count"] == 1, f"Expected 1, got {result['iteration_count']}"
+    assert result["iteration_count"] == 2, f"Expected 2 (1 nudge + 1 accepted repeat), got {result['iteration_count']}"
     assert result["phase"] == "done"
-    print("  [PASS] test_custom_graph_immediate_final_answer")
+    print("  [PASS] test_custom_graph_immediate_final_answer_gets_nudged_first")
 
 
 def test_custom_graph_no_output_fallback():
     """Verify graph handles empty LLM response.
 
-    mock_scan isn't a Phase 5/6 tool, so the first Final Answer absorbs one
-    specs/019 phase5/6 nudge before the second is accepted."""
+    mock_scan is neither a Phase 1-2 nor a Phase 5/6 tool, so the first
+    Final Answer absorbs the 2026-07-26 phase12 nudge, the second absorbs
+    the specs/019 phase5/6 nudge, before the third is accepted."""
     llm = MockLLM([
         "",
         "Thought: Try again.\nAction: mock_scan\nAction Input: test",
         "Final Answer: Done.",
+        "Thought: Still nothing else.\nFinal Answer: Done (still).",
         "Thought: Confirmed, no further scanning applies.\nFinal Answer: Done (confirmed).",
     ])
 
     graph = _build_custom_workflow(llm, [mock_scan])
     result = graph.invoke(dict(BASE_STATE))
-    assert result["iteration_count"] <= 4, f"Should stop, got {result['iteration_count']}"
+    assert result["iteration_count"] <= 5, f"Should stop, got {result['iteration_count']}"
     print("  [PASS] test_custom_graph_no_output_fallback")
 
 
@@ -669,19 +922,21 @@ def test_custom_graph_no_output_fallback():
 def test_custom_graph_json_action_format():
     """Verify parser handles JSON Action format.
 
-    Neither mock_scan nor mock_search is a Phase 5/6 tool, so the first
-    Final Answer absorbs one specs/019 phase5/6 nudge."""
+    Neither mock_scan nor mock_search is a Phase 1-2 or Phase 5/6 tool, so
+    the first Final Answer absorbs the 2026-07-26 phase12 nudge and the
+    second absorbs the specs/019 phase5/6 nudge."""
     llm = MockLLM([
         'Thought: Scanning.\nAction: {"name": "mock_scan", "input": "https://test.com"}\n',
         'Thought: Searching.\nAction: {"name": "mock_search", "input": "nginx 1.24"}\n',
         "Final Answer: Report done.",
+        "Thought: Still nothing else.\nFinal Answer: Report done (still).",
         "Thought: Confirmed, no further scanning applies.\nFinal Answer: Report done (confirmed).",
     ])
 
     graph = _build_custom_workflow(llm, [mock_scan, mock_search])
     result = graph.invoke(dict(BASE_STATE))
 
-    assert result["iteration_count"] == 4
+    assert result["iteration_count"] == 5
     assert result["phase"] == "done"
     print("  [PASS] test_custom_graph_json_action_format")
 
@@ -689,18 +944,20 @@ def test_custom_graph_json_action_format():
 def test_custom_graph_json_action_variants():
     """Verify parser accepts alternative JSON key names (action, tool, arguments).
 
-    mock_scan isn't a Phase 5/6 tool, so the first Final Answer absorbs one
-    specs/019 phase5/6 nudge."""
+    mock_scan is neither a Phase 1-2 nor a Phase 5/6 tool, so the first
+    Final Answer absorbs the 2026-07-26 phase12 nudge and the second
+    absorbs the specs/019 phase5/6 nudge."""
     llm = MockLLM([
         'Thought: Scan.\nAction: {"action": "mock_scan", "arguments": "https://test.com"}\n',
         "Final Answer: Done.",
+        "Thought: Still nothing else.\nFinal Answer: Done (still).",
         "Thought: Confirmed, no further scanning applies.\nFinal Answer: Done (confirmed).",
     ])
 
     graph = _build_custom_workflow(llm, [mock_scan])
     result = graph.invoke(dict(BASE_STATE))
 
-    assert result["iteration_count"] == 3
+    assert result["iteration_count"] == 4
     assert result["phase"] == "done"
     print("  [PASS] test_custom_graph_json_action_variants")
 
@@ -708,19 +965,21 @@ def test_custom_graph_json_action_variants():
 def test_custom_graph_malformed_json_fallback_to_text():
     """Verify parser falls back to text format when JSON is malformed.
 
-    mock_scan isn't a Phase 5/6 tool, so the first Final Answer absorbs one
-    specs/019 phase5/6 nudge."""
+    mock_scan is neither a Phase 1-2 nor a Phase 5/6 tool, so the first
+    Final Answer absorbs the 2026-07-26 phase12 nudge and the second
+    absorbs the specs/019 phase5/6 nudge."""
     llm = MockLLM([
         'Thought: Scan.\nAction: {"name": "mock_scan" "input": "missing comma"}\n',  # malformed JSON
         'Thought: Fixed.\nAction: mock_scan\nAction Input: https://test.com',
         "Final Answer: Done.",
+        "Thought: Still nothing else.\nFinal Answer: Done (still).",
         "Thought: Confirmed, no further scanning applies.\nFinal Answer: Done (confirmed).",
     ])
 
     graph = _build_custom_workflow(llm, [mock_scan])
     result = graph.invoke(dict(BASE_STATE))
 
-    assert result["iteration_count"] <= 4
+    assert result["iteration_count"] <= 5
     # Should have executed mock_scan successfully via text fallback
     assert "Open ports" in str(result["tool_result"])
     print("  [PASS] test_custom_graph_malformed_json_fallback_to_text")
@@ -755,12 +1014,19 @@ def test_structured_action_falls_back_on_exception():
 
 
 def test_custom_graph_uses_structured_action_end_to_end():
-    """Full graph cycle driven by structured decoding instead of free-text output."""
+    """Full graph cycle driven by structured decoding instead of free-text output.
+
+    2026-07-26: this Final Answer has zero tool calls behind it, so it now
+    absorbs one zero-tool-call nudge first (see
+    test_final_answer_with_zero_tool_calls_gets_nudged_to_investigate_first's
+    docstring) before being accepted - `StructuredMockLLM` returns the same
+    canned action on every call (no cycling), so the repeated Final Answer
+    is accepted on the 2nd iteration."""
     llm = StructuredMockLLM(_ArgusAction(thought="Done.", final_answer="Security report here."))
     graph = _build_custom_workflow(llm, [mock_scan])
     result = graph.invoke(dict(BASE_STATE))
 
-    assert result["iteration_count"] == 1
+    assert result["iteration_count"] == 2
     assert "Security report here." in result["messages"][-1].content
     print("  [PASS] test_custom_graph_uses_structured_action_end_to_end")
 
@@ -987,11 +1253,14 @@ if __name__ == "__main__":
     test_inter_reflection_disabled_skips_majority_vote()
     test_early_termination_flag_detection_adds_nudge()
     test_vulnerability_hint_in_tool_result_adds_directive_nudge()
+    test_matched_vuln_keywords_extracts_raw_keywords()
+    test_live_test_directive_names_advanced_evasion_probe_for_path_traversal()
+    test_live_test_directive_falls_back_for_uncovered_vuln_class()
     test_final_answer_without_phase56_tool_gets_nudged_once_then_accepted()
     test_final_answer_with_phase56_tool_is_not_nudged()
-    test_final_answer_with_zero_tool_calls_is_not_nudged()
+    test_final_answer_with_zero_tool_calls_gets_nudged_to_investigate_first()
     test_custom_graph_handles_unknown_tool()
-    test_custom_graph_immediate_final_answer()
+    test_custom_graph_immediate_final_answer_gets_nudged_first()
     test_custom_graph_no_output_fallback()
     test_custom_graph_json_action_format()
     test_custom_graph_json_action_variants()

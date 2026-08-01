@@ -18,3 +18,9 @@ paramiko
 torchvision
 networkx
 pyvis
+# specs/029-vulnerability-screenshot-evidence: host-side headless browser
+# (BrowserManager, app/tools/browser_manager.py) for vulnerability
+# proof-of-concept screenshots. Chromium's own binary is a one-time local
+# setup step this pip install does not cover: run
+# `playwright install chromium` once after installing this requirements file.
+playwright

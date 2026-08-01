@@ -380,13 +380,22 @@ class _CrashOnceThenSucceedLLM:
 
 
 def test_ask_retries_once_on_transient_ollama_cuda_crash():
-    """Verify Ask retries once on transient ollama cuda crash."""
+    """Verify Ask retries once on transient ollama cuda crash.
+
+    2026-07-26: call_count is 3, not 2 - the crash is 1 call, and the
+    recovery response is a Final Answer with zero tool calls behind it, so
+    it now absorbs one zero-tool-call nudge (see
+    test_final_answer_with_zero_tool_calls_gets_nudged_to_investigate_first's
+    docstring for the live incident that fix addresses) before being
+    accepted on the 3rd call - unrelated to the crash-retry mechanism this
+    test actually covers, which is still exactly 1 retry (call 1 crashes,
+    call 2 is the only retry attempt)."""
     llm = _CrashOnceThenSucceedLLM()
     brain = ArgusBrain("test-model", [_make_tool()], rag_config={"enabled": False}, llm=llm)
 
     result = brain.ask("scan example.com")
 
-    assert llm.call_count == 2
+    assert llm.call_count == 3
     assert result["output"]["summary"] == "ok"
 
 

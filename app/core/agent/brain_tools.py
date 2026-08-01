@@ -24,7 +24,7 @@ from app.tools.tool_registry import WSLBridgeTools
 # see config.yaml's enable_multi_agent_roles) FR-002's tool partition, kept
 # here as the one place that lists which tool names belong to which role
 # (Constitution IX) - `build_argus_tools(bridge, role=...)` below filters
-# the full 17-tool list against this mapping rather than maintaining a
+# the full 18-tool list against this mapping rather than maintaining a
 # second, separately-constructed tool list per role.
 # Collector: reconnaissance/discovery only. Exploiter: vulnerability
 # scanning/exploitation only. Planner/Summarizer: read-only memory access,
@@ -43,6 +43,7 @@ ROLE_TOOL_PARTITIONS = {
     "exploiter": {
         "Run_Nikto", "Run_FFUF", "Exploit_Suggester", "Advanced_Evasion_Probe",
         "Run_Kali_Command", "Reflective_Pre_Verify", "System_Self_Heal",
+        "Capture_Vulnerability_Screenshot",
     },
 }
 _PLANNER_SUMMARIZER_TOOLS = {"Query_Memory", "Query_Knowledge_Graph"}
@@ -58,12 +59,12 @@ def build_argus_tools(bridge: WSLBridgeTools, role: Optional[str] = None) -> lis
             `"planner"`, `"summarizer"` (specs/020, feature-flagged off by
             default) to return only that role's tool subset per
             `ROLE_TOOL_PARTITIONS`/`_PLANNER_SUMMARIZER_TOOLS`. `None`
-            (default) returns the full 17-tool list, unchanged from before
+            (default) returns the full 18-tool list, unchanged from before
             this parameter existed - every existing caller (`019` and
             earlier) is unaffected.
 
     Returns:
-        list[Tool]: The full 17-tool list covering recon, memory/graph
+        list[Tool]: The full 18-tool list covering recon, memory/graph
         queries, scanning, exploitation research, reflective
         self-verification, and raw command execution when `role` is `None`
         (see the module docstring's 2026-07-09 audit for how this list was
@@ -135,6 +136,11 @@ def build_argus_tools(bridge: WSLBridgeTools, role: Optional[str] = None) -> lis
             description="Perform targeted, WAF-evasive probes for SQL injection and Path Traversal - actually attempts exploitation, not just suggestion.",
         ),
         Tool(
+            name="Capture_Vulnerability_Screenshot",
+            func=bridge.capture_vulnerability_screenshot,
+            description="Take a screenshot of a URL as proof-of-concept evidence for a confirmed vulnerability (path traversal by default). Advanced_Evasion_Probe already does this automatically for confirmed Path Traversal hits - use this tool only for an extra, on-demand capture of a specific URL.",
+        ),
+        Tool(
             name="Reflective_Pre_Verify",
             func=bridge.verify_command,
             description="Check a command for malformed parameters, illegal syntax, or missing tools before running it.",
@@ -173,7 +179,7 @@ def partition_tools_by_role(tools: list) -> dict:
     """Split an already-built flat tool list into role subsets, using the
     same `ROLE_TOOL_PARTITIONS` mapping `build_argus_tools(bridge, role=...)`
     filters against - so a caller that already has `ArgusBrain`'s flat
-    17-tool list (no `WSLBridgeTools` reference of its own) doesn't need to
+    18-tool list (no `WSLBridgeTools` reference of its own) doesn't need to
     rebuild tools from a bridge just to get the specs/020 multi-role
     partition (Constitution IX - one partition definition, two entry points).
 

@@ -2,6 +2,267 @@
 
 All notable changes to this project will be documented in this file.
 
+## Fixed: vulnerability-hint nudge let the model treat `Exploit_Suggester` as equivalent to a live test (2026-08-01)
+
+Live run `bc915491` against a PortSwigger path-traversal lab: `Recon_Suite`'s own output
+named the vulnerability class in the page title ("File path traversal"), the deterministic
+`_extract_vulnerability_hints` nudge fired correctly, but its wording -
+`"Prioritize testing it directly (e.g. Advanced_Evasion_Probe or Exploit_Suggester for that
+specific class)"` - presented the two tools as interchangeable. `Exploit_Suggester`
+(`bridge.suggest_payloads`) only returns static reference payload text from a local
+PayloadsAllTheThings mirror; it never sends a request to the target. The model called it
+three times in a row with the identical input, hit the duplicate-call guard, and gave an
+honest "stopped early" Final Answer - `Advanced_Evasion_Probe` (the only tool that actually
+attempts exploitation, and only for SQL injection / Path Traversal per its own Tool
+description) was never called, so the real, live-testable vulnerability went unverified even
+though nothing was fabricated.
+
+Fixed in `react_workflow.py`: new `_matched_vuln_keywords()` (keyword-matching logic factored
+out of `_extract_vulnerability_hints`) and `_live_test_directive()`, which name the one
+specific tool that actually tests a matched class live (`_LIVE_TEST_TOOL_BY_KEYWORD`, currently
+`Advanced_Evasion_Probe` for path/directory traversal and SQL injection) and explicitly state
+that `Exploit_Suggester` does not touch the target and does not count as testing - falling back
+to a `Run_Kali_Command`/`Run_Nikto`/`Run_FFUF` suggestion for classes with no dedicated live
+tool. Applied at both nudge call sites (the production single-loop `execute_node` and the
+experimental multi-role `_run_specialist_step`).
+
+## Added: Phase 1-2 (connectivity/recon) coverage enforcement, same day as the zero-tool-call fix (2026-07-26)
+
+Follow-up to the zero-tool-call fix below, at the user's explicit request to make the agent
+actually run through all of `react_prompts.py`'s PHASE 1-8 progression, not just avoid the
+worst case (zero tool calls at all). New `PHASE_1_2_TOOLS = frozenset({"Check_Reachability",
+"Subdomain_Enumeration", "Recon_Suite", "Crawl_Target"})` in `react_workflow.py`, and a new
+one-time nudge in `parse_node` - mirrors the existing Phase 5/6 nudge exactly: if `tried_names` is
+non-empty (so `zero_tool_check` doesn't apply) but doesn't intersect `PHASE_1_2_TOOLS`, and this
+hasn't fired yet this run, the Final Answer is rejected once with a nudge to establish real
+connectivity/recon on this specific target before concluding. New state field `phase12_nudged: bool`
+(`react_state.py`, initialized in `brain.py`); new `"phase12_check"` phase added to
+`route_after_parse`'s bounded-loop-back set, checked before the existing phase56 check (Phase 1-2
+logically precedes Phase 5/6).
+
+**Known tradeoff, flagged and accepted by the user before implementing:** this can add a real extra
+LLM round-trip on runs that legitimately start with a non-recon tool (e.g. `Query_Memory` to check
+for prior findings before deciding whether to re-scan) - directly in tension with this project's own
+recent "why does a run take so long" concern. Kept as a hard, always-on nudge (not a
+`config.yaml`-gated toggle) per explicit user decision.
+
+**Test impact:** this broke 15 previously-passing tests - any test using a generic, non-"real-tool-named"
+mock (`mock_scan`, `mock_search`, `mock_probe`, `mock_title_tool`, `mock_flag_tool`) as its only
+tool call now needs one additional canned Final-Answer response queued up to absorb the new phase12
+nudge before the run concludes, exactly the same mechanical pattern this project's own history
+already established when `phase56_nudged` was first added (specs/019). All 15 fixed by adding one
+more repeated Final Answer response per affected test and adjusting `iteration_count`/message-count
+assertions to match; two tests using a real Phase 5/6 tool (`Run_Nikto`) needed the same treatment
+since `Run_Nikto` satisfies Phase 5/6 but not Phase 1-2. `tests/test_agent/test_langgraph_workflow.py`
++ `test_brain_ask.py` + `tests/test_tools/test_evasion.py`: 116/116 passing. `ruff check` clean;
+`mypy --follow-imports=skip` clean.
+
+## Fixed: agent could give a Final Answer with fabricated findings and zero tool calls (2026-07-26)
+
+Live-discovered TWICE independently, different targets, different days: a PortSwigger lab
+(`agent_a3cfdea1-...json`) and a real production site, `www.cultbeauty.co.uk`
+(`agent_766068d2-...json`). In both, the model wrote `Final Answer:` directly inside or right
+after its very first `Thought`, before ever executing a single tool - zero `Observation` events in
+either run log. The synthesized report that followed still contained specific, plausible-sounding
+but entirely fabricated findings (SQLi at `/login.php`, path traversal at `/download.php` with a
+suggested payload, an exposed `/admin.php` in one run; a fabricated "scanned with Smart_Web_Search,
+no SQLi found" claim in the other, even though `Smart_Web_Search` was never called either). Neither
+run's target structure even matches those invented paths.
+
+This is a direct violation of this project's own stated Constitution VIII ("never fabricate a
+report") - `_finalize_graph_output()`'s "Final Answer:" requirement is meant to uphold that, but a
+bare string match on the literal text `"Final Answer:"` can't by itself distinguish a genuine,
+evidence-backed conclusion from one with nothing behind it. This was previously a **documented,
+known gap**, not a surprise: `app/core/agent/react_workflow.py`'s `parse_node` had an explicit
+comment stating a Final Answer with zero tool calls was "a different, broader problem... out of
+scope for this check."
+
+Fixed: `parse_node` now checks `tool_call_history` when it sees `phase == "done"`. If it's
+completely empty (no tool was ever executed this run) and this is the first time this run, the
+Final Answer is rejected with an explicit nudge explaining that any claim in it is unverified and
+telling the model to start with `Check_Reachability`/`Recon_Suite` first - mirroring the existing
+Phase 5/6 nudge's one-time-per-run design (a target CAN legitimately need no further tooling, but
+only after actually checking, not before ever trying). New state field
+`zero_tool_final_answer_nudged: bool` (`react_state.py`, initialized in `brain.py`'s `ask()`); new
+`"zero_tool_check"` phase added to `route_after_parse`'s bounded-loop-back set (same `max_iterations`
+safety net as `format_error`/`duplicate_call`/`phase56_check`).
+
+Three pre-existing tests asserted the OLD (buggy) behavior and were updated to prove the corrected
+one instead: `test_final_answer_with_zero_tool_calls_gets_nudged_to_investigate_first` (renamed from
+`..._is_not_nudged`), `test_custom_graph_immediate_final_answer_gets_nudged_first` (renamed from
+`..._immediate_final_answer`, iteration count 1 -> 2), and
+`test_custom_graph_uses_structured_action_end_to_end` (iteration count 1 -> 2). One test in
+`test_brain_ask.py` (`test_ask_retries_once_on_transient_ollama_cuda_crash`) needed its
+`llm.call_count` assertion updated 2 -> 3 for the same reason (its post-crash recovery response is
+itself a zero-tool-call Final Answer) - the crash-retry mechanism that test actually covers is
+unaffected (still exactly 1 retry). New test:
+`test_zero_tool_call_nudge_is_skipped_once_a_real_tool_executes` (proves the guard doesn't fire
+again once the model recovers with a genuine tool call). `tests/test_agent/test_langgraph_workflow.py`
++ `test_brain_ask.py` + `tests/test_tools/test_evasion.py`: 116/116 passing. `ruff check` clean;
+`mypy --follow-imports=skip` clean.
+
+## Fixed: `Advanced_Evasion_Probe` (path traversal) silently failed against real targets - two confirmed root causes (2026-07-25)
+
+Found by directly testing `EvasionService.advanced_vuln_probe()` against this project's own
+`benchmarks/fixtures/path_traversal_download` fixture's real server (not a mock) - a live PortSwigger
+run log from the same day confirmed the same class of gap independently.
+
+**Root cause 1 - hardcoded query parameter name.** The probe always appended the payload as
+`?item=<payload>` (or `?id=` for SQLi). Confirmed via direct `curl` against the benchmark fixture's
+real server that it uses `?file=`, not `?item=` - `?item=../../secret.txt` returns the harmless
+welcome page every time, while `?file=../secret.txt` returns the real flag content. This exactly
+matches this project's own `benchmarks/results/*.md` history: `path_traversal_download` scored
+0% on `traverse_to_secret_file`/`retrieve_flag` in **every** recorded run, only ever completing
+`find_download_endpoint` (100%) - the probe finds the endpoint via recon, then can never actually
+traverse it. Real-world targets (PortSwigger labs included) commonly use `file`/`filename`/`path`/
+`document` instead of `item`.
+
+**Root cause 2 - unsanitized tool_input.** A live run's log (`agent_0221f988-...json`) showed the
+model calling `Advanced_Evasion_Probe` with tool_input
+`"https://<lab>.web-security-academy.net/ path traversal"` - free text appended after the URL
+(primed by `Exploit_Suggester`'s own preceding output style). Un-sanitized, this spliced straight
+into the curl command, producing a broken URL (a literal embedded space, garbage path appended)
+that was guaranteed to fail against ANY target, vulnerable or not - unrelated to root cause 1,
+compounding it in that specific run.
+
+Fixed, both in `app/tools/evasion.py`:
+- `_extract_clean_url()` - a new module-level helper, applied at the top of
+  `advanced_vuln_probe()`, that extracts the first `http(s)://`-prefixed whitespace-free token
+  from `url` and drops any trailing free text the model appended.
+- Path-traversal parameter handling: if `url` already carries a query string (a discovered
+  endpoint's own real parameter, e.g. crawled as `?filename=x.jpg`), that parameter name is reused
+  for every payload instead of guessing. Otherwise, a short candidate list is tried per payload -
+  `item` first (exact backward compatibility with every existing call site/test), then `file`,
+  `filename`, `path`, `document` - locking in whichever one confirms a hit so subsequent payloads
+  go straight to it instead of re-fuzzing every time (bounds the added request volume).
+
+Explicitly NOT changed: `SENSITIVE_CONTENT_INDICATORS` (`app/tools/utils.py`) still only recognizes
+real OS-level artifacts (`root:x:0:0:`, `DB_PASSWORD`, `appSettings`, `uid=`) - the benchmark
+fixture's own synthetic flag text (`CONFIDENTIAL INTERNAL NOTE` / `flag{...}`) isn't one of them,
+so a full live run against that specific fixture still won't self-report a finding even after this
+fix (a separate, narrower gap specific to that one synthetic fixture, not touched without checking
+first - real targets like PortSwigger's actual `/etc/passwd` reads are unaffected, since that
+content genuinely contains `root:x:0:0:`).
+
+This is also the direct answer to "why did the headless-browser screenshot feature (specs/029)
+show nothing" in several live runs: `capture_vulnerability()` only ever fires on a *confirmed*
+`advanced_vuln_probe()` hit, and the JSON evidence report is only written when a screenshot was
+actually captured - with detection itself silently failing for the two reasons above, zero
+findings meant zero screenshots and zero reports, exactly as designed (not a bug in the screenshot
+feature itself, which was independently live-verified working via
+`scripts/diagnose_browser_manager.py` on 2026-07-25).
+
+Tests: 4 new cases in `tests/test_tools/test_evasion.py`
+(`TestAdvancedVulnProbeParameterFuzzingAndUrlCleaning`) proving the URL-cleaning, existing-param
+reuse, fallback-candidate fuzzing, and confirmed-param lock-in behaviors independently; all 11
+pre-existing `test_evasion.py` cases pass unchanged (the `item`-first ordering was chosen
+specifically to preserve this). `ruff check` clean; `mypy --follow-imports=skip` clean.
+
+## Fixed: ReAct agent could burn all `max_iterations` in a duplicate-call loop without a Final Answer (2026-07-25)
+
+Live bug, hit by the user running Argus Studio against a real PortSwigger lab: the run took
+~11 minutes, reported `'error': 'no_final_answer'`, and the run log showed `Recon_Suite` invoked
+18 times in a row (`Exploit_Suggester`: 5, `Query_Memory`: 1, `Advanced_Evasion_Probe`: 1 - so the
+screenshot feature above was not the cause, it fired exactly once). Root cause traced to
+`app/core/agent/react_workflow.py`'s `parse_node`: its duplicate-call guard (tracks
+`tool_call_history`, allows a call twice, blocks the third identical attempt with guidance text)
+correctly blocks *execution* but was unbounded in how many times *that same block-and-retry cycle*
+could repeat - a model that keeps re-proposing the same (or another already-tried) tool after being
+told not to was only ever stopped by the generic `max_iterations` cap, silently consuming the
+entire iteration budget with zero new information gained.
+
+Fix: a new `MAX_CONSECUTIVE_DUPLICATE_BLOCKS = 3` constant and a `consecutive_duplicate_blocks`
+counter on `ArgusAgentState` (`react_state.py`, `NotRequired[int]`, initialized to `0` in
+`brain.py`'s `ask()`). `parse_node` increments it every time the duplicate-call guard fires and
+resets it to `0` in `execute_node` on any genuinely executed (non-duplicate) tool call. Once the
+counter reaches the threshold, the graph now stops itself early with `phase="done"` and an honest,
+explicit Final Answer (worded as a partial result caused by a tool-selection loop, not a completed
+assessment, listing which tools actually ran) instead of continuing to burn iterations that the
+guard's own logic guarantees will produce identical guidance every time.
+
+Chosen threshold (3) verified not to regress the pre-existing
+`test_custom_graph_duplicate_call_loop_respects_max_iterations` test: in that test the first
+duplicate-call block coincides with `iteration_count` already hitting a low `max_iterations`, so
+the existing `route_after_parse` cap fires first, before the new counter (at 1) could ever trigger -
+confirmed both by manual trace and by the full suite passing unchanged.
+
+Added: `test_custom_graph_gives_up_early_after_consecutive_duplicate_blocks` (proves the graph now
+concludes well before `max_iterations=25` on a sustained loop) and
+`test_custom_graph_recovering_between_blocks_resets_consecutive_counter` (proves one genuine
+intervening action resets the counter, so a model that recovers isn't penalized for an earlier
+stumble). `tests/test_agent/test_langgraph_workflow.py` + `tests/test_agent/test_brain_ask.py`:
+68/68 passing. `ruff check` clean; `mypy --follow-imports=skip` clean on all three touched files
+(`react_workflow.py`, `react_state.py`, `brain.py`) - `--follow-imports=skip` used only to route
+around a pre-existing, unrelated mypy parser crash on `app/tools/recon.py`'s Python-3.12-only
+f-string syntax, confirmed via `git diff` to be untouched by this change.
+
+**Follow-up same day (web-research-backed):** the duplicate-call guard's `call_key` compared
+`tool_input` via exact string equality only, so two calls that are semantically identical but
+textually different (e.g. `"https://test.com"` vs `"https://test.com/"` - a trailing slash) never
+registered as the "same" call at all, silently bypassing the guard rather than tripping it - one
+credible way a run could reach 18 `Recon_Suite` calls despite the guard's own "block the 3rd
+identical attempt" design. Added `_normalize_call_input()` (whitespace collapsing + a single
+trailing slash stripped, applied to all three `call_key` construction sites, both graphs) -
+deliberately does NOT lowercase or otherwise touch payload content, since several Phase 5/6 tools
+pass case-sensitive payloads as `tool_input` where two differently-cased strings are genuinely
+different attack attempts. New test:
+`test_custom_graph_blocks_near_duplicate_call_differing_only_by_trailing_slash`. All 68 tests
+still passing; `ruff`/`mypy` clean.
+
+## Implemented specs/029 (vulnerability screenshot evidence capture via Playwright) (2026-07-25)
+
+User requested a Playwright-based headless-browser module distinct from the still-proposed
+`specs/022-browser-automation-playwright`: a persistent `BrowserManager` (opens once when a
+target is set, stays open for the whole test run, not a fresh process per call), wired into the
+existing path-traversal detection path so a confirmed finding gets an automatic screenshot,
+producing a JSON evidence report - via spec-kit, with the needed items added to Requirements.
+Full spec/research/plan/tasks in `specs/029-vulnerability-screenshot-evidence/`.
+
+Ported the same day from an equivalent implementation independently built in a teammate's
+separate local clone of this repo (`IBRAHIM`'s working copy, at a different commit than this
+clone despite sharing the same GitHub remote) - reverted there per the user's request and rebuilt
+here against this clone's own current file contents (fuller docstrings from an intervening
+`specs/016-docstring-enforcement` pass, `pytestmark = pytest.mark.unit`, etc. - same design,
+re-applied). See `specs/029-vulnerability-screenshot-evidence/research.md`'s "Provenance" note.
+
+Scoped as its own feature rather than folded into `022` because the two are architecturally
+incompatible: `022` is a stateless, fresh-subprocess-per-call design executed inside Kali over
+SSH for DOM-rendering purposes, with screenshots explicitly out of scope; `029` is a persistent,
+host-side (no Kali/SSH) session whose entire purpose is the screenshot `022` deliberately
+excluded. `022` is untouched by this work and remains its own, separately-approved unit of work.
+
+Implemented:
+- `app/tools/browser_manager.py` - `BrowserManager` (Playwright sync API): `start()`/`close()`
+  lifecycle instead of a `with` block (so one Chromium session survives across many
+  `capture_vulnerability()` calls), auto-start-on-first-capture, idempotent `close()`, context
+  manager support, `BrowserManagerError` for a missing Playwright install.
+- `app/tools/vuln_report_writer.py` - `VulnerabilityReportWriter.save_report()`, mirroring
+  `reachability.py`'s existing `JSONReportWriter` convention exactly.
+- `app/tools/evasion.py` - `EvasionService` gained an optional, defaulted-to-`None`
+  `browser_manager` constructor argument (every existing call site and test is unaffected). A
+  confirmed path-traversal hit now triggers `capture_vulnerability()`; a capture failure is caught
+  and logged **and surfaced in the returned result text itself** (not just `logger.warning()`,
+  which is too easy to miss depending on logging config - the exact "no report at all, no visible
+  error" symptom the user hit while testing this on the `IBRAHIM` clone before this port). A JSON
+  evidence report is written and its path appended when at least one screenshot was captured.
+- `app/tools/tool_registry.py` - `WSLBridgeTools` now owns one `BrowserManager` instance, passed
+  into `EvasionService`; new `close_browser()`/`capture_vulnerability_screenshot()` delegates and
+  a `"capture_screenshot"` registry entry.
+- `app/core/agent/brain_tools.py` - new `Capture_Vulnerability_Screenshot` tool (18-tool list, up
+  from 17), added to `ROLE_TOOL_PARTITIONS["exploiter"]`.
+- `scripts/run_agent.py` - `run_brain_analysis()`'s `bridge` usage now runs inside `try/finally`,
+  closing the browser once the run is unambiguously finished.
+- `config/requirements.txt` - added `playwright` (Chromium's binary itself, `playwright install
+  chromium`, remains a documented one-time local step).
+- `scripts/diagnose_browser_manager.py` - standalone, offline-capable 4-step diagnostic (package
+  import -> Chromium launch -> screenshot capture -> JSON report round-trip) with actionable fix
+  messages. Live-verified in the assistant's own sandbox (no Chromium binary downloaded there):
+  correctly caught `BrowserType.launch: Executable doesn't exist...` at step 2 and printed the
+  exact fix (`playwright install chromium`).
+- Tests: `tests/test_tools/test_browser_manager.py` (new, mocked Playwright) and new
+  `TestAdvancedVulnProbeScreenshotEvidence` cases in `tests/test_tools/test_evasion.py`, alongside
+  every pre-existing case, unchanged and still passing.
+
 ## Implemented specs/025 (subtask-level benchmark suite: SR/SCR/TTE + ablation) - found and fixed a real WSL-networking bug live (2026-07-23)
 
 Implemented `specs/025-subtask-benchmark-suite` T001-T004/T006-T008/T010: `benchmarks/fixture_base.py`

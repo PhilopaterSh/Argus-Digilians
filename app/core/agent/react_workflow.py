@@ -70,6 +70,46 @@ PHASE_5_6_TOOLS = frozenset({
     "Advanced_Evasion_Probe",
 })
 
+# 2026-07-26: Phase 1-2 per react_prompts.py's own progression (Connectivity
+# + Surface Mapping) - the foundation Phase 5/6 (and everything else) is
+# supposed to be grounded in. Enforced the same way as PHASE_5_6_TOOLS
+# above: a one-time nudge, not a hard block. Companion to the same day's
+# zero_tool_check (react_workflow.py::parse_node) - that check catches the
+# more severe "no tool call at all" case; this one catches a model that
+# calls SOME tool(s) (so zero_tool_check doesn't fire) but skips straight
+# to Phase 3+ (e.g. only Query_Memory/Smart_Web_Search) without ever
+# establishing real connectivity/recon on this specific target first.
+PHASE_1_2_TOOLS = frozenset({
+    "Check_Reachability",
+    "Subdomain_Enumeration",
+    "Recon_Suite",
+    "Crawl_Target",
+})
+
+# Live-discovered 2026-07-25: a real run against a PortSwigger lab called
+# Recon_Suite twice (the guard's own allowed retry), got blocked on the
+# third identical attempt as designed - then kept re-proposing the exact
+# same blocked call (or oscillating between it and another already-blocked
+# tool) 18 times in a row, burning the entire max_iterations=25 budget
+# before finally hitting the existing iteration check and reporting a bare
+# "no_final_answer" error. The guidance message parse_node already sends on
+# a block ("pick one of those [untried tools]") is advisory text only - like
+# react_prompts.py's own "never repeat" rule, nothing stops a model from
+# ignoring it, which is exactly what specs/018's original duplicate-call fix
+# was meant to structurally prevent for the FIRST repeat but not for
+# repeatedly ignoring the block itself. Rather than silently spending the
+# rest of the iteration budget on a conversation that provably cannot
+# change outcome (the guard's own hard block guarantees the Nth+1 attempt
+# produces the identical guidance every time), this caps how many
+# *consecutive* duplicate_call turns are tolerated before the run concludes
+# early with an honest, partial Final Answer summarizing what was actually
+# tried - faster AND more informative than "no_final_answer" after burning
+# the full budget. 3 (not 1) preserves room for the model to genuinely
+# recover by trying something else in between two blocked attempts; only a
+# model that is blocked three turns running - never producing a single
+# valid new action in between - is treated as unrecoverable this run.
+MAX_CONSECUTIVE_DUPLICATE_BLOCKS = 3
+
 # specs/019: matches Red-MIRROR's Inter-reflection Step 2 (Algorithm 4) -
 # early-termination flag check, independent of Final Answer detection.
 _FLAG_PATTERN = re.compile(r"flag\{[^}]+\}", re.IGNORECASE)
@@ -83,6 +123,48 @@ _FLAG_PATTERN = re.compile(r"flag\{[^}]+\}", re.IGNORECASE)
 # of reasoning about the real recon data. Matches OBSERVATION_MAX_CHARS
 # below to `tool_result`'s existing bound for consistency, not a new value.
 OBSERVATION_MAX_CHARS = 2000
+
+
+# Live-discovered 2026-07-25 (same incident as MAX_CONSECUTIVE_DUPLICATE_BLOCKS
+# above, confirmed by web research on this exact failure class - agents
+# calling e.g. search("auth errors") then search("login failures") never
+# register as duplicates under naive exact-string matching): call_key's
+# exact-string match means two calls that are semantically identical but
+# textually different - "http://target.com" vs "http://target.com/" (a
+# trailing slash), or an LLM inserting/dropping a stray space - never
+# register as the "same" call at all, silently bypassing the duplicate-call
+# guard entirely instead of tripping it, which is one credible way a model
+# could reach 18 Recon_Suite calls despite the guard's own "block the 3rd
+# identical attempt" rule. Deliberately NOT lowercasing or otherwise
+# touching path/query content: several Phase 5/6 tools
+# (Advanced_Evasion_Probe, Run_FFUF) pass case-sensitive payloads as
+# tool_input where two differently-cased strings genuinely are different
+# attack attempts - folding case here would make the guard wrongly collapse
+# two distinct payloads into "the same call". Scoped to the one universally
+# safe normalization: incidental whitespace and a single trailing slash.
+def _normalize_call_input(tool_input: str) -> str:
+    """Normalize a tool_input string for duplicate-call comparison only.
+
+    Collapses incidental whitespace differences and a single trailing
+    slash so semantically-identical calls (e.g. differing only by a
+    trailing "/" or a stray space) are recognised as the same call by the
+    duplicate-call guard. Does not lowercase or otherwise touch payload
+    content, since several tools' inputs are case-sensitive payloads.
+
+    Args:
+        tool_input (str): The raw tool_input string as produced by
+            `_parse_react_output`.
+
+    Returns:
+        str: The normalized string, used only as part of `call_key` for
+        duplicate detection - never shown to the model or used for actual
+        tool execution (the original, unnormalized `tool_input` is what
+        gets passed to the tool).
+    """
+    normalized = re.sub(r"\s+", " ", (tool_input or "")).strip()
+    if len(normalized) > 1 and normalized.endswith("/"):
+        normalized = normalized.rstrip("/")
+    return normalized
 
 
 def _bounded_observation(result: Any) -> str:
@@ -144,6 +226,26 @@ _VULN_CLASS_KEYWORDS = (
 )
 
 
+def _matched_vuln_keywords(text: str) -> list[str]:
+    """Return the `_VULN_CLASS_KEYWORDS` entries that appear verbatim
+    (case-insensitive) in `text`, sorted alphabetically.
+
+    Factored out of `_extract_vulnerability_hints` so `_live_test_directive`
+    below can build a tool-specific instruction from the same matched set
+    instead of re-parsing the human-readable hint sentences.
+
+    Args:
+        text (str): Tool result / observation text to scan.
+
+    Returns:
+        list[str]: Matched keywords, or `[]` if none matched.
+    """
+    if not text:
+        return []
+    lower = text.lower()
+    return sorted({kw for kw in _VULN_CLASS_KEYWORDS if kw in lower})
+
+
 def _extract_vulnerability_hints(text: str) -> list[str]:
     """Scan a tool result for explicit signals of a specific vulnerability
     class - a page title naming it (whatweb-style `Title[...]` fingerprint
@@ -163,11 +265,68 @@ def _extract_vulnerability_hints(text: str) -> list[str]:
     title_match = _TITLE_PATTERN.search(text)
     if title_match:
         hints.append(f"the page title mentions '{title_match.group(1).strip()}'")
-    lower = text.lower()
-    matched = sorted({kw for kw in _VULN_CLASS_KEYWORDS if kw in lower})
+    matched = _matched_vuln_keywords(text)
     if matched:
         hints.append(f"the output mentions vulnerability-class keyword(s): {', '.join(matched)}")
     return hints
+
+
+# 2026-08-01: `Exploit_Suggester` (bridge.suggest_payloads -> PayloadsAllTheThings
+# local mirror) returns static reference payload text and never sends a
+# request to the target - it is not a live test. `Advanced_Evasion_Probe` is
+# the only tool in this agent's toolset that actually attempts exploitation,
+# and its own Tool description (brain_tools.py) scopes that to SQL injection
+# and Path Traversal only - no other class has a dedicated live-test tool.
+# A prior version of the nudge below read "e.g. Advanced_Evasion_Probe or
+# Exploit_Suggester for that specific class", which the model took as two
+# interchangeable ways to "test it directly". Observed live 2026-08-01
+# (run bc915491, PortSwigger path-traversal lab, Recon_Suite page title
+# literally said "File path traversal"): the model called Exploit_Suggester
+# three times in a row with the identical input, got the same canned
+# PayloadsAllTheThings snippet each time, tripped the duplicate-call guard,
+# and gave an honest "stopped early" Final Answer - Advanced_Evasion_Probe
+# was never called, so the real, live-testable vulnerability went unverified.
+_LIVE_TEST_TOOL_BY_KEYWORD = {
+    "path traversal": "Advanced_Evasion_Probe",
+    "directory traversal": "Advanced_Evasion_Probe",
+    "sql injection": "Advanced_Evasion_Probe",
+}
+
+
+def _live_test_directive(matched_keywords: list[str]) -> str:
+    """Build an unambiguous "what to call next" instruction for a matched
+    vulnerability-class keyword set, naming the one tool (if any) that
+    actually sends a live request - and explicitly ruling out
+    `Exploit_Suggester`, which only returns reference payload text.
+
+    Args:
+        matched_keywords (list[str]): Keywords from `_matched_vuln_keywords`
+            (may be empty - callers should only invoke this when non-empty).
+
+    Returns:
+        str: A directive sentence naming the specific live-test tool when
+        `_LIVE_TEST_TOOL_BY_KEYWORD` covers the matched class, or a generic
+        fallback (manual `Run_Kali_Command` probe) when it doesn't.
+    """
+    for kw in matched_keywords:
+        tool = _LIVE_TEST_TOOL_BY_KEYWORD.get(kw)
+        if tool:
+            return (
+                f"Call {tool} now against the real target - it is the only "
+                f"tool that actually sends a live request for this "
+                f"vulnerability class. Exploit_Suggester only returns "
+                f"reference payload text from a local mirror; it does NOT "
+                f"touch the target, and calling it again will not test "
+                f"anything new."
+            )
+    return (
+        "No dedicated live-test tool covers this specific class - use "
+        "Run_Kali_Command to send a real, crafted request against the "
+        "actual endpoint (e.g. curl with the suspected payload), or "
+        "Run_Nikto/Run_FFUF for broader coverage. Exploit_Suggester only "
+        "returns reference payload text; it does NOT touch the target and "
+        "does not count as testing."
+    )
 
 
 # Cap on how many discovered subdomains become graph edges per
@@ -720,15 +879,51 @@ def _build_custom_workflow(
         # the first result - only a THIRD identical attempt is treated as
         # the model just not making progress.
         if result.get("tool_name"):
-            call_key = f"{result['tool_name']}::{result.get('tool_input', '')}"
+            call_key = f"{result['tool_name']}::{_normalize_call_input(result.get('tool_input', ''))}"
             if state.get("tool_call_history", []).count(call_key) >= 2:
+                tried_names = {entry.partition("::")[0] for entry in state.get("tool_call_history", [])}
+
+                # 2026-07-25: a model blocked here has, by definition, no
+                # way to make this exact attempt succeed differently next
+                # time - the guard's own hard block guarantees an identical
+                # guidance message on every subsequent try. Rather than
+                # trusting the model to eventually pick something else
+                # (three consecutive blocks with zero real progress in
+                # between is treated as it won't), conclude the run early
+                # with an honest partial answer instead of silently burning
+                # the rest of max_iterations on a conversation that provably
+                # cannot change outcome - see MAX_CONSECUTIVE_DUPLICATE_BLOCKS'
+                # own comment for the live incident this fixes.
+                consecutive_blocks = state.get("consecutive_duplicate_blocks", 0) + 1
+                if consecutive_blocks >= MAX_CONSECUTIVE_DUPLICATE_BLOCKS:
+                    give_up_note = (
+                        f"Final Answer: Agent stopped early after being blocked "
+                        f"from repeating the same or another already-tried tool "
+                        f"call {consecutive_blocks} times in a row without "
+                        f"proposing a genuinely new action - continuing would "
+                        f"not have produced a different result. Tools actually "
+                        f"executed this run: {', '.join(sorted(tried_names)) or 'none'}. "
+                        f"This is a partial, honest result reflecting a "
+                        f"tool-selection loop, not a fully completed security "
+                        f"assessment - re-running against the same target may "
+                        f"produce a different outcome."
+                    )
+                    return {
+                        "tool_error": None,
+                        "tool_name": None,
+                        "tool_input": None,
+                        "phase": "done",
+                        "consecutive_duplicate_blocks": 0,
+                        "reflection_notes": state.get("reflection_notes", []) + [give_up_note],
+                        "messages": [AIMessage(content=give_up_note)],
+                    }
+
                 # A live run oscillated between two already-blocked tools for
                 # several turns before finally giving a Final Answer - vague
                 # "choose something different" guidance isn't concrete enough
                 # for the model to act on reliably. List the tools it hasn't
                 # touched at all this run by name, so there's always a
                 # concrete next step instead of another guess.
-                tried_names = {entry.partition("::")[0] for entry in state.get("tool_call_history", [])}
                 untried = [name for name in tool_map if name not in tried_names]
                 untried_block = (
                     ", ".join(untried) if untried
@@ -755,16 +950,87 @@ def _build_custom_workflow(
                     "tool_name": None,
                     "tool_input": None,
                     "phase": "duplicate_call",
+                    "consecutive_duplicate_blocks": consecutive_blocks,
                     "reflection_notes": state.get("reflection_notes", []) + [reflection_note],
                     "messages": [HumanMessage(content=guidance)],
                 }
 
         if result.get("phase") == "done":
             tried_names = {entry.partition("::")[0] for entry in state.get("tool_call_history", [])}
+
+            # Live-discovered 2026-07-26, TWICE independently (a PortSwigger
+            # lab, then a real production site - cultbeauty.co.uk - a
+            # different day): the model sometimes writes "Final Answer:"
+            # directly inside or right after its very first Thought,
+            # before ever executing a single tool - then the synthesized
+            # report that follows contains plausible-sounding but entirely
+            # fabricated findings (specific paths like "/login.php", named
+            # CVE-style payloads, severities) with zero real tool_result
+            # backing any of it. This directly violates this project's own
+            # Constitution VIII ("never fabricate a report"), which
+            # `_finalize_graph_output()`'s "Final Answer:" requirement was
+            # meant to uphold but doesn't on its own - a bare string match
+            # on "Final Answer:" can't distinguish a genuine,
+            # evidence-backed conclusion from this. This used to be an
+            # explicitly documented gap right here ("out of scope for this
+            # check") - it no longer is. Nudged exactly once per run
+            # (mirroring the Phase 5/6 nudge below) rather than hard-blocked:
+            # a target CAN legitimately turn out to need no further tooling,
+            # but only after genuinely checking, not before ever trying.
+            if not tried_names and not state.get("zero_tool_final_answer_nudged", False):
+                zero_tool_nudge = (
+                    "Observation: You provided a Final Answer without executing "
+                    "a single tool this run - any vulnerability, path, or payload "
+                    "named in it has NOT actually been verified against the real "
+                    "target and would be a fabricated finding, not a genuine one "
+                    "(Constitution VIII: never fabricate a report). Start with "
+                    "Check_Reachability or Recon_Suite against the real target "
+                    "before drawing any conclusion. If, after genuinely "
+                    "investigating, nothing is found, state that explicitly - do "
+                    "not invent findings to fill out the report."
+                )
+                return {
+                    "tool_error": zero_tool_nudge,
+                    "tool_name": None,
+                    "tool_input": None,
+                    "phase": "zero_tool_check",
+                    "zero_tool_final_answer_nudged": True,
+                    "reflection_notes": state.get("reflection_notes", []) + [zero_tool_nudge],
+                    "messages": [HumanMessage(content=zero_tool_nudge)],
+                }
+
+            # 2026-07-26: companion to the zero_tool_check above - that one
+            # catches "no tool call at all"; this one catches a model that
+            # called SOME tool(s) (so tried_names is non-empty) but skipped
+            # straight to Phase 3+ without ever establishing real
+            # connectivity/recon on THIS target first (e.g. only ever
+            # calling Query_Memory or Smart_Web_Search). One-time nudge,
+            # same pattern as phase56_nudged below - checked first since
+            # Phase 1-2 logically precedes Phase 5/6 in the recommended
+            # progression (react_prompts.py).
+            if tried_names and not (tried_names & PHASE_1_2_TOOLS) and not state.get("phase12_nudged", False):
+                phase12_nudge = (
+                    "Observation: Before concluding, note that you have not yet "
+                    "established basic connectivity/reconnaissance for this "
+                    "specific target (Check_Reachability, Subdomain_Enumeration, "
+                    "Recon_Suite, or Crawl_Target). Try one of these now so any "
+                    "later findings are grounded in real data about this target, "
+                    "not general knowledge. If recon genuinely does not apply, "
+                    "state that explicitly in your Final Answer instead of "
+                    "omitting it silently."
+                )
+                return {
+                    "tool_error": phase12_nudge,
+                    "tool_name": None,
+                    "tool_input": None,
+                    "phase": "phase12_check",
+                    "phase12_nudged": True,
+                    "reflection_notes": state.get("reflection_notes", []) + [phase12_nudge],
+                    "messages": [HumanMessage(content=phase12_nudge)],
+                }
+
             # Only nudge a run that attempted at least one tool - a Final
-            # Answer with zero tool calls at all is a different, broader
-            # problem (skipping every phase, not specifically 5/6) out of
-            # scope for this check.
+            # Answer with zero tool calls at all is handled above instead.
             if tried_names and not (tried_names & PHASE_5_6_TOOLS) and not state.get("phase56_nudged", False):
                 nudge = (
                     "Observation: Before concluding, note that you have not yet "
@@ -816,7 +1082,7 @@ def _build_custom_workflow(
                 f"{state['blackboard_summary']}\n"
                 f"- [{name}] {str(inp)[:80]} -> {str(result)[:200]}"
             ).strip()
-            call_key = f"{name}::{inp}"
+            call_key = f"{name}::{_normalize_call_input(str(inp))}"
             extra_messages = []
             reflection_notes = list(state.get("reflection_notes", []))
 
@@ -842,12 +1108,11 @@ def _build_custom_workflow(
             # signal like a page title on its own.
             vuln_hints = _extract_vulnerability_hints(str(result))
             if vuln_hints:
+                matched_keywords = _matched_vuln_keywords(str(result))
                 hint_note = (
                     f"Reflection: the {name} result above {' and '.join(vuln_hints)} - "
                     f"this strongly suggests the target's likely vulnerability class. "
-                    f"Prioritize testing it directly (e.g. Advanced_Evasion_Probe or "
-                    f"Exploit_Suggester for that specific class) over further generic "
-                    f"scanning."
+                    f"{_live_test_directive(matched_keywords)}"
                 )
                 extra_messages.append(HumanMessage(content=hint_note))
                 reflection_notes.append(hint_note)
@@ -870,6 +1135,13 @@ def _build_custom_workflow(
                 "messages": [HumanMessage(content=obs)] + extra_messages,
                 "tool_call_history": state.get("tool_call_history", []) + [call_key],
                 "reflection_notes": reflection_notes,
+                # A real, allowed execution (not a blocked repeat) is
+                # genuine progress - reset the consecutive-duplicate-block
+                # counter so a model that gets blocked once, recovers with a
+                # real new action, then gets blocked again later isn't
+                # unfairly close to MAX_CONSECUTIVE_DUPLICATE_BLOCKS from
+                # unrelated, already-resolved blocks earlier in the run.
+                "consecutive_duplicate_blocks": 0,
             }
             if memory is not None:
                 try:
@@ -901,15 +1173,16 @@ def _build_custom_workflow(
                 `tool_name`, `iteration_count`, and `max_iterations`.
 
         Returns:
-            str: One of `"end"` (done, or a format/duplicate-call/phase56-check
+            str: One of `"end"` (done, or a
+            format/duplicate-call/phase56-check/zero-tool-check/phase12-check
             loop that hit `max_iterations`), `"agent"` (retry after a format
-            error, blocked duplicate call, or phase5/6 nudge), or `"execute"`
-            (a valid new tool call).
+            error, blocked duplicate call, phase1/2 nudge, phase5/6 nudge,
+            or zero-tool-call nudge), or `"execute"` (a valid new tool call).
         """
         phase = state.get("phase", "")
         if phase == "done":
             return "end"
-        if phase in ("format_error", "duplicate_call", "phase56_check"):
+        if phase in ("format_error", "duplicate_call", "phase56_check", "zero_tool_check", "phase12_check"):
             # Bug fixed (specs/018): this previously routed straight back to
             # "agent" with no iteration check at all, unlike the tool-execute
             # path below. A model that never once produces valid output (the
@@ -917,7 +1190,8 @@ def _build_custom_workflow(
             # bounded only by LangGraph's default recursion_limit (25) via an
             # ungraceful GraphRecursionError - not by max_iterations, and not
             # a clean "no final answer" result. duplicate_call (specs/018
-            # addendum 2) and phase56_check (specs/019 follow-up) share this
+            # addendum 2), phase56_check (specs/019 follow-up), and
+            # zero_tool_check/phase12_check (2026-07-26 follow-up) share this
             # same bound for the same reason - any soft-block/nudge path that
             # loops back to "agent" needs the same safety net a model that
             # never produces valid output does.
@@ -1095,7 +1369,7 @@ def _build_multi_role_workflow(
             f"{state['blackboard_summary']}\n"
             f"- [{role_name}/{name}] {str(inp)[:80]} -> {str(result)[:200]}"
         ).strip()
-        call_key = f"{name}::{inp}"
+        call_key = f"{name}::{_normalize_call_input(str(inp))}"
         reflection_notes = list(state.get("reflection_notes", []))
         extra_messages = []
 
@@ -1110,9 +1384,11 @@ def _build_multi_role_workflow(
 
         vuln_hints = _extract_vulnerability_hints(str(result))
         if vuln_hints:
+            matched_keywords = _matched_vuln_keywords(str(result))
             hint_note = (
                 f"Reflection: the {name} result above {' and '.join(vuln_hints)} - "
-                f"this strongly suggests the target's likely vulnerability class."
+                f"this strongly suggests the target's likely vulnerability class. "
+                f"{_live_test_directive(matched_keywords)}"
             )
             extra_messages.append(HumanMessage(content=hint_note))
             reflection_notes.append(hint_note)

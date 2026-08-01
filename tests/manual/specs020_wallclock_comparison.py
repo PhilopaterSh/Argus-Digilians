@@ -109,6 +109,8 @@ BASE_STATE = {
     "tool_call_history": [],
     "reflection_notes": [],
     "phase56_nudged": False,
+    "zero_tool_final_answer_nudged": False,
+    "phase12_nudged": False,
     "current_role": "",
     "role_history": [],
     "remaining_steps": 15,

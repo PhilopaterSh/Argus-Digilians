@@ -1,4 +1,5 @@
 import argparse
+import logging
 import os
 import sys
 import threading
@@ -6,6 +7,8 @@ import uuid
 from typing import Any, Dict
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
+logger = logging.getLogger(__name__)
 
 from app.core.agent.brain_tools import build_argus_tools
 from app.core.agent.contracts import (
@@ -55,6 +58,7 @@ def run_brain_analysis(target: str, run_id: str, mode: str, state_file: str, res
             function runs on a background thread, so exceptions here would
             otherwise be silently lost to the caller.
     """
+    bridge = None
     try:
         model_name = os.getenv('SELECTED_MODEL') or ArgusConfig.load().model_name
         bridge = WSLBridgeTools()
@@ -65,6 +69,16 @@ def run_brain_analysis(target: str, run_id: str, mode: str, state_file: str, res
         result_box['result'] = brain.ask(query, callbacks=[handler])
     except Exception as e:
         result_box['error'] = str(e)
+    finally:
+        # specs/029: BrowserManager stays open for the whole run (opened
+        # lazily on first vulnerability screenshot capture) - this is the
+        # single point where the run is unambiguously finished, so it's
+        # closed here regardless of success/failure/exception above.
+        if bridge is not None:
+            try:
+                bridge.close_browser()
+            except Exception:
+                logger.warning("close_browser() failed during run cleanup", exc_info=True)
 
 
 def _build_final_state(result: Dict[str, Any], mode: str, target: str) -> Dict[str, Any]:

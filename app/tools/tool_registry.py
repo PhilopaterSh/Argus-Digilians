@@ -23,6 +23,7 @@ from app.tools.web_search import SmartWebSearch
 from app.tools.reachability import ReachabilityService, JSONReportWriter
 from app.tools.crawler import CrawlerService
 from app.tools.evasion import EvasionService
+from app.tools.browser_manager import BrowserManager
 from app.tools.self_heal import SelfHealingService
 from app.tools.reflective_verification import ReflectiveVerificationService
 
@@ -92,7 +93,12 @@ class WSLBridgeTools:
         self.web = SmartWebSearch(self.memory)
         self.reachability = ReachabilityService(self.runner, self.memory)
         self.crawler = CrawlerService(self.runner, self.memory)
-        self.evasion = EvasionService(self.runner, self.memory)
+        # specs/029: persistent, host-side (no Kali/SSH involvement) browser
+        # session - opened lazily on first use, stays open for the whole
+        # test run, closed via close_browser() (wired into
+        # scripts/run_agent.py's run_brain_analysis() finally block).
+        self.browser_manager = BrowserManager()
+        self.evasion = EvasionService(self.runner, self.memory, browser_manager=self.browser_manager)
         self.self_heal = SelfHealingService(self.runner)
         self.verifier = ReflectiveVerificationService(self.runner, self.memory)
 
@@ -132,6 +138,10 @@ class WSLBridgeTools:
         ))
         self.registry.register(_ToolServiceAdapter(
             "evasion", "Advanced vulnerability probe with evasion", self.evasion, "advanced_vuln_probe"
+        ))
+        self.registry.register(_ToolServiceAdapter(
+            "capture_screenshot", "Capture a screenshot of a URL as vulnerability evidence",
+            self.browser_manager, "capture_vulnerability"
         ))
         self.registry.register(_ToolServiceAdapter(
             "self_heal", "Autonomously install missing tools", self.self_heal, "system_self_heal"
@@ -223,6 +233,18 @@ class WSLBridgeTools:
     def advanced_vuln_probe(self, url):
         """Delegate to EvasionService.advanced_vuln_probe()."""
         return self.evasion.advanced_vuln_probe(url)
+
+    def capture_vulnerability_screenshot(self, url, vulnerability_type="path_traversal", payload=None, note=None):
+        """On-demand evidence capture (specs/029) - separate from the
+        automatic capture already wired into advanced_vuln_probe(), for
+        when the agent/operator wants a screenshot of a specific URL
+        outside that flow."""
+        return self.browser_manager.capture_vulnerability(vulnerability_type, url, payload=payload, note=note)
+
+    def close_browser(self):
+        """Ends the persistent BrowserManager session (specs/029) - call
+        once the whole test run is finished. Idempotent."""
+        self.browser_manager.close()
 
     def system_self_heal(self, tool_info):
         """Delegate to SelfHealingService.system_self_heal()."""
