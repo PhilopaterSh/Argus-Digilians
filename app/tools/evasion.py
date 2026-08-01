@@ -130,9 +130,16 @@ class EvasionService:
             paths otherwise. Empty list if the fetch fails or nothing
             usable is found.
         """
+        # 2026-08-01: matching only href="..." missed the exact case this
+        # was built for - PortSwigger's own "File path traversal, simple
+        # case" lab loads its vulnerable endpoint as
+        # <img src="/image?filename=61.jpg">, an src= attribute on an
+        # <img> tag, not an href= link. Also match src="..." so an image-
+        # driven parameter (the single most common real-world path-
+        # traversal pattern) isn't silently skipped.
         cmd = (
             f"curl -s -L --max-time 10 --connect-timeout 5 '{base_url}' | "
-            f"grep -oE 'href=\"[^\"]+\"' | cut -d'\"' -f2 | sort -u"
+            f"grep -oE '(href|src)=\"[^\"]+\"' | cut -d'\"' -f2 | sort -u"
         )
         body = self.stealth_run(cmd, delay=False, timeout=12)
         links = [

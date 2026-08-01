@@ -376,6 +376,27 @@ class TestAdvancedVulnProbeEndpointDiscovery:
             "discovery should not run when the root probe already found a vulnerability"
 
     @patch("app.tools.evasion.time.sleep")
+    def test_finds_vulnerability_via_img_src_not_only_a_href(self, _mock_sleep):
+        """2026-08-01: PortSwigger's own "File path traversal, simple case"
+        lab loads its vulnerable endpoint as <img src="/image?filename=..."> -
+        an src= attribute, not an href= link. Discovery must catch this,
+        not just <a href> navigation links."""
+        runner = _make_runner({
+            "-L --max-time 10 --connect-timeout 5 'http://example.com'": "/image?filename=61.jpg",
+            "/image?filename=../../../../etc/passwd": "root:x:0:0:root:/root:/bin/bash",
+        }, default="<html>Not Found</html>")
+        memory = MagicMock()
+        svc = EvasionService(runner, memory)
+
+        result = svc.advanced_vuln_probe("http://example.com")
+
+        assert "Path Traversal Success" in result
+        commands = [call[0][0] for call in runner.run.call_args_list if call[0][0].startswith("curl")]
+        assert any("/image?filename=" in cmd for cmd in commands)
+        discovery_cmd = next(cmd for cmd in commands if "grep -oE" in cmd)
+        assert "(href|src)" in discovery_cmd, "discovery must grep for src= as well as href="
+
+    @patch("app.tools.evasion.time.sleep")
     def test_discovery_ignores_javascript_and_mailto_links(self, _mock_sleep):
         """Non-navigable hrefs must never be turned into probe URLs."""
         runner = _make_runner({
