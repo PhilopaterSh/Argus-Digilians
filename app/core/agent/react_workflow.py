@@ -8,6 +8,7 @@ import json
 import re
 import warnings
 from typing import Any, Callable, Dict, Optional
+from urllib.parse import urlsplit
 
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 from langchain_core.tools import BaseTool
@@ -327,6 +328,72 @@ def _live_test_directive(matched_keywords: list[str]) -> str:
         "returns reference payload text; it does NOT touch the target and "
         "does not count as testing."
     )
+
+
+_URL_IN_INPUT_RE = re.compile(r"https?://[^\s\"']+", re.IGNORECASE)
+
+
+def _hostname(text: str) -> Optional[str]:
+    """Extract a hostname from a tool-input string, whether it's a full URL
+    or a bare domain.
+
+    Args:
+        text (str): A tool-input string - may be a full `http(s)://` URL, a
+            bare domain (`Recon_Suite`/`Check_Reachability` are sometimes
+            called with just the domain, no scheme), or free text.
+
+    Returns:
+        str or None: The lowercased hostname (port stripped), or `None` if
+        no URL or domain-like token is found.
+    """
+    if not text:
+        return None
+    text = text.strip()
+    match = _URL_IN_INPUT_RE.search(text)
+    if match:
+        netloc = urlsplit(match.group(0)).netloc
+        return netloc.split(":")[0].lower() or None
+    first_token = text.split()[0] if text.split() else ""
+    if first_token and "/" not in first_token and "." in first_token:
+        return first_token.split(":")[0].lower()
+    return None
+
+
+# 2026-08-01: scope guard - observed live (run b84499b0, PortSwigger
+# path-traversal lab) that when the duplicate-call guard tells the model to
+# "try a genuinely different input", a 7B local model satisfied that
+# instruction by inventing an entirely different, unauthorized hostname (a
+# plausible-looking but fabricated web-security-academy.net lab ID) instead
+# of varying the technique/path/parameter against the real target. This
+# isn't just wasted budget - the hallucinated Recon_Suite call was still
+# running its own ~3-4 min nmap probe when the 900s wall-clock ceiling
+# killed the run - it's a scope-safety issue: left unchecked, it would have
+# sent real network probes to a host the user never authorized. Checked in
+# execute_node before dispatch, so an out-of-scope call is rejected without
+# ever actually running (no wasted network cost either).
+def _is_out_of_scope(tool_input: str, target: str) -> bool:
+    """Check whether a tool-input's hostname differs from the run's
+    authorized target hostname.
+
+    Deliberately an exact-hostname allowlist of one (the original target) -
+    no subdomain carve-out. A model that has a genuine reason to test a
+    discovered subdomain should say so in its Thought and the user can
+    decide to start a new, separately-scoped run for it; this guard's job
+    is only to stop a silent, hallucinated target swap mid-run.
+
+    Args:
+        tool_input (str): The proposed tool call's input string.
+        target (str): This run's authorized target (`state["target"]`).
+
+    Returns:
+        bool: `True` if `tool_input` names a different host than `target`
+        (both hostnames must be resolvable from the strings for this to
+        fire - a non-URL input like a Query_Memory search term never
+        triggers it).
+    """
+    call_host = _hostname(tool_input)
+    target_host = _hostname(target)
+    return bool(call_host and target_host and call_host != target_host)
 
 
 # Cap on how many discovered subdomains become graph edges per
@@ -1075,6 +1142,25 @@ def _build_custom_workflow(
             obs = f"Observation: Unknown tool '{name}'. Available: {list(tool_map.keys())}"
             return {"tool_error": obs, "messages": [HumanMessage(content=obs)]}
 
+        # See _is_out_of_scope's docstring for the live-run failure this
+        # guards against - reject before dispatch, so nothing is ever sent
+        # to an unauthorized host.
+        if _is_out_of_scope(str(inp), str(state["target"])):
+            scope_obs = (
+                f"Observation: REJECTED - this input targets a different "
+                f"host than the one authorized for this run "
+                f"('{state['target']}'). You may only test the original "
+                f"target. If you need a genuinely different next action, "
+                f"vary the technique, path, or parameter against the SAME "
+                f"target - do not substitute a different hostname."
+            )
+            return {
+                "tool_error": scope_obs,
+                "tool_name": None,
+                "tool_input": None,
+                "messages": [HumanMessage(content=scope_obs)],
+            }
+
         try:
             result = tool_map[name](inp)
             obs = f"Observation: {_bounded_observation(result)}"
@@ -1105,7 +1191,10 @@ def _build_custom_workflow(
             # 2026-07-11: deterministic evidence-extraction check (see
             # _extract_vulnerability_hints' docstring) - hands the model an
             # explicit directive instead of relying on it to notice a
-            # signal like a page title on its own.
+            # signal like a page title on its own. 2026-08-01: the directive
+            # now names the specific live-test tool (see
+            # _live_test_directive's docstring for why) instead of listing
+            # Exploit_Suggester as an equivalent alternative.
             vuln_hints = _extract_vulnerability_hints(str(result))
             if vuln_hints:
                 matched_keywords = _matched_vuln_keywords(str(result))
@@ -1358,6 +1447,20 @@ def _build_multi_role_workflow(
             return {
                 "iteration_count": state["iteration_count"] + 1,
                 "messages": [agent_message, HumanMessage(content=obs)],
+            }
+
+        if _is_out_of_scope(str(inp), str(state["target"])):
+            scope_obs = (
+                f"Observation: REJECTED - this input targets a different "
+                f"host than the one authorized for this run "
+                f"('{state['target']}'). You may only test the original "
+                f"target. If you need a genuinely different next action, "
+                f"vary the technique, path, or parameter against the SAME "
+                f"target - do not substitute a different hostname."
+            )
+            return {
+                "iteration_count": state["iteration_count"] + 1,
+                "messages": [agent_message, HumanMessage(content=scope_obs)],
             }
 
         try:

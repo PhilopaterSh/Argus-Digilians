@@ -24,7 +24,9 @@ from app.core.agent.react_workflow import (
     _build_tool_map,
     _check_early_termination,
     _extract_vulnerability_hints,
+    _hostname,
     _inter_reflect,
+    _is_out_of_scope,
     _live_test_directive,
     _matched_vuln_keywords,
     _PlannerDecision,
@@ -371,6 +373,91 @@ def test_custom_graph_blocks_near_duplicate_call_differing_only_by_trailing_slas
     assert len(blocked_msgs) == 1, "the near-duplicate (trailing slash) call should have been blocked"
 
     print("  [PASS] test_custom_graph_blocks_near_duplicate_call_differing_only_by_trailing_slash")
+
+
+def test_hostname_extracts_from_full_url_and_bare_domain():
+    """_hostname must handle both a full http(s):// URL and a bare domain
+    (Recon_Suite/Check_Reachability are sometimes called with just the
+    domain, no scheme)."""
+    assert _hostname("https://0a0600b3031358e982cd9c740003002e.web-security-academy.net/") == \
+        "0a0600b3031358e982cd9c740003002e.web-security-academy.net"
+    assert _hostname("0a0600b3031358e982cd9c740003002e.web-security-academy.net") == \
+        "0a0600b3031358e982cd9c740003002e.web-security-academy.net"
+    assert _hostname("https://test.com:8080/path?x=1") == "test.com"
+    assert _hostname("SQL injection findings for this target") is None
+    assert _hostname("") is None
+    assert _hostname(None) is None
+    print("  [PASS] test_hostname_extracts_from_full_url_and_bare_domain")
+
+
+def test_is_out_of_scope_catches_hallucinated_target_swap():
+    """2026-08-01: locks in the fix for the b84499b0 live-run failure -
+    when the duplicate-call guard told the model to "try a genuinely
+    different input", it invented an entirely different, unauthorized
+    web-security-academy.net hostname instead of varying the technique
+    against the real target. _is_out_of_scope must catch this exact case,
+    while never flagging a same-host variation (different path/param) or a
+    non-URL input (e.g. a Query_Memory search term) as out of scope."""
+    target = "https://0a0600b3031358e982cd9c740003002e.web-security-academy.net/"
+
+    hallucinated = "https://0a1300960402886e823a83f000260093.web-security-academy.net"
+    assert _is_out_of_scope(hallucinated, target) is True
+
+    same_host_diff_path = (
+        "https://0a0600b3031358e982cd9c740003002e.web-security-academy.net"
+        "/image?filename=../../etc/passwd"
+    )
+    assert _is_out_of_scope(same_host_diff_path, target) is False
+
+    assert _is_out_of_scope("evil-unrelated-domain.com", target) is True
+    assert _is_out_of_scope("SQL injection findings for this target", target) is False
+    print("  [PASS] test_is_out_of_scope_catches_hallucinated_target_swap")
+
+
+_recon_call_log = []
+
+
+def mock_recon_returns_hallucinated_target_on_retry(target: str) -> str:
+    """Records every input it's actually invoked with (module-level
+    `_recon_call_log`) so the test below can assert the fabricated,
+    unauthorized hostname never reached the tool itself - not just that
+    execute_node emitted a rejection message. Mirrors the scenario observed
+    live in run b84499b0: the model swapped in a fabricated hostname
+    instead of varying its technique on the real target."""
+    _recon_call_log.append(target)
+    return "Tech fingerprint: some real recon output for the authorized target."
+
+
+def test_custom_graph_rejects_hallucinated_target_swap_without_executing_tool():
+    """Graph-level regression for the b84499b0 failure: once the duplicate
+    guard blocks a repeat, a swapped-in unauthorized hostname must be
+    rejected by execute_node BEFORE the tool runs (no network cost, no
+    fabricated-target Recon_Suite call), not merely flagged after the
+    fact."""
+    _recon_call_log.clear()
+    llm = MockLLM([
+        "Thought: Recon first.\nAction: mock_recon_returns_hallucinated_target_on_retry\nAction Input: https://test.com",
+        "Thought: Recon again, same input.\nAction: mock_recon_returns_hallucinated_target_on_retry\nAction Input: https://test.com",
+        "Thought: Try a different target entirely.\nAction: mock_recon_returns_hallucinated_target_on_retry\nAction Input: https://evil-unrelated-domain.com",
+        "Thought: Understood, wrapping up.\nFinal Answer: Security report here.",
+        "Thought: Still nothing else to add.\nFinal Answer: Security report here (again).",
+        "Thought: Confirmed, no further scanning applies.\nFinal Answer: Security report here (confirmed).",
+    ])
+
+    graph = _build_custom_workflow(llm, [mock_recon_returns_hallucinated_target_on_retry])
+    result = graph.invoke(dict(BASE_STATE))
+
+    rejected_msgs = [m for m in result["messages"] if "REJECTED" in str(m.content)]
+    assert len(rejected_msgs) == 1, "the hallucinated-hostname call should have been rejected exactly once"
+    # The 2nd (identical) call is allowed as the one free retry before the
+    # duplicate guard would block a 3rd identical repeat - so the real tool
+    # legitimately runs twice with the authorized host. What matters here:
+    # the fabricated hostname never appears in that call log at all.
+    assert _recon_call_log == ["https://test.com", "https://test.com"], (
+        f"the out-of-scope call must never actually reach the tool - got calls: {_recon_call_log}"
+    )
+    assert "evil-unrelated-domain.com" not in _recon_call_log
+    print("  [PASS] test_custom_graph_rejects_hallucinated_target_swap_without_executing_tool")
 
 
 def test_custom_graph_duplicate_call_loop_respects_max_iterations():

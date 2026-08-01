@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file.
 
+## Fixed: duplicate-call guard could be satisfied by hallucinating a different, unauthorized target (2026-08-01)
+
+Live run `b84499b0` against a PortSwigger path-traversal lab timed out after 900s. Root cause
+chain: `Recon_Suite` costs ~3-4 min/call (nmap's 180s primary-scan timeout + a degraded `-Pn`
+retry), and once the duplicate-call guard told the model to "try a genuinely different input"
+after a repeat, the 7B local model satisfied that instruction by inventing an entirely
+different, unauthorized `web-security-academy.net` hostname (a plausible-looking but fabricated
+lab ID) rather than varying the technique/path/parameter against the real target. That
+hallucinated `Recon_Suite` call was still running its own nmap probe against the fake host when
+the 900s wall-clock ceiling killed the run - and had it not been killed, it would have sent real
+network probes to a host the user never authorized.
+
+Fixed in `react_workflow.py`: new `_hostname()` (extracts a hostname from a tool-input string,
+whether a full URL or a bare domain) and `_is_out_of_scope()` (exact-hostname allowlist of one -
+the run's original `state["target"]`, no subdomain carve-out). Wired into `execute_node` (both
+the production single-loop path and the experimental multi-role `_run_specialist_step`) right
+before tool dispatch, so an out-of-scope call is rejected - with a clear "REJECTED" Observation
+redirecting back to the real target - before it ever executes, at zero network cost.
+
 ## Fixed: vulnerability-hint nudge let the model treat `Exploit_Suggester` as equivalent to a live test (2026-08-01)
 
 Live run `bc915491` against a PortSwigger path-traversal lab: `Recon_Suite`'s own output
