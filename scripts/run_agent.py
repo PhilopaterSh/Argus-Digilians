@@ -29,11 +29,14 @@ from app.tools.tool_registry import WSLBridgeTools
 # ArgusBrain's ReAct loop (app/core/agent/agent_factory.py, max_iterations=50)
 # can make far more tool calls than the old fixed 3-phase pipeline it
 # replaces (specs/017-restore-react-agent) - each real recon/scan tool call
-# can itself take 60-180s. 900s is the same default the old pipeline needed
-# for a single recon->scanner->exploit pass; a full free-form run exploring
-# many tools may need more. Override via AGENT_TIMEOUT_SECONDS if a run
-# needs more headroom than this.
-DEFAULT_TIMEOUT_SECONDS = 900
+# can itself take 60-180s. The original 900s default (the same the old
+# pipeline needed for a single recon->scanner->exploit pass) turned out to
+# be too tight for a free-form run: live run b84499b0 (2026-08-01) needed
+# 3 real Recon_Suite calls (~3-4 min each, nmap's 180s primary-scan timeout
+# + a degraded -Pn retry) plus 2 Advanced_Evasion_Probe calls and got killed
+# mid-scan at 900s. Raised to 1200s (20 min). Override via
+# AGENT_TIMEOUT_SECONDS if a run needs more headroom than this.
+DEFAULT_TIMEOUT_SECONDS = 1200
 
 ANALYSIS_QUERY_TEMPLATE = (
     "CONSULT MEMORY FIRST using 'Query_Memory'. Then perform a comprehensive security "
