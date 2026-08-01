@@ -294,6 +294,104 @@ class TestAdvancedVulnProbeParameterFuzzingAndUrlCleaning:
         assert item_attempts == 1, f"expected exactly 1 'item' attempt (before confirmation), got {item_attempts}"
 
 
+class TestAdvancedVulnProbeEndpointDiscovery:
+    """specs/030, 2026-08-01: a bare-root probe that finds nothing used to
+    just report clean - even though PortSwigger's own path-traversal labs
+    put the real vulnerable parameter on a specific page (e.g.
+    "/image?filename=..."), not on "/" itself. Live runs (b84499b0,
+    5f71e301, others) called Advanced_Evasion_Probe against the bare root
+    3 times, found nothing every time, and the model never called
+    Crawl_Target first. These tests cover the discovery fallback that now
+    kicks in when the root probe comes up empty."""
+
+    @patch("app.tools.evasion.time.sleep")
+    def test_finds_vulnerability_at_discovered_endpoint_when_root_is_clean(self, _mock_sleep):
+        """The root page itself has nothing, but links to a page that
+        does - the fallback must discover and probe it."""
+        runner = _make_runner({
+            "-L --max-time 10 --connect-timeout 5 'http://example.com'": "/image?filename=cat.jpg\n/about",
+            "/image?filename=../../../../etc/passwd": "root:x:0:0:root:/root:/bin/bash",
+        }, default="<html>Not Found</html>")
+        memory = MagicMock()
+        svc = EvasionService(runner, memory)
+
+        result = svc.advanced_vuln_probe("http://example.com")
+
+        assert "Path Traversal Success" in result
+        memory.add_finding.assert_any_call(
+            "example.com", "evasion_probe", "vulnerability",
+            "Traversal: ../../../../etc/passwd",
+            "LFI/Path Traversal Confirmed (/etc/passwd read success)",
+        )
+        commands = [call[0][0] for call in runner.run.call_args_list if call[0][0].startswith("curl")]
+        assert any("/image?filename=" in cmd for cmd in commands), \
+            "should have probed the discovered /image?filename= endpoint, not just the root"
+
+    @patch("app.tools.evasion.time.sleep")
+    def test_reports_clean_when_root_and_discovered_endpoints_are_both_clean(self, _mock_sleep):
+        """No regression for a genuinely clean target: discovery runs (the
+        root probe found nothing), finds a link, probes it too, and still
+        correctly reports clean when nothing hits anywhere."""
+        runner = _make_runner({
+            "-L --max-time 10 --connect-timeout 5 'http://example.com'": "/about\n/contact",
+        }, default="<html>Not Found</html>")
+        memory = MagicMock()
+        svc = EvasionService(runner, memory)
+
+        result = svc.advanced_vuln_probe("http://example.com")
+
+        assert "No vulnerabilities detected" in result
+        memory.add_finding.assert_not_called()
+
+    @patch("app.tools.evasion.time.sleep")
+    def test_skips_discovery_when_url_already_has_a_query_parameter(self, _mock_sleep):
+        """A URL that already carries a query parameter is already a
+        specific-enough target (e.g. crawled or user-supplied) - discovery
+        must not fire even if that exact parameter doesn't hit, to avoid
+        multiplying request volume for no reason."""
+        runner = _make_runner({}, default="<html>Not Found</html>")
+        memory = MagicMock()
+        svc = EvasionService(runner, memory)
+
+        svc.advanced_vuln_probe("http://example.com/download?filename=welcome.txt")
+
+        commands = [call[0][0] for call in runner.run.call_args_list]
+        assert not any("-L --max-time 10" in cmd for cmd in commands), \
+            "discovery should not run when the URL already has a query parameter"
+
+    @patch("app.tools.evasion.time.sleep")
+    def test_skips_discovery_when_root_probe_already_found_something(self, _mock_sleep):
+        """No wasted discovery call when the root probe itself already
+        confirmed a hit."""
+        runner = _make_runner({
+            "etc/passwd": "root:x:0:0:root:/root:/bin/bash",
+        }, default="<html>Not Found</html>")
+        memory = MagicMock()
+        svc = EvasionService(runner, memory)
+
+        svc.advanced_vuln_probe("http://example.com")
+
+        commands = [call[0][0] for call in runner.run.call_args_list]
+        assert not any("-L --max-time 10" in cmd for cmd in commands), \
+            "discovery should not run when the root probe already found a vulnerability"
+
+    @patch("app.tools.evasion.time.sleep")
+    def test_discovery_ignores_javascript_and_mailto_links(self, _mock_sleep):
+        """Non-navigable hrefs must never be turned into probe URLs."""
+        runner = _make_runner({
+            "-L --max-time 10 --connect-timeout 5 'http://example.com'":
+                "javascript:void(0)\nmailto:admin@example.com\n#top",
+        }, default="<html>Not Found</html>")
+        memory = MagicMock()
+        svc = EvasionService(runner, memory)
+
+        result = svc.advanced_vuln_probe("http://example.com")
+
+        commands = [call[0][0] for call in runner.run.call_args_list if call[0][0].startswith("curl")]
+        assert not any("javascript:" in cmd or "mailto:" in cmd for cmd in commands)
+        assert "No vulnerabilities detected" in result
+
+
 class TestAdvancedVulnProbeScreenshotEvidence:
     """specs/029-vulnerability-screenshot-evidence: EvasionService's optional
     browser_manager argument. browser_manager=None (every test above) must

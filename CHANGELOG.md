@@ -2,6 +2,29 @@
 
 All notable changes to this project will be documented in this file.
 
+## Added: Advanced_Evasion_Probe falls back to endpoint discovery when a bare-root probe finds nothing (2026-08-01)
+
+Live runs (`b84499b0`, `5f71e301`, others) against the same PortSwigger path-traversal lab all
+reported "No vulnerabilities detected" even though the lab is a confirmed, genuine path
+traversal vulnerability (the page title says so). Root cause: `Advanced_Evasion_Probe` was
+always called with the bare root URL (`https://target/`) and only ever tested that literal
+path - PortSwigger's own path-traversal labs put the real vulnerable parameter on a specific
+page (e.g. `/image?filename=...`), not on `/` itself. The model never called `Crawl_Target`
+first to find it, and `Advanced_Evasion_Probe`'s screenshot-capture feature (which only fires on
+a *confirmed* hit) consequently never triggered either - the "headless browser doesn't work"
+symptom from earlier this session traces back to this same root cause.
+
+Fixed in `evasion.py`: the path-traversal section of `advanced_vuln_probe()` was refactored
+into a shared `_probe_traversal_target()` helper (identical hit-detection/memory-write/
+screenshot logic, now used by both the primary probe and the new fallback, instead of two
+copies that could drift). New `_discover_candidate_paths()` does a lightweight, single-page
+curl+grep link discovery (mirrors `CrawlerService.crawl_target`'s own technique, without an
+import dependency on it). When the root probe finds nothing AND the URL had no existing query
+parameter, up to 3 same-host discovered links (query-bearing links ranked first) are probed the
+same way before giving up. Gated tightly (root already found a hit, or the URL already carried
+a query parameter, both skip discovery entirely) so all 15 pre-existing tests pass unchanged; 5
+new tests cover the discovery path itself.
+
 ## Fixed: duplicate-call guard could be satisfied by hallucinating a different, unauthorized target (2026-08-01)
 
 Live run `b84499b0` against a PortSwigger path-traversal lab timed out after 900s. Root cause
