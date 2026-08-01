@@ -421,6 +421,18 @@ class TestAdvancedVulnProbeScreenshotEvidence:
 
     @patch("app.tools.evasion.time.sleep")
     def test_captures_screenshot_on_confirmed_path_traversal(self, _mock_sleep):
+        """2026-08-01: this test previously did NOT mock
+        VulnerabilityReportWriter, so its fake mocked evidence (a
+        `screenshot_path` that was never actually captured) got written by
+        the REAL report writer to a real `reports/vulnerability_report_*.json`
+        file on disk every time the test suite ran - confirmed live: a
+        genuine test-pollution artifact
+        (`vulnerability_report_example.com_20260801_190808.json`) was found
+        sitting in a real working copy's `reports/` folder, matching this
+        test's mock data exactly, and was mistaken for real target
+        evidence. Now mocked like
+        test_includes_report_path_when_screenshot_captured below already
+        does, so running this test never touches the filesystem."""
         runner = _make_runner({
             "etc/passwd": "root:x:0:0:root:/root:/bin/bash",
         }, default="<html>Not Found</html>")
@@ -436,7 +448,9 @@ class TestAdvancedVulnProbeScreenshotEvidence:
         }
         svc = EvasionService(runner, memory, browser_manager=browser_manager)
 
-        result = svc.advanced_vuln_probe("http://example.com")
+        with patch("app.tools.evasion.VulnerabilityReportWriter") as MockWriter:
+            MockWriter.return_value.save_report.return_value = "reports/vulnerability_report_example.com_TESTFAKE.json"
+            result = svc.advanced_vuln_probe("http://example.com")
 
         browser_manager.capture_vulnerability.assert_any_call(
             "path_traversal",
@@ -446,6 +460,7 @@ class TestAdvancedVulnProbeScreenshotEvidence:
         )
         assert "Screenshot saved" in result
         assert "path_traversal_example.com" in result
+        MockWriter.return_value.save_report.assert_called_once()
 
     @patch("app.tools.evasion.time.sleep")
     def test_includes_report_path_when_screenshot_captured(self, _mock_sleep):
