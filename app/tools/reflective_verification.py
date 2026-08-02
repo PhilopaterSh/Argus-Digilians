@@ -2,7 +2,7 @@ import re
 import json
 import urllib.parse
 from app.core.memory.memory_service import ArgusMemory
-from app.tools.utils import normalize_domain_for_memory, SENSITIVE_CONTENT_INDICATORS
+from app.tools.utils import normalize_domain_for_memory, find_sensitive_content_match
 
 MAX_HISTORY = 10
 LOOP_THRESHOLD = 3
@@ -136,11 +136,11 @@ class ReflectiveVerificationService:
                     return "ALERT: False Positive. Target returned status 200 OK, but Content-Length is 0."
 
         # 3. Analyze output for actual indicators of success (e.g. Web.config contents, /etc/passwd contents)
-        for indicator, summary in SENSITIVE_CONTENT_INDICATORS.items():
-            if indicator in raw_output:
-                # Document finding directly in memory
-                self.memory.add_finding(clean_target, "reflective_verification", "high_severity_vulnerability", command, f"VERIFIED: {summary}")
-                return f"SUCCESS: High-severity finding verified. {summary}"
+        summary = find_sensitive_content_match(raw_output)
+        if summary:
+            # Document finding directly in memory
+            self.memory.add_finding(clean_target, "reflective_verification", "high_severity_vulnerability", command, f"VERIFIED: {summary}")
+            return f"SUCCESS: High-severity finding verified. {summary}"
 
         return "Analysis: Command executed successfully. No immediate false positives or exploit signatures detected."
 

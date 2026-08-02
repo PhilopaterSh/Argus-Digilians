@@ -57,6 +57,52 @@ SENSITIVE_CONTENT_INDICATORS = {
     "uid=": "RCE Confirmed (id command executed successfully)",
 }
 
+# Live-discovered 2026-08-02: SENSITIVE_CONTENT_INDICATORS' exact-substring
+# match on "root:x:0:0:" only fires when /etc/passwd's password field is the
+# literal "x" (the common Linux default). Some images use "*" (no login) or
+# inline a legacy hashed value there instead, so a genuinely successful
+# traversal read against one of those targets produced a response an
+# operator could see was real /etc/passwd content, yet the exact-substring
+# check never matched it - a false negative, not a false positive, and the
+# opposite failure mode from the false-positive risk that motivated using
+# exact substrings over a loose match in the first place. This regex keeps
+# the same specificity (still requires the structurally-unique
+# "root:<single field>:0:0:" shape - not a generic loosening) while
+# tolerating that one field's real-world variation.
+SENSITIVE_CONTENT_PATTERNS = [
+    (re.compile(r"root:[^:\n]*:0:0:"), "LFI/Path Traversal Confirmed (/etc/passwd read success)"),
+]
+
+
+def find_sensitive_content_match(text: str) -> Optional[str]:
+    """Scan `text` against every known confirmed-vulnerability signature -
+    both `SENSITIVE_CONTENT_INDICATORS`' exact substrings and
+    `SENSITIVE_CONTENT_PATTERNS`' regex fallbacks - and return the first
+    match's human-readable summary.
+
+    Single source of truth (Constitution IX) for "is this response
+    confirmed evidence of a vulnerability" - `evasion.py`'s live probe and
+    `reflective_verification.py`'s passive check both call this instead of
+    each independently iterating `SENSITIVE_CONTENT_INDICATORS`, so a new
+    signature or pattern only needs adding here to cover both callers.
+
+    Args:
+        text (str): Raw HTTP response body (or command output) to scan.
+
+    Returns:
+        str or None: The matched indicator/pattern's summary string, or
+        `None` if nothing in `text` matched any known signature.
+    """
+    if not text:
+        return None
+    for indicator, summary in SENSITIVE_CONTENT_INDICATORS.items():
+        if indicator in text:
+            return summary
+    for pattern, summary in SENSITIVE_CONTENT_PATTERNS:
+        if pattern.search(text):
+            return summary
+    return None
+
 
 # ----------------------------------------------------------------------
 # Knowledge-graph (entities/relations) parsing helpers.

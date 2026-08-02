@@ -10,7 +10,11 @@ behavior here prevents that bug from silently reappearing.
 """
 import pytest
 
-from app.tools.utils import clean_ansi_codes, normalize_domain_for_memory
+from app.tools.utils import (
+    clean_ansi_codes,
+    find_sensitive_content_match,
+    normalize_domain_for_memory,
+)
 
 pytestmark = pytest.mark.unit
 
@@ -70,3 +74,59 @@ class TestCleanAnsiCodes:
     def test_empty_string(self):
         """Verify Empty string."""
         assert clean_ansi_codes("") == ""
+
+
+class TestFindSensitiveContentMatch:
+    def test_matches_exact_substring_indicator(self):
+        """The common case: /etc/passwd's password field is the literal
+        "x" default, so the exact-substring SENSITIVE_CONTENT_INDICATORS
+        entry matches directly - no regex fallback needed."""
+        body = "root:x:0:0:root:/root:/bin/bash\ndaemon:x:1:1:daemon:/usr/sbin:/usr/sbin/nologin"
+        summary = find_sensitive_content_match(body)
+        assert summary == "LFI/Path Traversal Confirmed (/etc/passwd read success)"
+
+    def test_matches_other_exact_indicators(self):
+        """Verify the other three SENSITIVE_CONTENT_INDICATORS entries
+        (unaffected by this change) still match via find_sensitive_content_match."""
+        assert find_sensitive_content_match("DB_PASSWORD=hunter2") == (
+            "Secret Disclosure Confirmed (Database configuration leaked)"
+        )
+        assert find_sensitive_content_match("<appSettings>...</appSettings>") == (
+            "Web Configuration Leak Confirmed (web.config read success)"
+        )
+        assert find_sensitive_content_match("uid=0(root) gid=0(root)") == (
+            "RCE Confirmed (id command executed successfully)"
+        )
+
+    def test_regex_fallback_catches_non_x_password_field(self):
+        """Live-discovered 2026-08-02: a real /etc/passwd read against a
+        target whose root entry uses "*" (no direct login) instead of the
+        literal "x" in the password field was genuinely successful evidence
+        but never matched the exact-substring "root:x:0:0:" indicator - a
+        false negative. The regex fallback must still catch it."""
+        body = "root:*:0:0:root:/root:/bin/bash\n"
+        summary = find_sensitive_content_match(body)
+        assert summary == "LFI/Path Traversal Confirmed (/etc/passwd read success)"
+
+    def test_regex_fallback_catches_empty_password_field(self):
+        """Another real variant: an empty password field (::0:0:)."""
+        body = "root::0:0:root:/root:/bin/bash\n"
+        assert find_sensitive_content_match(body) is not None
+
+    def test_does_not_match_unrelated_uid_gid_pair(self):
+        """The regex must stay scoped to root's specific UID:GID (0:0) -
+        an unrelated non-root passwd line (e.g. a regular user account)
+        must not false-positive just because it also has a colon-separated
+        shape."""
+        body = "alice:x:1001:1001:Alice:/home/alice:/bin/bash\n"
+        assert find_sensitive_content_match(body) is None
+
+    def test_returns_none_for_clean_response(self):
+        """A genuinely clean response (no signature, no /etc/passwd-shaped
+        content at all) must not match anything."""
+        assert find_sensitive_content_match("<html>404 Not Found</html>") is None
+
+    def test_returns_none_for_empty_or_none_text(self):
+        """Verify Returns none for empty or none text."""
+        assert find_sensitive_content_match("") is None
+        assert find_sensitive_content_match(None) is None

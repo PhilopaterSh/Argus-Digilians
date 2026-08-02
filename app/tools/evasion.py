@@ -4,7 +4,7 @@ import re
 import time
 from urllib.parse import parse_qsl, urlsplit, urlunsplit
 
-from app.tools.utils import normalize_domain_for_memory, SENSITIVE_CONTENT_INDICATORS
+from app.tools.utils import normalize_domain_for_memory, find_sensitive_content_match
 from app.tools.payloads import fetch_intruder_payloads
 from app.tools.vuln_report_writer import VulnerabilityReportWriter
 
@@ -199,32 +199,28 @@ class EvasionService:
                 probe_url = f"{base_url}?{param_name}={p}"
                 cmd = f"curl -s --max-time 15 --connect-timeout 5 '{probe_url}'"
                 body = self.stealth_run(cmd)
-                hit = False
-                for indicator, summary in SENSITIVE_CONTENT_INDICATORS.items():
-                    if indicator in body:
-                        confirmed_param = param_name
-                        results.append(f"[!] Path Traversal Success ({p}): {summary}")
-                        self.memory.add_finding(clean_target, "evasion_probe", "vulnerability", f"Traversal: {p}", summary)
-                        # specs/029: capture proof-of-concept evidence for this
-                        # confirmed hit. Best-effort only - a screenshot failure
-                        # (browser crash, Playwright not installed, etc.) must
-                        # never take down an already-confirmed, already-recorded
-                        # finding, so any exception here is caught and logged,
-                        # never re-raised.
-                        if self.browser_manager is not None:
-                            try:
-                                evidence = self.browser_manager.capture_vulnerability(
-                                    "path_traversal", probe_url, payload=p, note=summary,
-                                )
-                                screenshot_evidence.append(evidence)
-                                results.append(f"    [camera] Screenshot saved: {evidence['screenshot_path']}")
-                            except Exception as e:
-                                print(f"[!] [Argus-Core] Screenshot capture failed for payload '{p}': {e}")
-                                logger.warning("Screenshot capture failed for payload %s: %s", p, e)
-                                results.append(f"    [!] Screenshot capture FAILED ({p}): {e}")
-                        hit = True
-                        break
-                if hit:
+                summary = find_sensitive_content_match(body)
+                if summary:
+                    confirmed_param = param_name
+                    results.append(f"[!] Path Traversal Success ({p}): {summary}")
+                    self.memory.add_finding(clean_target, "evasion_probe", "vulnerability", f"Traversal: {p}", summary)
+                    # specs/029: capture proof-of-concept evidence for this
+                    # confirmed hit. Best-effort only - a screenshot failure
+                    # (browser crash, Playwright not installed, etc.) must
+                    # never take down an already-confirmed, already-recorded
+                    # finding, so any exception here is caught and logged,
+                    # never re-raised.
+                    if self.browser_manager is not None:
+                        try:
+                            evidence = self.browser_manager.capture_vulnerability(
+                                "path_traversal", probe_url, payload=p, note=summary,
+                            )
+                            screenshot_evidence.append(evidence)
+                            results.append(f"    [camera] Screenshot saved: {evidence['screenshot_path']}")
+                        except Exception as e:
+                            print(f"[!] [Argus-Core] Screenshot capture failed for payload '{p}': {e}")
+                            logger.warning("Screenshot capture failed for payload %s: %s", p, e)
+                            results.append(f"    [!] Screenshot capture FAILED ({p}): {e}")
                     break
         return results, screenshot_evidence, confirmed_param
 

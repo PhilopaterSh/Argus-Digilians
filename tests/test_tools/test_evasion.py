@@ -117,6 +117,29 @@ class TestAdvancedVulnProbe:
         )
 
     @patch("app.tools.evasion.time.sleep")
+    def test_detects_linux_path_traversal_with_non_x_password_field(self, _mock_sleep):
+        """Live-discovered 2026-08-02: SENSITIVE_CONTENT_INDICATORS' exact
+        substring "root:x:0:0:" only matches when /etc/passwd's password
+        field is the literal "x". A target whose root entry uses "*"
+        instead (a real, common variant) produced genuine traversal
+        evidence that the exact-substring check silently missed - fixed by
+        find_sensitive_content_match()'s regex fallback in app/tools/utils.py.
+
+        Args:
+            _mock_sleep: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
+        """
+        runner = _make_runner({
+            "etc/passwd": "root:*:0:0:root:/root:/bin/bash\ndaemon:x:1:1:...",
+        }, default="<html>Not Found</html>")
+        memory = MagicMock()
+        svc = EvasionService(runner, memory)
+
+        result = svc.advanced_vuln_probe("http://example.com")
+
+        assert "Path Traversal Success" in result
+        assert "/etc/passwd read success" in result
+
+    @patch("app.tools.evasion.time.sleep")
     def test_tries_linux_traversal_payloads_not_only_windows(self, _mock_sleep):
         """Verify Tries linux traversal payloads not only windows.
         
