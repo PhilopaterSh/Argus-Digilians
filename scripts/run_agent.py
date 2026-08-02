@@ -34,9 +34,13 @@ from app.tools.tool_registry import WSLBridgeTools
 # be too tight for a free-form run: live run b84499b0 (2026-08-01) needed
 # 3 real Recon_Suite calls (~3-4 min each, nmap's 180s primary-scan timeout
 # + a degraded -Pn retry) plus 2 Advanced_Evasion_Probe calls and got killed
-# mid-scan at 900s. Raised to 1200s (20 min). Override via
-# AGENT_TIMEOUT_SECONDS if a run needs more headroom than this.
-DEFAULT_TIMEOUT_SECONDS = 1200
+# mid-scan at 900s. Raised to 1200s (20 min) on 2026-08-01, then to 1800s
+# (30 min) on 2026-08-02 - still not enough headroom for a run that also
+# needs to reach the endpoint-discovery fallback + a live
+# Advanced_Evasion_Probe + capture_vulnerability() screenshot before the
+# clock runs out. Override via AGENT_TIMEOUT_SECONDS if a run needs more
+# headroom than this.
+DEFAULT_TIMEOUT_SECONDS = 1800
 
 ANALYSIS_QUERY_TEMPLATE = (
     "CONSULT MEMORY FIRST using 'Query_Memory'. Then perform a comprehensive security "
