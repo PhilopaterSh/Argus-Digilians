@@ -6,6 +6,7 @@ from app.core.rag import RAGEngine, RAGConfig
 from app.core.memory.memory_service import ArgusMemory
 from app.tools.utils import (
     to_bare_hostname,
+    normalize_domain_for_memory,
     parse_subdomains,
     parse_tech_block,
     clean_tech_string,
@@ -38,7 +39,75 @@ DETERMINISTIC_PHASES: List[str] = [
     "Query_Knowledge_Graph",
     "Run_Nikto",
     "Run_FFUF",
+    # Exploitation phases. Until these were added, no deterministic run ever
+    # attempted an exploit, so no finding was ever confirmed and
+    # specs/029's screenshot evidence could never trigger - the whole
+    # pipeline stopped at reconnaissance.
+    "Path_Traversal_Scan",
+    "Advanced_Evasion_Probe",
 ]
+
+# The "fast" profile: reach the target, learn its real endpoints, then try to
+# exploit them. It deliberately drops the slow recon phases (subdomain
+# enumeration, Nikto, FFUF) that can each add minutes without contributing to
+# a confirmed finding on a single-target run.
+#
+# Advanced_Evasion_Probe is what captures proof-of-concept screenshots
+# (specs/029), so it must be present in every profile or a scan produces a
+# report with no evidence attached.
+DETERMINISTIC_PHASES_FAST: List[str] = [
+    "Check_Reachability",
+    "Crawl_Target",
+    "Path_Traversal_Scan",
+    "Advanced_Evasion_Probe",
+]
+
+# Environment variable selecting between the two profiles above.
+SCAN_PROFILE_ENV = "ARGUS_SCAN_PROFILE"
+
+# Recon tools store *every* output line with data_type "vulnerability" -
+# server banners, open ports, "host tested", connect failures. Filtering on
+# data_type alone would fill a report with lines that confirm nothing, so
+# these sources are excluded from the deterministic report entirely. Real
+# exploitation tools (path_traversal, evasion_probe) are not listed here.
+_RECON_NOISE_TOOLS = frozenset({
+    "nikto", "recon", "recon_suite", "ffuf", "run_ffuf",
+    "crawler", "reachability", "subdomain_enumeration",
+})
+
+_TRAVERSAL_TERMS = ("traversal", "lfi", "file inclusion", "etc/passwd", "win.ini")
+_SQLI_TERMS = ("sqli", "sql injection")
+
+_TRAVERSAL_REMEDIATION = (
+    "Do not build filesystem paths from user input. Resolve the requested "
+    "path, then verify the canonical result is still inside the intended "
+    "directory before opening it, and serve files through an allow-list of "
+    "known identifiers rather than raw filenames."
+)
+_SQLI_REMEDIATION = (
+    "Use parameterized queries (prepared statements) for every database "
+    "call so user input is never concatenated into SQL. Apply least-"
+    "privilege database accounts and validate input against an allow-list."
+)
+_GENERIC_REMEDIATION = (
+    "Validate and sanitise the affected input, then re-test the endpoint to "
+    "confirm the behaviour no longer reproduces."
+)
+
+
+def _selected_deterministic_phases() -> List[str]:
+    """Return the phase list for the configured scan profile.
+
+    Fast is the default: a first run should reach a confirmed finding (and
+    therefore a screenshot) in a reasonable time. Set
+    `ARGUS_SCAN_PROFILE=full` for the complete recon-plus-exploit sweep.
+
+    Returns:
+        List[str]: `DETERMINISTIC_PHASES` when the profile is `"full"`,
+        otherwise `DETERMINISTIC_PHASES_FAST`.
+    """
+    profile = os.environ.get(SCAN_PROFILE_ENV, "fast").strip().lower()
+    return DETERMINISTIC_PHASES if profile == "full" else DETERMINISTIC_PHASES_FAST
 
 # Chaining limits - kept small since each extra call is a real network
 # operation (and each subdomain re-check multiplies runtime).
@@ -590,6 +659,159 @@ class ArgusBrain:
         """
         record_graph_edge(self.memory, entity, source_val, target_val, rel_type)
 
+    # ------------------------------------------------------------------
+    # Deterministic report
+    # ------------------------------------------------------------------
+    @staticmethod
+    def _classify_finding(text: str) -> tuple:
+        """Map a finding's text to `(issue, remediation)`.
+
+        Args:
+            text (str): The finding's summary and raw data, lowercased.
+
+        Returns:
+            tuple[str, str]: Human-readable issue title and its remediation.
+        """
+        if any(term in text for term in _TRAVERSAL_TERMS):
+            return "Path Traversal / Local File Inclusion", _TRAVERSAL_REMEDIATION
+        if any(term in text for term in _SQLI_TERMS):
+            return "SQL Injection", _SQLI_REMEDIATION
+        return "Confirmed vulnerability", _GENERIC_REMEDIATION
+
+    @staticmethod
+    def _extract_payload(raw_data: str) -> Optional[str]:
+        """Recover the payload string a finding was confirmed with.
+
+        Findings are stored as free text by the tool that found them, in two
+        shapes: a full request URL (`Traversal: https://x/image?filename=P`)
+        or a bare label plus payload (`SQLi: 1 OR 1=1`). The query-string
+        form is checked first, since splitting that one on ": " would return
+        the whole URL rather than the payload.
+
+        Args:
+            raw_data (str): The finding's stored raw text.
+
+        Returns:
+            str or None: The payload, or None when none can be recovered.
+        """
+        if not raw_data:
+            return None
+        if "?" in raw_data:
+            query = raw_data.split("?", 1)[1].strip()
+            last_param = query.split("&")[-1]
+            if "=" in last_param:
+                value = last_param.split("=", 1)[1].strip()
+                if value:
+                    return value
+        if ": " in raw_data:
+            return raw_data.split(": ", 1)[1].strip() or None
+        return raw_data.strip() or None
+
+    def _build_deterministic_report(
+        self,
+        target: str,
+        observations: Dict[str, str],
+        since: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Build the run's report directly from confirmed findings in memory.
+
+        No LLM is involved. The tools already decided what counts as
+        confirmed (content-based signature matches, see
+        `app/tools/utils.py::find_sensitive_content_match`); this method only
+        renders those decisions, so a weak local model can neither invent a
+        finding nor drop a real one.
+
+        Args:
+            target (str): The scan target, used as each finding's `target`.
+            observations (Dict[str, str]): `{phase_label: raw_observation}`
+                from `run_deterministic_recon`, summarised in
+                `attack_surface_stats`.
+            since (str, optional): ISO timestamp of this run's start. The
+                blackboard is persistent and holds earlier runs' findings, so
+                without this the report would replay old results.
+
+        Returns:
+            Dict[str, Any]: A `SecurityReport`-shaped dict with `summary`,
+            `attack_surface_stats`, `findings`, `overall_risk_score` and
+            `next_steps`.
+        """
+        if self.memory is None:
+            stored = []
+        else:
+            try:
+                # Findings are keyed by the same normalisation the tools used
+                # when writing them (evasion.py / path_traversal.py both call
+                # normalize_domain_for_memory), so the report must look them
+                # up under that exact key or it finds nothing.
+                stored = self.memory.get_detailed_findings(
+                    normalize_domain_for_memory(target), since=since
+                ) or []
+            except Exception as e:
+                print(f"[BRAIN] Could not read findings for the report: {e}")
+                stored = []
+
+        findings: List[Dict[str, Any]] = []
+        seen: set = set()
+
+        for entry in stored:
+            if (entry.get("data_type") or "").lower() != "vulnerability":
+                continue
+            tool_name = (entry.get("tool_name") or "").lower()
+            if tool_name in _RECON_NOISE_TOOLS:
+                continue
+
+            raw_data = entry.get("raw_data") or ""
+            summary = entry.get("summary") or ""
+            issue, remediation = self._classify_finding(f"{summary} {raw_data}".lower())
+            payload = self._extract_payload(raw_data)
+
+            key = (issue, payload)
+            if key in seen:
+                continue
+            seen.add(key)
+
+            findings.append({
+                "target": target,
+                "issue": issue,
+                "severity": "High",
+                "description": summary or raw_data,
+                "suggested_payload": payload,
+                "remediation": remediation,
+                "tool_source": entry.get("tool_name"),
+            })
+
+        if findings:
+            risk = 9
+            summary_text = (
+                f"{len(findings)} confirmed vulnerability finding(s) on {target}, "
+                f"each verified from real response content."
+            )
+            next_steps = [
+                "Review the proof-of-concept screenshots saved under artifacts/screenshots/.",
+                "Apply the remediation listed for each finding, then re-run the scan to confirm it no longer reproduces.",
+            ]
+        else:
+            risk = 1
+            summary_text = (
+                f"No vulnerabilities were confirmed on {target} in this run."
+            )
+            next_steps = [
+                "No vulnerabilities were confirmed. Re-run with ARGUS_SCAN_PROFILE=full "
+                "for the deeper recon sweep, or widen the scope to other endpoints.",
+            ]
+
+        return {
+            "target": target,
+            "scan_target": target,
+            "summary": summary_text,
+            "attack_surface_stats": (
+                f"{len(observations)} scan phase(s) completed against {target}."
+            ),
+            "findings": findings,
+            "overall_risk_score": risk,
+            "next_steps": next_steps,
+        }
+
     def _run_tool_safely(self, tool_name: str, target: str) -> str:
         """Call a registered tool by name, converting to a bare hostname
         for tools that need one and retrying once after a self-heal
@@ -755,8 +977,14 @@ class ArgusBrain:
             calls (subdomain reachability re-checks, a tech-based
             Smart_Web_Search, an Exploit_Suggester lookup) that actually ran.
         """
+        phases = _selected_deterministic_phases()
+        print(
+            f"[BRAIN] Scan profile: "
+            f"{os.environ.get(SCAN_PROFILE_ENV, 'fast')} ({len(phases)} phases)"
+        )
+
         observations: Dict[str, str] = {}
-        counter = {"i": 0, "total": len(DETERMINISTIC_PHASES)}
+        counter = {"i": 0, "total": len(phases)}
 
         # Seed the knowledge graph with the root domain up front. add_relation
         # only writes an edge when BOTH endpoints already exist as entities,
@@ -803,7 +1031,7 @@ class ArgusBrain:
                 except Exception as e:
                     print(f"[BRAIN] on_phase callback raised (ignored): {e}")
 
-        for tool_name in DETERMINISTIC_PHASES:
+        for tool_name in phases:
             print(f"[BRAIN] Running phase: {tool_name}({target})")
             observation = self._run_tool_safely(tool_name, target)
             emit(tool_name, observation)

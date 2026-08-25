@@ -43,7 +43,7 @@ ROLE_TOOL_PARTITIONS = {
     "exploiter": {
         "Run_Nikto", "Run_FFUF", "Exploit_Suggester", "Advanced_Evasion_Probe",
         "Run_Kali_Command", "Reflective_Pre_Verify", "System_Self_Heal",
-        "Capture_Vulnerability_Screenshot",
+        "Capture_Vulnerability_Screenshot", "Path_Traversal_Scan",
     },
 }
 _PLANNER_SUMMARIZER_TOOLS = {"Query_Memory", "Query_Knowledge_Graph"}
@@ -134,6 +134,11 @@ def build_argus_tools(bridge: WSLBridgeTools, role: Optional[str] = None) -> lis
             name="Advanced_Evasion_Probe",
             func=bridge.advanced_vuln_probe,
             description="Perform targeted, WAF-evasive probes for SQL injection and Path Traversal - actually attempts exploitation, not just suggestion.",
+        ),
+        Tool(
+            name="Path_Traversal_Scan",
+            func=bridge.run_traversal_scan,
+            description="Dedicated path-traversal scan: applies a full encoding matrix (raw, single/double URL-encoded, UTF-8 overlong, backslash, collapse) across every discovered parameter, and confirms hits from real response content.",
         ),
         Tool(
             name="Capture_Vulnerability_Screenshot",

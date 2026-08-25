@@ -216,7 +216,93 @@ class EvasionService:
                                 "path_traversal", probe_url, payload=p, note=summary,
                             )
                             screenshot_evidence.append(evidence)
-                            results.append(f"    [camera] Screenshot saved: {evidence['screenshot_path']}")
+                            # specs/029: one capture now writes a website
+                            # shot plus an evidence card, so list every file
+                            # rather than only the primary one. `.get` keeps
+                            # this working with a BrowserManager double that
+                            # returns the older single-screenshot dict.
+                            for shot in evidence.get("screenshots") or [evidence["screenshot_path"]]:
+                                results.append(f"    [camera] Screenshot saved: {shot}")
+                        except Exception as e:
+                            print(f"[!] [Argus-Core] Screenshot capture failed for payload '{p}': {e}")
+                            logger.warning("Screenshot capture failed for payload %s: %s", p, e)
+                            results.append(f"    [!] Screenshot capture FAILED ({p}): {e}")
+                    break
+        return results, screenshot_evidence, confirmed_param
+
+    def _probe_sqli_target(self, base_url, param_candidates, sqli_payloads, sqli_error_signatures, clean_target, confirmed_param):
+        """Run every SQLi payload against one candidate base URL.
+
+        Mirrors `_probe_traversal_target`'s parameter-fuzzing and
+        confirmed-param locking (2026-08-23 live-run finding). Two real,
+        confirmed gaps in the previous SQLi probe are fixed by sharing
+        this pattern:
+
+        1. It always hardcoded `?id={payload}` - real PortSwigger SQLi
+           labs almost never use `id` as the vulnerable parameter (e.g.
+           `?category=`, `?TrackingId=`, `?search=`). A live run against
+           "SQL injection vulnerability in WHERE clause allowing retrieval
+           of hidden data" (run 1099dc95, 2026-08-23) probed only `?id=`,
+           found nothing, and the agent then burned its whole budget
+           looping on Recon_Suite/Advanced_Evasion_Probe retries instead
+           of ever trying the lab's actual `?category=` parameter.
+        2. If the caller's URL already carried its own query string (e.g.
+           a crawled "?category=Gifts"), appending `?id=...` produced an
+           invalid double-`?` URL that could never succeed regardless of
+           whether the target was vulnerable.
+
+        It also adds proof-of-concept screenshot capture on a confirmed
+        hit, matching what `_probe_traversal_target` already does -
+        previously a confirmed SQLi never produced a screenshot at all,
+        even when the text finding was recorded correctly.
+
+        Args:
+            base_url (str): Clean base URL (no query string) to probe.
+            param_candidates (list[str]): Parameter names to try, in
+                order, when `confirmed_param` is not yet locked.
+            sqli_payloads (list[str]): Payloads to try, in order.
+            sqli_error_signatures (tuple[str, ...]): Lowercase substrings
+                that, if found in a response body, indicate a real DB
+                error page.
+            clean_target (str): Normalized domain for
+                `memory.add_finding()`.
+            confirmed_param (str or None): Already-locked parameter name
+                from a prior call, if any.
+
+        Returns:
+            tuple[list[str], list[dict], str or None]: `(result lines,
+            screenshot evidence dicts, the possibly-newly-locked
+            confirmed_param)`.
+        """
+        results = []
+        screenshot_evidence = []
+        for p in sqli_payloads:
+            for param_name in ([confirmed_param] if confirmed_param else param_candidates):
+                probe_url = f"{base_url}?{param_name}={p}"
+                cmd = f"curl -s --max-time 15 --connect-timeout 5 -w '\\n%{{http_code}}' '{probe_url}'"
+                res = self.stealth_run(cmd)
+                body, _, code = res.rpartition("\n")
+                reason = None
+                if code == "500":
+                    reason = "Server Error 500"
+                elif any(sig in body.lower() for sig in sqli_error_signatures):
+                    reason = "SQL error signature in response body"
+                if reason:
+                    confirmed_param = param_name
+                    results.append(f"[!] Potential SQLi (Evasion): {p} ({reason})")
+                    self.memory.add_finding(clean_target, "evasion_probe", "vulnerability", f"SQLi: {p}", "SQLi potential via WAF evasion")
+                    # 2026-08-23: capture proof-of-concept evidence for this
+                    # confirmed hit, exactly like _probe_traversal_target
+                    # does. Best-effort only - never take down an
+                    # already-confirmed, already-recorded finding.
+                    if self.browser_manager is not None:
+                        try:
+                            evidence = self.browser_manager.capture_vulnerability(
+                                "sql_injection", probe_url, payload=p, note="SQLi potential via WAF evasion",
+                            )
+                            screenshot_evidence.append(evidence)
+                            for shot in evidence.get("screenshots") or [evidence["screenshot_path"]]:
+                                results.append(f"    [camera] Screenshot saved: {shot}")
                         except Exception as e:
                             print(f"[!] [Argus-Core] Screenshot capture failed for payload '{p}': {e}")
                             logger.warning("Screenshot capture failed for payload %s: %s", p, e)
@@ -353,16 +439,21 @@ class EvasionService:
             p for p in fetch_intruder_payloads(self.runner, "sqli")
             if p not in sqli_payloads
         ]
-        for p in sqli_payloads:
-            cmd = f"curl -s --max-time 15 --connect-timeout 5 -w '\\n%{{http_code}}' '{url}?id={p}'"
-            res = self.stealth_run(cmd)
-            body, _, code = res.rpartition("\n")
-            if code == "500":
-                results.append(f"[!] Potential SQLi (Evasion): {p} (Server Error 500)")
-                self.memory.add_finding(clean_target, "evasion_probe", "vulnerability", f"SQLi: {p}", "SQLi potential via WAF evasion")
-            elif any(sig in body.lower() for sig in sqli_error_signatures):
-                results.append(f"[!] Potential SQLi (Evasion): {p} (SQL error signature in response body)")
-                self.memory.add_finding(clean_target, "evasion_probe", "vulnerability", f"SQLi: {p}", "SQLi potential via WAF evasion")
+        # 2026-08-23: reuse the same existing-parameter-name signal the
+        # traversal probe already relies on, instead of always guessing
+        # "id" - see _probe_sqli_target's docstring for the live-run
+        # finding this fixes. "id" stays first in the fallback list for
+        # exact backward compatibility with every pre-existing call site
+        # and test that passes a bare URL.
+        if existing_params:
+            sqli_param_candidates = [existing_params[-1][0]]
+        else:
+            sqli_param_candidates = ["id", "category", "search", "productId", "username"]
+        results_here, evidence_here, _sqli_confirmed_param = self._probe_sqli_target(
+            base_url, sqli_param_candidates, sqli_payloads, sqli_error_signatures, clean_target, None
+        )
+        results.extend(results_here)
+        screenshot_evidence.extend(evidence_here)
 
         if not results:
             return "No vulnerabilities detected with advanced evasion probes."
@@ -370,8 +461,15 @@ class EvasionService:
         report_line = ""
         if screenshot_evidence:
             try:
+                # Report the actual vulnerability type(s) captured rather
+                # than a hardcoded "path_traversal" - a run can now confirm
+                # SQLi, traversal, or both in the same probe.
+                evidence_types = {
+                    e.get("vulnerability_type") for e in screenshot_evidence if e.get("vulnerability_type")
+                }
+                report_type = next(iter(evidence_types)) if len(evidence_types) == 1 else "mixed"
                 report_path = VulnerabilityReportWriter().save_report(
-                    clean_target, "path_traversal", screenshot_evidence,
+                    clean_target, report_type, screenshot_evidence,
                 )
                 report_line = f"\n[report] Vulnerability evidence report: {report_path}"
             except Exception as e:

@@ -293,6 +293,51 @@ _LIVE_TEST_TOOL_BY_KEYWORD = {
     "sql injection": "Advanced_Evasion_Probe",
 }
 
+# 2026-08-23 live-run finding (agent runs 1099dc95, 765c243c, b4762be3 -
+# see _already_confirmed_exploitation()'s docstring): the set of tools this
+# directive can name, factored out so the call site can recognize "this
+# tool's OWN result already confirmed the finding" instead of blindly
+# re-issuing "call it now" against a result that already IS the live test.
+_LIVE_TEST_TOOLS = frozenset(_LIVE_TEST_TOOL_BY_KEYWORD.values())
+
+# The exact header evasion.py's advanced_vuln_probe() prints (see
+# app/tools/evasion.py) only when `results` is non-empty - i.e. only on a
+# genuine confirmed hit, never on "No vulnerabilities detected...". Reusing
+# this literal instead of re-deriving confirmation from keywords keeps the
+# two modules from silently drifting apart (Constitution IX).
+_EVASION_PROBE_SUCCESS_MARKER = "ADVANCED EVASION PROBE REPORT"
+
+
+def _already_confirmed_exploitation(tool_name: str, result_text: str) -> bool:
+    """True when `result_text` is a live-test tool's OWN confirmed-finding
+    output, not just a result that happens to mention a vulnerability-class
+    keyword.
+
+    Root cause of a real, observed failure mode (agent run b4762be3,
+    2026-08-23, a PortSwigger path-traversal lab): `Advanced_Evasion_Probe`
+    confirmed the vulnerability and captured real screenshots - but its own
+    success text still contains the words "Path Traversal", so the generic
+    keyword check in `_extract_vulnerability_hints` matched it too and
+    re-issued "Call Advanced_Evasion_Probe now" right after the tool had
+    just done exactly that. The model called it again (a second genuine,
+    also-successful confirmation), then a third time with no new signal to
+    stop, tripped the duplicate-call guard, and the run's fallback
+    "stopped early" Final Answer discarded both real, evidence-backed
+    confirmations entirely - the same failure independently reproduced
+    against a second target (run 1099dc95, an SQLi lab) that same day.
+
+    Args:
+        tool_name (str): The tool that produced `result_text`.
+        result_text (str): That tool's raw Observation text.
+
+    Returns:
+        bool: True only for a live-test tool (`_LIVE_TEST_TOOLS`) whose own
+        result carries `_EVASION_PROBE_SUCCESS_MARKER` - i.e. a genuine,
+        already-confirmed hit from that exact tool, not a keyword mention
+        in someone else's (e.g. Recon_Suite's) output.
+    """
+    return tool_name in _LIVE_TEST_TOOLS and _EVASION_PROBE_SUCCESS_MARKER in (result_text or "")
+
 
 def _live_test_directive(matched_keywords: list[str]) -> str:
     """Build an unambiguous "what to call next" instruction for a matched
@@ -975,6 +1020,26 @@ def _build_custom_workflow(
                         f"assessment - re-running against the same target may "
                         f"produce a different outcome."
                     )
+                    # 2026-08-23 (defense-in-depth for the same live-run
+                    # failure _already_confirmed_exploitation() targets at
+                    # the source): the loop guard above fires on ANY
+                    # repeated tool call, including one where an earlier
+                    # call in this same run already confirmed a real
+                    # vulnerability with evidence - the model just kept
+                    # circling back to it (or another tool) instead of
+                    # stopping. Without this, a genuinely confirmed,
+                    # screenshot-backed finding is silently swallowed by a
+                    # generic "partial assessment, no findings" message.
+                    # Surface it explicitly rather than losing it.
+                    if _EVASION_PROBE_SUCCESS_MARKER in state.get("blackboard_summary", ""):
+                        give_up_note += (
+                            f" IMPORTANT: despite this early stop, a vulnerability "
+                            f"WAS already confirmed earlier in this run with "
+                            f"real evidence captured - see the "
+                            f"Advanced_Evasion_Probe result above for the "
+                            f"confirmed payload and screenshot/report paths. "
+                            f"Do not treat this run as clean."
+                        )
                     return {
                         "tool_error": None,
                         "tool_name": None,
@@ -1195,16 +1260,30 @@ def _build_custom_workflow(
             # now names the specific live-test tool (see
             # _live_test_directive's docstring for why) instead of listing
             # Exploit_Suggester as an equivalent alternative.
-            vuln_hints = _extract_vulnerability_hints(str(result))
-            if vuln_hints:
-                matched_keywords = _matched_vuln_keywords(str(result))
+            if _already_confirmed_exploitation(name, str(result)):
                 hint_note = (
-                    f"Reflection: the {name} result above {' and '.join(vuln_hints)} - "
-                    f"this strongly suggests the target's likely vulnerability class. "
-                    f"{_live_test_directive(matched_keywords)}"
+                    f"Reflection: {name} above already CONFIRMED a real "
+                    f"vulnerability against the live target, with evidence "
+                    f"captured (see the screenshot/report paths in the "
+                    f"Observation above). Calling {name} - or any other "
+                    f"tool - again will not add anything; the finding is "
+                    f"already proven. Provide your Final Answer now, "
+                    f"citing exactly what was confirmed and the evidence "
+                    f"paths shown above."
                 )
                 extra_messages.append(HumanMessage(content=hint_note))
                 reflection_notes.append(hint_note)
+            else:
+                vuln_hints = _extract_vulnerability_hints(str(result))
+                if vuln_hints:
+                    matched_keywords = _matched_vuln_keywords(str(result))
+                    hint_note = (
+                        f"Reflection: the {name} result above {' and '.join(vuln_hints)} - "
+                        f"this strongly suggests the target's likely vulnerability class. "
+                        f"{_live_test_directive(matched_keywords)}"
+                    )
+                    extra_messages.append(HumanMessage(content=hint_note))
+                    reflection_notes.append(hint_note)
 
             # specs/019 FR-006 (Red-MIRROR Algorithm 4 Step 1): 3x
             # self-consistency majority vote, scoped to EXPLOITATION_TOOLS
@@ -1212,8 +1291,22 @@ def _build_custom_workflow(
             if enable_inter_reflection and name in EXPLOITATION_TOOLS:
                 verdict = _inter_reflect(llm, call_key, str(result))
                 if verdict is not None:
-                    verdict_text = "SUCCESS" if verdict else "INCONCLUSIVE/NO FINDING"
-                    reflect_msg = f"Reflection: majority-vote assessment of {name} result = {verdict_text}."
+                    if verdict:
+                        # 2026-08-23: a bare "= SUCCESS" note gave the model
+                        # no reason to stop - live runs (b4762be3, 1099dc95)
+                        # both treated it as encouragement to re-run the
+                        # same already-successful tool "to be sure",
+                        # eventually tripping the duplicate-call guard and
+                        # losing the confirmed finding. Say explicitly that
+                        # no further call is needed.
+                        reflect_msg = (
+                            f"Reflection: majority-vote assessment of {name} "
+                            f"result = SUCCESS. This finding is confirmed - "
+                            f"do not call {name} again for this target. "
+                            f"Provide your Final Answer now."
+                        )
+                    else:
+                        reflect_msg = f"Reflection: majority-vote assessment of {name} result = INCONCLUSIVE/NO FINDING."
                     extra_messages.append(HumanMessage(content=reflect_msg))
                     reflection_notes.append(reflect_msg)
 
@@ -1485,22 +1578,43 @@ def _build_multi_role_workflow(
             extra_messages.append(HumanMessage(content=nudge))
             reflection_notes.append(nudge)
 
-        vuln_hints = _extract_vulnerability_hints(str(result))
-        if vuln_hints:
-            matched_keywords = _matched_vuln_keywords(str(result))
+        if _already_confirmed_exploitation(name, str(result)):
             hint_note = (
-                f"Reflection: the {name} result above {' and '.join(vuln_hints)} - "
-                f"this strongly suggests the target's likely vulnerability class. "
-                f"{_live_test_directive(matched_keywords)}"
+                f"Reflection: {name} above already CONFIRMED a real "
+                f"vulnerability against the live target, with evidence "
+                f"captured (see the screenshot/report paths in the "
+                f"Observation above). Calling {name} - or any other "
+                f"tool - again will not add anything; the finding is "
+                f"already proven. Provide your Final Answer now, "
+                f"citing exactly what was confirmed and the evidence "
+                f"paths shown above."
             )
             extra_messages.append(HumanMessage(content=hint_note))
             reflection_notes.append(hint_note)
+        else:
+            vuln_hints = _extract_vulnerability_hints(str(result))
+            if vuln_hints:
+                matched_keywords = _matched_vuln_keywords(str(result))
+                hint_note = (
+                    f"Reflection: the {name} result above {' and '.join(vuln_hints)} - "
+                    f"this strongly suggests the target's likely vulnerability class. "
+                    f"{_live_test_directive(matched_keywords)}"
+                )
+                extra_messages.append(HumanMessage(content=hint_note))
+                reflection_notes.append(hint_note)
 
         if enable_inter_reflection and name in EXPLOITATION_TOOLS:
             verdict = _inter_reflect(llm, call_key, str(result))
             if verdict is not None:
-                verdict_text = "SUCCESS" if verdict else "INCONCLUSIVE/NO FINDING"
-                reflect_msg = f"Reflection: majority-vote assessment of {name} result = {verdict_text}."
+                if verdict:
+                    reflect_msg = (
+                        f"Reflection: majority-vote assessment of {name} "
+                        f"result = SUCCESS. This finding is confirmed - "
+                        f"do not call {name} again for this target. "
+                        f"Provide your Final Answer now."
+                    )
+                else:
+                    reflect_msg = f"Reflection: majority-vote assessment of {name} result = INCONCLUSIVE/NO FINDING."
                 extra_messages.append(HumanMessage(content=reflect_msg))
                 reflection_notes.append(reflect_msg)
 

@@ -22,14 +22,22 @@ EXPECTED_TOOL_NAMES = {
     # didn't; Secret_Scanner was in neither.
     "Crawl_Target", "Secret_Scanner", "Advanced_Evasion_Probe",
     "Reflective_Pre_Verify", "Task_Difficulty_Assessment",
+    # specs/029: on-demand evidence capture, registered in brain_tools.py
+    # when the screenshot feature landed but never added here - so this
+    # "canonical" list drifted again and both assertions below failed.
+    "Capture_Vulnerability_Screenshot",
+    # The dedicated PathTraversalScanner existed and was fully tested, but was
+    # registered nowhere - so no pipeline could call it.
+    "Path_Traversal_Scan",
 }
+EXPECTED_TOOL_COUNT = len(EXPECTED_TOOL_NAMES)
 
 
 def test_build_argus_tools_returns_expected_tool_set():
     """Verify Build argus tools returns expected tool set."""
     tools = build_argus_tools(MagicMock())
     assert {t.name for t in tools} == EXPECTED_TOOL_NAMES
-    assert len(tools) == 17
+    assert len(tools) == EXPECTED_TOOL_COUNT
 
 
 def test_each_tool_has_a_description_and_is_callable():
@@ -79,12 +87,17 @@ class TestRolePartitioning:
     """specs/020 (multi-agent role separation, feature-flagged off by
     default) - build_argus_tools(role=...) / partition_tools_by_role()."""
 
-    def test_role_none_returns_the_full_17_tool_set_unchanged(self):
+    def test_role_none_returns_the_full_tool_set_unchanged(self):
         """Every existing caller (specs/017-019) passes no role argument -
-        must be byte-for-byte the same as before this parameter existed."""
+        must be byte-for-byte the same as before this parameter existed.
+
+        The count lives in EXPECTED_TOOL_COUNT rather than being hardcoded:
+        this test used to say 17, and adding one tool made it fail for a
+        reason that had nothing to do with role partitioning.
+        """
         tools = build_argus_tools(MagicMock())
         assert {t.name for t in tools} == EXPECTED_TOOL_NAMES
-        assert len(tools) == 17
+        assert len(tools) == EXPECTED_TOOL_COUNT
 
     def test_collector_role_returns_only_recon_tools(self):
         """Verify Collector role returns only recon tools."""

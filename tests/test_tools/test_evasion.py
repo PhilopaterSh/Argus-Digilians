@@ -564,3 +564,149 @@ class TestAdvancedVulnProbeScreenshotEvidence:
 
         MockWriter.return_value.save_report.assert_not_called()
         assert "[report]" not in result
+
+
+class TestAdvancedVulnProbeSqliParameterFuzzing:
+    """2026-08-23 live-run finding (agent run 1099dc95, a PortSwigger "SQL
+    injection vulnerability in WHERE clause" lab): the SQLi probe always
+    hardcoded `?id={payload}`, so it silently tested the wrong parameter on
+    a lab that used `?category=` - the agent then burned its whole budget
+    on unrelated Recon_Suite/Advanced_Evasion_Probe retries because nothing
+    was ever confirmed. Mirrors the parameter-fuzzing coverage
+    TestAdvancedVulnProbeParameterFuzzingAndUrlCleaning already has for
+    traversal."""
+
+    @patch("app.tools.evasion.time.sleep")
+    def test_reuses_existing_query_parameter_name_for_sqli_instead_of_id(self, _mock_sleep):
+        """A URL that already carries a discovered query parameter (e.g.
+        crawled as "?category=Gifts") is a far stronger signal than the
+        "id" guess - the probe must reuse that exact parameter name."""
+        runner = _make_runner({
+            "category=1%20OR%201=1": "\n500",
+        }, default="<html>OK</html>\n200")
+        memory = MagicMock()
+        svc = EvasionService(runner, memory)
+
+        result = svc.advanced_vuln_probe("http://example.com/filter?category=Gifts")
+
+        commands = [call[0][0] for call in runner.run.call_args_list if call[0][0].startswith("curl")]
+        assert not any("?id=" in cmd for cmd in commands), \
+            "should reuse the discovered 'category' parameter, not fall back to 'id'"
+        assert any("?category=" in cmd for cmd in commands)
+        assert "Potential SQLi" in result
+
+    @patch("app.tools.evasion.time.sleep")
+    def test_falls_back_to_common_parameter_names_for_sqli_when_id_does_not_hit(self, _mock_sleep):
+        """A bare URL (no existing query string) must not stop at "id" -
+        it should keep trying other common real-world SQLi parameter
+        names (e.g. PortSwigger's own "category") until one hits."""
+        runner = _make_runner({
+            "category=1%20OR%201=1": "\n500",
+        }, default="<html>OK</html>\n200")
+        memory = MagicMock()
+        svc = EvasionService(runner, memory)
+
+        result = svc.advanced_vuln_probe("http://example.com/filter")
+
+        commands = [call[0][0] for call in runner.run.call_args_list if call[0][0].startswith("curl")]
+        assert any("?id=" in cmd for cmd in commands), "id should still be tried first"
+        assert any("?category=" in cmd for cmd in commands), "category should be tried as a fallback candidate"
+        assert "Potential SQLi" in result
+
+    @patch("app.tools.evasion.time.sleep")
+    def test_does_not_produce_a_double_question_mark_when_url_has_existing_query(self, _mock_sleep):
+        """2026-08-23: appending "?id=..." to a URL that already had its
+        own query string produced an invalid double-"?" URL that could
+        never succeed regardless of whether the target was vulnerable."""
+        runner = _make_runner({}, default="<html>OK</html>\n200")
+        memory = MagicMock()
+        svc = EvasionService(runner, memory)
+
+        svc.advanced_vuln_probe("http://example.com/filter?category=Gifts")
+
+        commands = [call[0][0] for call in runner.run.call_args_list if call[0][0].startswith("curl")]
+        assert commands, "no curl commands were issued"
+        for cmd in commands:
+            assert cmd.count("?") <= 1, f"double question mark in probe URL: {cmd}"
+
+
+class TestAdvancedVulnProbeSqliScreenshotEvidence:
+    """2026-08-23: a confirmed SQLi previously never triggered a
+    screenshot at all - only _probe_traversal_target had that wiring.
+    These mirror TestAdvancedVulnProbeScreenshotEvidence's traversal
+    coverage for the SQLi path."""
+
+    @patch("app.tools.evasion.time.sleep")
+    def test_captures_screenshot_on_confirmed_sqli(self, _mock_sleep):
+        runner = _make_runner({
+            "1%20OR%201=1": "\n500",
+        }, default="<html>OK</html>\n200")
+        memory = MagicMock()
+        browser_manager = MagicMock()
+        browser_manager.capture_vulnerability.return_value = {
+            "vulnerability_type": "sql_injection",
+            "url": "http://example.com?id=1%20OR%201=1",
+            "payload": "1%20OR%201=1",
+            "note": "SQLi potential via WAF evasion",
+            "screenshot_path": "artifacts/screenshots/sql_injection_example.com_20260823_000000_000000.png",
+            "timestamp": "2026-08-23T00:00:00",
+        }
+        svc = EvasionService(runner, memory, browser_manager=browser_manager)
+
+        with patch("app.tools.evasion.VulnerabilityReportWriter") as MockWriter:
+            MockWriter.return_value.save_report.return_value = "reports/vulnerability_report_example.com_TESTFAKE.json"
+            result = svc.advanced_vuln_probe("http://example.com")
+
+        browser_manager.capture_vulnerability.assert_any_call(
+            "sql_injection",
+            "http://example.com?id=1%20OR%201=1",
+            payload="1%20OR%201=1",
+            note="SQLi potential via WAF evasion",
+        )
+        assert "Screenshot saved" in result
+        assert "sql_injection_example.com" in result
+
+    @patch("app.tools.evasion.time.sleep")
+    def test_report_type_reflects_sqli_when_only_sqli_confirmed(self, _mock_sleep):
+        """The report-writer call must describe what was actually
+        captured, not a hardcoded "path_traversal" left over from before
+        SQLi had screenshot capture at all."""
+        runner = _make_runner({
+            "1%20OR%201=1": "\n500",
+        }, default="<html>OK</html>\n200")
+        memory = MagicMock()
+        browser_manager = MagicMock()
+        browser_manager.capture_vulnerability.return_value = {
+            "vulnerability_type": "sql_injection",
+            "url": "http://example.com?id=1%20OR%201=1",
+            "payload": "1%20OR%201=1",
+            "note": "note",
+            "screenshot_path": "artifacts/screenshots/shot.png",
+            "timestamp": "2026-08-23T00:00:00",
+        }
+        svc = EvasionService(runner, memory, browser_manager=browser_manager)
+
+        with patch("app.tools.evasion.VulnerabilityReportWriter") as MockWriter:
+            MockWriter.return_value.save_report.return_value = "reports/vulnerability_report_example.com_20260823_000000.json"
+            svc.advanced_vuln_probe("http://example.com")
+
+        args, _ = MockWriter.return_value.save_report.call_args
+        assert args[1] == "sql_injection"
+
+    @patch("app.tools.evasion.time.sleep")
+    def test_sqli_screenshot_capture_failure_does_not_break_finding(self, _mock_sleep):
+        """A browser/screenshot failure must never take down an
+        already-confirmed, already-recorded SQLi text finding."""
+        runner = _make_runner({
+            "1%20OR%201=1": "\n500",
+        }, default="<html>OK</html>\n200")
+        memory = MagicMock()
+        browser_manager = MagicMock()
+        browser_manager.capture_vulnerability.side_effect = RuntimeError("browser crashed")
+        svc = EvasionService(runner, memory, browser_manager=browser_manager)
+
+        result = svc.advanced_vuln_probe("http://example.com")
+
+        assert "Potential SQLi" in result
+        assert "Screenshot capture FAILED" in result
+        assert "browser crashed" in result

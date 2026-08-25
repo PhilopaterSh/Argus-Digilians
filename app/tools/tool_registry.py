@@ -23,6 +23,7 @@ from app.tools.web_search import SmartWebSearch
 from app.tools.reachability import ReachabilityService, JSONReportWriter
 from app.tools.crawler import CrawlerService
 from app.tools.evasion import EvasionService
+from app.tools.path_traversal import PathTraversalScanner
 from app.tools.browser_manager import BrowserManager
 from app.tools.self_heal import SelfHealingService
 from app.tools.reflective_verification import ReflectiveVerificationService
@@ -99,6 +100,9 @@ class WSLBridgeTools:
         # scripts/run_agent.py's run_brain_analysis() finally block).
         self.browser_manager = BrowserManager()
         self.evasion = EvasionService(self.runner, self.memory, browser_manager=self.browser_manager)
+        # The dedicated scanner existed and was fully tested, but was never
+        # registered here - so nothing in the pipeline could ever call it.
+        self.path_traversal = PathTraversalScanner(self.runner, self.memory)
         self.self_heal = SelfHealingService(self.runner)
         self.verifier = ReflectiveVerificationService(self.runner, self.memory)
 
@@ -138,6 +142,10 @@ class WSLBridgeTools:
         ))
         self.registry.register(_ToolServiceAdapter(
             "evasion", "Advanced vulnerability probe with evasion", self.evasion, "advanced_vuln_probe"
+        ))
+        self.registry.register(_ToolServiceAdapter(
+            "path_traversal", "Dedicated multi-encoding path traversal scan",
+            self.path_traversal, "run_traversal_scan"
         ))
         self.registry.register(_ToolServiceAdapter(
             "capture_screenshot", "Capture a screenshot of a URL as vulnerability evidence",
@@ -233,6 +241,10 @@ class WSLBridgeTools:
     def advanced_vuln_probe(self, url):
         """Delegate to EvasionService.advanced_vuln_probe()."""
         return self.evasion.advanced_vuln_probe(url)
+
+    def run_traversal_scan(self, url):
+        """Delegate to PathTraversalScanner.run_traversal_scan()."""
+        return self.path_traversal.run_traversal_scan(url)
 
     def capture_vulnerability_screenshot(self, url, vulnerability_type="path_traversal", payload=None, note=None):
         """On-demand evidence capture (specs/029) - separate from the

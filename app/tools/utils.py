@@ -55,6 +55,13 @@ SENSITIVE_CONTENT_INDICATORS = {
     "DB_PASSWORD": "Secret Disclosure Confirmed (Database configuration leaked)",
     "appSettings": "Web Configuration Leak Confirmed (web.config read success)",
     "uid=": "RCE Confirmed (id command executed successfully)",
+    # PathTraversalScanner._build_payloads() has always sent Windows payloads
+    # (`..\windows\win.ini`) alongside the Unix ones, but no signature here
+    # could ever confirm one - so a real traversal on a Windows target read
+    # the file and was still reported as "no vulnerabilities confirmed".
+    # This comment line is boilerplate at the top of a standard win.ini and
+    # is specific enough not to fire on ordinary page content.
+    "for 16-bit app support": "LFI/Path Traversal Confirmed (win.ini read success)",
 }
 
 # Live-discovered 2026-08-02: SENSITIVE_CONTENT_INDICATORS' exact-substring
@@ -71,6 +78,15 @@ SENSITIVE_CONTENT_INDICATORS = {
 # tolerating that one field's real-world variation.
 SENSITIVE_CONTENT_PATTERNS = [
     (re.compile(r"root:[^:\n]*:0:0:"), "LFI/Path Traversal Confirmed (/etc/passwd read success)"),
+    # Same reasoning applied to win.ini: a hardened or edited copy can drop
+    # the "; for 16-bit app support" comment above, but the section headers
+    # it exists to introduce are what actually make the file recognisable.
+    # Requiring two of them in sequence keeps this specific - a page that
+    # merely contains the word "fonts" will not match.
+    (
+        re.compile(r"\[fonts\][\s\S]{0,400}?\[extensions\]", re.IGNORECASE),
+        "LFI/Path Traversal Confirmed (win.ini read success)",
+    ),
 ]
 
 

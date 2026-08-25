@@ -79,6 +79,7 @@ paramiko
 torchvision
 networkx
 pyvis
+playwright
 "@
 
 # check_and_install.sh - Kali Linux tool installer (run inside WSL as root)
@@ -1231,6 +1232,26 @@ function Invoke-StepAiEnvironment {
         }
     } else {
         Write-OK "Libraries already satisfied (skip)."
+    }
+
+    # --- Playwright Chromium binary (specs/029) ---
+    # `pip install playwright` ships the Python bindings only; the browser
+    # itself is a separate ~190 MB download. Without it BrowserManager cannot
+    # launch and vulnerability proof-of-concept screenshots silently never
+    # appear. The CLI is idempotent (it no-ops when the matching build is
+    # already present), so this is safe to run on every install.
+    # Deliberately NON-fatal: every other part of Argus works without a
+    # browser, and BrowserManager already raises its own actionable error.
+    if ($DryRun) {
+        Write-Info "[DryRun] Would run: python -m playwright install chromium"
+    } else {
+        Write-Info "Ensuring Playwright Chromium is installed (screenshot evidence)..."
+        & $venvPython -m playwright install chromium
+        if ($LASTEXITCODE -eq 0) {
+            Write-OK "Playwright Chromium is available."
+        } else {
+            Write-Warn "Playwright Chromium install failed (exit $LASTEXITCODE). Argus will still run, but vulnerability screenshots will not be captured. Fix later with: Argus_venv\Scripts\python.exe -m playwright install chromium"
+        }
     }
 
     # --- model pull ---

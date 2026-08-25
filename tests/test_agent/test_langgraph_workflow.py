@@ -15,6 +15,7 @@ from typing import Any
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage
 from app.core.agent.react_workflow import (
+    _already_confirmed_exploitation,
     _ArgusAction,
     _bounded_observation,
     _build_custom_workflow,
@@ -181,6 +182,24 @@ def Run_Nikto(target: str) -> str:
     """Stands in for the real Run_Nikto tool - same name, so it's recognised
     by react_workflow.py's EXPLOITATION_TOOLS allowlist for Inter-reflection."""
     return "Nikto scan complete: found /admin/ directory listing enabled."
+
+
+def Advanced_Evasion_Probe(target: str) -> str:
+    """Stands in for the real Advanced_Evasion_Probe tool - same name, so
+    it's recognised by react_workflow.py's `_LIVE_TEST_TOOLS`/
+    `EXPLOITATION_TOOLS` allowlists. Returns the exact success shape
+    app/tools/evasion.py's advanced_vuln_probe() produces on a confirmed
+    hit (the "ADVANCED EVASION PROBE REPORT" header only appears when a
+    payload actually succeeded), so tests can exercise
+    `_already_confirmed_exploitation()` against realistic text instead of
+    a synthetic marker."""
+    return (
+        "--- [SHIELD] ADVANCED EVASION PROBE REPORT ---\n"
+        "[!] Path Traversal Success (../../../../etc/passwd): "
+        "LFI/Path Traversal Confirmed (/etc/passwd read success)\n"
+        "    [camera] Screenshot saved: artifacts/screenshots/"
+        "path_traversal_test.com_20260823_000000_000000_response.png"
+    )
 
 
 def mock_flag_tool(target: str) -> str:
@@ -839,6 +858,120 @@ def test_live_test_directive_falls_back_for_uncovered_vuln_class():
     assert "Run_Kali_Command" in directive
     assert "Advanced_Evasion_Probe" not in directive
     print("  [PASS] test_live_test_directive_falls_back_for_uncovered_vuln_class")
+
+
+def test_already_confirmed_exploitation_detects_evasion_probe_success_marker():
+    """Unit coverage for the helper directly: True only for a live-test
+    tool (Advanced_Evasion_Probe) whose OWN result carries the evasion
+    probe's real success header - not for an unrelated tool, and not for
+    a clean/no-finding result from the same tool."""
+    success_text = Advanced_Evasion_Probe("https://test.com")
+    assert _already_confirmed_exploitation("Advanced_Evasion_Probe", success_text) is True
+    assert _already_confirmed_exploitation("Recon_Suite", success_text) is False, \
+        "the marker in someone else's tool result must not count"
+    assert _already_confirmed_exploitation("Advanced_Evasion_Probe", "No vulnerabilities detected with advanced evasion probes.") is False
+    assert _already_confirmed_exploitation("Advanced_Evasion_Probe", "") is False
+    assert _already_confirmed_exploitation("Advanced_Evasion_Probe", None) is False
+    print("  [PASS] test_already_confirmed_exploitation_detects_evasion_probe_success_marker")
+
+
+def test_confirmed_exploitation_suppresses_call_it_again_directive():
+    """2026-08-23 live-run finding (agent run b4762be3, a PortSwigger
+    path-traversal lab): Advanced_Evasion_Probe genuinely confirmed the
+    vulnerability and captured real screenshots - but its own success text
+    still contains the words "Path Traversal", so the generic keyword
+    check re-issued "Call Advanced_Evasion_Probe now" right after the tool
+    had just done exactly that, sending the model back to redundantly
+    re-run it. This locks in the fix: a confirmed result from the tool
+    itself must get a "stop, Final Answer now" nudge instead of the
+    generic "go call it" directive."""
+    llm = MockLLM([
+        "Thought: probe.\nAction: Advanced_Evasion_Probe\nAction Input: https://test.com",
+        "Thought: done.\nFinal Answer: confirmed path traversal, evidence captured.",
+        "Thought: confirmed, no further scanning applies.\nFinal Answer: confirmed path traversal, evidence captured (again).",
+    ])
+    graph = _build_custom_workflow(llm, [Advanced_Evasion_Probe], enable_inter_reflection=False)
+    result = graph.invoke(dict(BASE_STATE))
+
+    already_confirmed_msgs = [m for m in result["messages"] if "already CONFIRMED a real" in str(m.content)]
+    assert len(already_confirmed_msgs) == 1
+    assert "Advanced_Evasion_Probe" in already_confirmed_msgs[0].content
+    assert "Final Answer now" in already_confirmed_msgs[0].content
+
+    # The old, misleading "Call Advanced_Evasion_Probe now against the real
+    # target" directive must NOT appear for the tool's own confirmed result.
+    call_it_now_msgs = [m for m in result["messages"] if "the only tool that actually sends a live request" in str(m.content)]
+    assert len(call_it_now_msgs) == 0
+    print("  [PASS] test_confirmed_exploitation_suppresses_call_it_again_directive")
+
+
+def test_majority_vote_success_tells_model_to_stop_not_just_success():
+    """A bare "= SUCCESS" majority-vote note gave the model no reason to
+    stop - live runs (b4762be3, 1099dc95) both treated it as encouragement
+    to re-run the same already-successful tool "to be sure". The note must
+    now explicitly say not to call the tool again and to answer now."""
+    llm = ReflectionAwareMockLLM(
+        react_responses=[
+            "Thought: probe.\nAction: Advanced_Evasion_Probe\nAction Input: https://test.com",
+            "Thought: done.\nFinal Answer: confirmed.",
+            "Thought: confirmed, no further scanning applies.\nFinal Answer: confirmed (again).",
+        ],
+        vote_responses=["yes", "yes", "yes"],
+    )
+    graph = _build_custom_workflow(llm, [Advanced_Evasion_Probe], enable_inter_reflection=True)
+    result = graph.invoke(dict(BASE_STATE))
+
+    reflect_msgs = [m for m in result["messages"] if "majority-vote assessment" in str(m.content)]
+    assert len(reflect_msgs) == 1
+    assert "SUCCESS" in reflect_msgs[0].content
+    assert "do not call Advanced_Evasion_Probe again" in reflect_msgs[0].content
+    assert "Final Answer now" in reflect_msgs[0].content
+    print("  [PASS] test_majority_vote_success_tells_model_to_stop_not_just_success")
+
+
+def test_give_up_note_surfaces_a_finding_confirmed_earlier_in_the_run():
+    """Defense-in-depth for the same failure mode: even if the model
+    ignores the "stop, Final Answer now" nudges above and keeps circling
+    back (or bounces between already-tried tools) until the loop guard
+    gives up, a genuinely confirmed, screenshot-backed finding from
+    earlier in the run must not be silently swallowed by the generic
+    "partial assessment, no findings" message."""
+    llm = MockLLM([
+        "Thought: probe.\nAction: Advanced_Evasion_Probe\nAction Input: https://test.com",
+        "Thought: probe again to be safe.\nAction: Advanced_Evasion_Probe\nAction Input: https://test.com",
+        "Thought: probe a third time.\nAction: Advanced_Evasion_Probe\nAction Input: https://test.com",
+        "Thought: probe a fourth time.\nAction: Advanced_Evasion_Probe\nAction Input: https://test.com",
+        "Thought: probe a fifth time.\nAction: Advanced_Evasion_Probe\nAction Input: https://test.com",
+    ])
+    graph = _build_custom_workflow(llm, [Advanced_Evasion_Probe], enable_inter_reflection=False)
+    result = graph.invoke(dict(BASE_STATE))
+
+    assert result["phase"] == "done"
+    give_up_msgs = [m for m in result["messages"] if "stopped early after being blocked" in str(m.content)]
+    assert len(give_up_msgs) == 1
+    assert "IMPORTANT: despite this early stop, a vulnerability WAS already confirmed" in give_up_msgs[0].content
+    print("  [PASS] test_give_up_note_surfaces_a_finding_confirmed_earlier_in_the_run")
+
+
+def test_give_up_note_stays_generic_when_nothing_was_ever_confirmed():
+    """No regression: when the loop guard fires with no confirmed finding
+    anywhere in the run (the pre-existing scenario), the give-up message
+    must stay exactly the original generic text, with no fabricated
+    "vulnerability confirmed" claim added."""
+    llm = MockLLM([
+        "Thought: probe.\nAction: mock_probe\nAction Input: https://test.com",
+        "Thought: probe again to be safe.\nAction: mock_probe\nAction Input: https://test.com",
+        "Thought: probe a third time.\nAction: mock_probe\nAction Input: https://test.com",
+        "Thought: probe a fourth time.\nAction: mock_probe\nAction Input: https://test.com",
+        "Thought: probe a fifth time.\nAction: mock_probe\nAction Input: https://test.com",
+    ])
+    graph = _build_custom_workflow(llm, [mock_probe], enable_inter_reflection=False)
+    result = graph.invoke(dict(BASE_STATE))
+
+    give_up_msgs = [m for m in result["messages"] if "stopped early after being blocked" in str(m.content)]
+    assert len(give_up_msgs) == 1
+    assert "IMPORTANT" not in give_up_msgs[0].content
+    print("  [PASS] test_give_up_note_stays_generic_when_nothing_was_ever_confirmed")
 
 
 def test_final_answer_without_phase56_tool_gets_nudged_once_then_accepted():
