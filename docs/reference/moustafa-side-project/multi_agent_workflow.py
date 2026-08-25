@@ -1,4 +1,4 @@
-﻿import os
+import os
 import time
 import json
 import requests
@@ -16,10 +16,10 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 
-# ╪¬╪¡┘à┘è┘ä ╪º┘ä╪Ñ╪╣╪»╪º╪»╪º╪¬ ┘à┘å ┘à┘ä┘ü .env
+# تحميل الإعدادات من ملف .env
 load_dotenv(os.path.join("C:\\AI_Agents_Project", ".env"))
 
-# 1. ╪º┘ä╪Ñ╪╣╪»╪º╪»╪º╪¬
+# 1. الإعدادات
 PRIMARY_MODEL = "deepseek/deepseek-chat"
 BACKUP_MODEL = "meta-llama/llama-3.3-70b-instruct:free"
 FALLBACK_MODEL = "google/gemini-flash-1.5-8b"
@@ -29,20 +29,20 @@ KNOWLEDGE_BASE_DIR = os.path.join(BASE_DIR, "knowledge_base")
 REPORTS_DIR = os.path.join(BASE_DIR, "reports")
 MEMORY_FILE = os.path.join(BASE_DIR, "ai_memory.json")
 
-# ╪¼┘à╪╣ ┘â╪º┘ü╪⌐ ┘à┘ü╪º╪¬┘è╪¡ API ╪º┘ä┘à╪¬╪º╪¡╪⌐
+# جمع كافة مفاتيح API المتاحة
 api_keys = [os.getenv(f"OPENROUTER_API_KEY_{i}") for i in range(1, 11) if os.getenv(f"OPENROUTER_API_KEY_{i}")]
 if not api_keys:
     single_key = os.getenv("OPENROUTER_API_KEY")
     if single_key:
         api_keys = [single_key]
 
-print(f"[ΓÅ│] ╪¬┘à ╪º┘ä╪╣╪½┘ê╪▒ ╪╣┘ä┘ë {len(api_keys)} ┘à┘ü╪º╪¬┘è╪¡ API. ╪¼╪º╪▒┘è ╪┤╪¡┘å ╪º┘ä┘å╪╕╪º┘à ╪º┘ä╪º╪│╪¬╪«╪¿╪º╪▒╪º╪¬┘è ╪º┘ä┘à╪¬┘â╪º┘à┘ä...")
+print(f"[⏳] تم العثور على {len(api_keys)} مفاتيح API. جاري شحن النظام الاستخباراتي المتكامل...")
 hf_embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
 
 class ProMultiAgentSystem:
     def __init__(self):
         if not api_keys:
-            raise ValueError("[!] ╪«╪╖╪ú: ┘ä┘à ┘è╪¬┘à ╪º┘ä╪╣╪½┘ê╪▒ ╪╣┘ä┘ë ╪ú┘è ┘à┘ü╪º╪¬┘è╪¡ API.")
+            raise ValueError("[!] خطأ: لم يتم العثور على أي مفاتيح API.")
         
         self.key_cycle = itertools.cycle(api_keys)
         self.current_key = next(self.key_cycle)
@@ -65,7 +65,7 @@ class ProMultiAgentSystem:
 
     def _rotate_key(self):
         self.current_key = next(self.key_cycle)
-        print(f"[≡ƒöä] ╪¬┘à ╪¬╪¿╪»┘è┘ä ┘à┘ü╪¬╪º╪¡ API ┘ä╪¬┘ê╪▓┘è╪╣ ╪º┘ä╪╢╪║╪╖...")
+        print(f"[🔄] تم تبديل مفتاح API لتوزيع الضغط...")
 
     def _init_llms(self, model_name):
         self.current_model = model_name
@@ -91,9 +91,9 @@ class ProMultiAgentSystem:
             json.dump(self.memory, f, ensure_ascii=False, indent=4)
 
     def _get_past_context(self):
-        if not self.memory.get("sessions"): return "┘ä╪º ╪¬┘ê╪¼╪» ╪«╪¿╪▒╪º╪¬ ╪│╪º╪¿┘é╪⌐."
+        if not self.memory.get("sessions"): return "لا توجد خبرات سابقة."
         last_sessions = self.memory["sessions"][-3:]
-        context = "\n".join([f"- ┘à┘ç┘à╪⌐: {s.get('task','')}\n  ┘à┘ä╪«╪╡: {s.get('summary','')}" for s in last_sessions])
+        context = "\n".join([f"- مهمة: {s.get('task','')}\n  ملخص: {s.get('summary','')}" for s in last_sessions])
         return context
 
     def robust_invoke(self, agent_type, prompt_template, inputs):
@@ -108,23 +108,23 @@ class ProMultiAgentSystem:
                 except Exception as e:
                     error_str = str(e).lower()
                     if any(code in error_str for code in ["429", "402", "rate_limit", "insufficient_quota", "credit"]):
-                        print(f"[ΓÅ│] ╪╢╪║╪╖ ╪ú┘ê ╪º┘å╪¬┘ç╪º╪í ╪▒╪╡┘è╪» ({model}). ╪¼╪º╪▒┘è ╪¬╪¿╪»┘è┘ä ╪º┘ä┘à┘ü╪¬╪º╪¡...")
+                        print(f"[⏳] ضغط أو انتهاء رصيد ({model}). جاري تبديل المفتاح...")
                         self._rotate_key()
                         self._init_llms(model)
                         time.sleep(5)
                     elif "404" in error_str:
-                        print(f"[ΓÜá∩╕Å] ╪º┘ä┘å┘à┘ê╪░╪¼ {model} ╪║┘è╪▒ ┘à╪¬╪º╪¡. ╪¬╪¼╪▒╪¿╪⌐ ╪º┘ä╪¿╪»┘è┘ä...")
+                        print(f"[⚠️] النموذج {model} غير متاح. تجربة البديل...")
                         break
                     else:
-                        print(f"[ΓÜá∩╕Å] ╪«╪╖╪ú: {e}. ┘à╪¡╪º┘ê┘ä╪⌐ ╪¬╪¿╪»┘è┘ä ╪º┘ä┘à┘ü╪¬╪º╪¡...")
+                        print(f"[⚠️] خطأ: {e}. محاولة تبديل المفتاح...")
                         self._rotate_key()
                         self._init_llms(model)
                         time.sleep(2)
-            print(f"[≡ƒöä] ╪º┘ä╪º┘å╪¬┘é╪º┘ä ┘ä┘ä┘å┘à┘ê╪░╪¼ ╪º┘ä╪¬╪º┘ä┘è...")
-        return "ΓÜá∩╕Å ┘ü╪┤┘ä╪¬ ╪º┘ä┘à╪¡╪º┘ê┘ä╪º╪¬ ╪º┘ä╪│╪¡╪º╪¿┘è╪⌐. ┘è╪▒╪¼┘ë ╪º┘ä┘à╪¡╪º┘ê┘ä╪⌐ ┘ä╪º╪¡┘é╪º┘ï."
+            print(f"[🔄] الانتقال للنموذج التالي...")
+        return "⚠️ فشلت المحاولات السحابية. يرجى المحاولة لاحقاً."
 
     def local_rag_agent(self, task):
-        print(f"\n[1/7] ≡ƒôÜ Local Agent (RAG): ╪º┘ä╪¿╪¡╪½ ╪º┘ä┘à╪¡┘ä┘è...")
+        print(f"\n[1/7] 📚 Local Agent (RAG): البحث المحلي...")
         try:
             loaders = [
                 DirectoryLoader(KNOWLEDGE_BASE_DIR, glob="**/*.txt", loader_cls=TextLoader),
@@ -133,17 +133,17 @@ class ProMultiAgentSystem:
             ]
             documents = []
             for loader in loaders: documents.extend(loader.load())
-            if not documents: return "┘ä╪º ╪¬┘ê╪¼╪» ┘à┘ä┘ü╪º╪¬ ┘à╪¡┘ä┘è╪⌐."
+            if not documents: return "لا توجد ملفات محلية."
             text_splitter = RecursiveCharacterTextSplitter(chunk_size=600, chunk_overlap=100)
             splits = text_splitter.split_documents(documents)
             vectorstore = FAISS.from_documents(splits, hf_embeddings)
             results = vectorstore.similarity_search(task, k=3)
             return "\n".join([doc.page_content for doc in results])
         except Exception as e:
-            return f"╪«╪╖╪ú RAG: {e}"
+            return f"خطأ RAG: {e}"
 
     def researcher_agent(self, task):
-        print(f"[2/7] ≡ƒöì Researcher Agent: ╪º╪│╪¬┘é╪╡╪º╪í ╪º┘ä┘ê┘è╪¿ ┘ê╪º┘ä┘à╪╕┘ä┘à...")
+        print(f"[2/7] 🔍 Researcher Agent: استقصاء الويب والمظلم...")
         from langchain_community.tools import DuckDuckGoSearchRun
         from langchain_community.utilities import DuckDuckGoSearchAPIWrapper
         wrapper = DuckDuckGoSearchAPIWrapper(max_results=10)
@@ -157,7 +157,7 @@ class ProMultiAgentSystem:
             return f"Researcher Error: {e}"
 
     def darkweb_researcher_agent(self, task):
-        print(f"[≡ƒò╡∩╕Å] DarkWeb Agent: ╪¼╪º╪▒┘è ╪º┘ä╪¿╪¡╪½ ┘ü┘è ╪º┘ä┘ü╪╢╪º╪í ╪º┘ä┘à╪╕┘ä┘à...")
+        print(f"[🕵️] DarkWeb Agent: جاري البحث في الفضاء المظلم...")
         url = f"https://ahmia.fi/search/?q={task}"
         try:
             headers = {'User-Agent': 'Mozilla/5.0'}
@@ -171,67 +171,67 @@ class ProMultiAgentSystem:
                     snippet = res.find('p').text if res.find('p') else "No Snippet"
                     dark_info.append(f"Link: {link}\nSnippet: {snippet}")
                     if ".onion" in link: self.state["sources"].append(f"Dark Web Link: {link}")
-                return "\n\n".join(dark_info) if dark_info else "┘ä┘à ┘è╪¬┘à ╪º┘ä╪╣╪½┘ê╪▒ ╪╣┘ä┘ë ┘å╪¬╪º╪ª╪¼ ┘à╪╕┘ä┘à╪⌐."
-            return "┘ü╪┤┘ä ╪º┘ä┘ê╪╡┘ê┘ä ┘ä┘à╪¡╪▒┘â ╪º┘ä╪¿╪¡╪½ ╪º┘ä┘à╪╕┘ä┘à."
+                return "\n\n".join(dark_info) if dark_info else "لم يتم العثور على نتائج مظلمة."
+            return "فشل الوصول لمحرك البحث المظلم."
         except Exception as e:
-            return f"╪«╪╖╪ú DarkWeb: {e}"
+            return f"خطأ DarkWeb: {e}"
 
     def analyst_agent(self, raw_data):
-        print(f"[3/7] ≡ƒºá Analyst Agent: ╪¬╪¡┘ä┘è┘ä ╪º┘ä╪¿┘è╪º┘å╪º╪¬ ╪º┘ä┘à╪│╪¬╪«╪▒╪¼╪⌐...")
-        prompt = ChatPromptTemplate.from_template("""╪ú┘å╪¬ ┘à╪¡┘ä┘ä ╪¿┘è╪º┘å╪º╪¬ ╪º╪│╪¬╪«╪¿╪º╪▒╪º╪¬┘è. ┘é╪»┘à ╪¬╪¡┘ä┘è┘ä╪º┘ï ╪┤╪º┘à┘ä╪º┘ï ┘ä┘ä╪¿┘è╪º┘å╪º╪¬ ╪º┘ä╪¬╪º┘ä┘è╪⌐:
-        ╪│┘è╪º┘é ╪│╪º╪¿┘é: {past_context}
-        ╪º┘ä┘à┘ç┘à╪⌐: {task}
-        ╪º┘ä╪¿┘è╪º┘å╪º╪¬ ╪º┘ä╪«╪º┘à: {raw_data}
-        ╪º┘ä┘à╪╖┘ä┘ê╪¿: ╪º╪│╪¬╪«┘ä╪╡ ╪º┘ä╪¡┘é╪º╪ª┘é ┘ê╪º┘ä╪¬┘ç╪»┘è╪»╪º╪¬ ┘à╪╣ ╪º┘ä╪¡┘ü╪º╪╕ ╪╣┘ä┘ë ╪º┘ä╪▒┘ê╪º╪¿╪╖ ╪¡┘é┘è┘é┘è╪⌐ ┘ê┘â┘à╪º ┘ç┘è.""")
+        print(f"[3/7] 🧠 Analyst Agent: تحليل البيانات المستخرجة...")
+        prompt = ChatPromptTemplate.from_template("""أنت محلل بيانات استخباراتي. قدم تحليلاً شاملاً للبيانات التالية:
+        سياق سابق: {past_context}
+        المهمة: {task}
+        البيانات الخام: {raw_data}
+        المطلوب: استخلص الحقائق والتهديدات مع الحفاظ على الروابط حقيقية وكما هي.""")
         self.state["analysis"] = self.robust_invoke("smart", prompt, {
             "task": self.state["task"], "raw_data": raw_data, "past_context": self.state["past_context"]
         })
 
     def debater_agent(self, analysis):
-        print(f"[4/7] ΓÜû∩╕Å Debater Agent (Adversarial): ╪¬╪¡╪»┘è ╪º┘ä┘à╪╣┘ä┘ê┘à╪º╪¬...")
-        prompt = ChatPromptTemplate.from_template("""╪ú┘å╪¬ "┘à╪¡╪º┘à┘è ╪º┘ä╪┤┘è╪╖╪º┘å" ┘ê╪«╪¿┘è╪▒ ┘ü┘è ┘â╪┤┘ü ╪º┘ä╪¬╪╢┘ä┘è┘ä. 
-        ┘à┘ç┘à╪¬┘â ┘ç┘è ╪º┘ä╪¬╪┤┘â┘è┘â ┘ü┘è ╪º┘ä╪¬╪¡┘ä┘è┘ä ╪º┘ä╪¬╪º┘ä┘è╪î ╪«╪º╪╡╪⌐ ╪º┘ä┘à╪╣┘ä┘ê┘à╪º╪¬ ╪º┘ä┘à╪│╪¬┘à╪»╪⌐ ┘à┘å ╪º┘ä┘ê┘è╪¿ ╪º┘ä┘à╪╕┘ä┘à:
-        ╪º┘ä╪¬╪¡┘ä┘è┘ä: {analysis}
-        ╪º╪¿╪¡╪½ ╪╣┘å ╪º┘ä┘ü╪«╪º╪«╪î ╪º┘ä╪¬╪╢┘ä┘è┘ä╪î ┘ê╪º┘ä╪º╪»╪╣╪º╪í╪º╪¬ ╪║┘è╪▒ ╪º┘ä┘à┘ê╪½┘é╪⌐. ┘é╪º╪▒┘å ┘à╪╣ ┘à╪╣╪º┘è┘è╪▒ NIST/MITRE.""")
+        print(f"[4/7] ⚖️ Debater Agent (Adversarial): تحدي المعلومات...")
+        prompt = ChatPromptTemplate.from_template("""أنت "محامي الشيطان" وخبير في كشف التضليل. 
+        مهمتك هي التشكيك في التحليل التالي، خاصة المعلومات المستمدة من الويب المظلم:
+        التحليل: {analysis}
+        ابحث عن الفخاخ، التضليل، والادعاءات غير الموثقة. قارن مع معايير NIST/MITRE.""")
         self.state["debate"] = self.robust_invoke("creative", prompt, {"analysis": analysis})
 
     def fact_checker_agent(self):
-        print(f"[5/7] Γ£à Fact Checker Agent: ╪¬╪»┘é┘è┘é ╪º┘ä╪¡┘é╪º╪ª┘é...")
-        prompt = ChatPromptTemplate.from_template("""┘ê╪º╪▓┘å ╪¿┘è┘å ╪º┘ä╪¬╪¡┘ä┘è┘ä ╪º┘ä╪ú╪╡┘ä┘è ┘ê╪º╪╣╪¬╪▒╪º╪╢╪º╪¬ ┘ê┘â┘è┘ä ╪º┘ä┘à╪╣╪º╪▒╪╢╪⌐ (Debater).
-        ╪º┘ä╪¬╪¡┘ä┘è┘ä: {analysis}
-        ╪º┘ä┘à╪╣╪º╪▒╪╢╪⌐: {debate}
-        ╪ú╪╣╪╖┘É ╪º┘ä╪¡┘â┘à ╪º┘ä┘å┘ç╪º╪ª┘è ╪¡┘ê┘ä ┘à╪º ┘ç┘ê ╪¡┘é┘è┘é┘è ┘ê┘à╪º ┘ç┘ê ┘à╪┤┘â┘ê┘â ┘ü┘è┘ç.""")
+        print(f"[5/7] ✅ Fact Checker Agent: تدقيق الحقائق...")
+        prompt = ChatPromptTemplate.from_template("""وازن بين التحليل الأصلي واعتراضات وكيل المعارضة (Debater).
+        التحليل: {analysis}
+        المعارضة: {debate}
+        أعطِ الحكم النهائي حول ما هو حقيقي وما هو مشكوك فيه.""")
         self.state["fact_check"] = self.robust_invoke("smart", prompt, {
             "analysis": self.state["analysis"], "debate": self.state["debate"]
         })
 
     def reviewer_agent(self):
-        print(f"[6/7] ΓÜû∩╕Å Reviewer Agent: ┘à╪▒╪º╪¼╪╣╪⌐ ╪º┘ä╪¼┘ê╪»╪⌐...")
-        prompt = ChatPromptTemplate.from_template("╪▒╪º╪¼╪╣ ╪¼┘ê╪»╪⌐ ╪º┘ä╪¬╪¡┘ä┘è┘ä ╪º┘ä┘å┘ç╪º╪ª┘è ┘ê╪º┘ä╪¬╪»┘é┘è┘é: {fact_check}")
+        print(f"[6/7] ⚖️ Reviewer Agent: مراجعة الجودة...")
+        prompt = ChatPromptTemplate.from_template("راجع جودة التحليل النهائي والتدقيق: {fact_check}")
         return self.robust_invoke("creative", prompt, {"fact_check": self.state["fact_check"]})
 
     def writer_agent(self):
-        print(f"[7/7] ≡ƒô¥ Writer Agent: ╪╡┘è╪º╪║╪⌐ ╪º┘ä╪¬┘é╪▒┘è╪▒ ╪º┘ä┘à┘ê╪½┘é...")
+        print(f"[7/7] 📝 Writer Agent: صياغة التقرير الموثق...")
         unique_sources = list(set(self.state["sources"]))
         sources_list = "\n".join([f"- {s}" for s in unique_sources])
         current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         
-        prompt = ChatPromptTemplate.from_template("""╪╡╪║ ╪¬┘é╪▒┘è╪▒╪º┘ï ╪º╪│╪¬╪«╪¿╪º╪▒╪º╪¬┘è╪º┘ï ╪º╪¡╪¬╪▒╪º┘ü┘è╪º┘ï ╪¿┘Ç Markdown.
-        ╪º┘ä╪¬┘ê┘é┘è╪¬: {current_time}
-        ╪º┘ä╪¬╪¡┘ä┘è┘ä: {analysis}
-        ╪º╪╣╪¬╪▒╪º╪╢╪º╪¬ ╪º┘ä┘à╪╣╪º╪▒╪╢: {debate}
-        ╪¬╪»┘é┘è┘é ╪º┘ä╪¡┘é╪º╪ª┘é: {fact_check}
-        ╪º┘ä┘à╪╡╪º╪»╪▒: {sources}
-        ┘è╪¼╪¿ ╪ú┘å ┘è╪¡╪¬┘ê┘è ╪º┘ä╪¬┘é╪▒┘è╪▒ ╪╣┘ä┘ë ╪ú┘é╪│╪º┘à: ╪º┘ä┘à╪╣┘ä┘ê┘à╪º╪¬ ╪º┘ä┘à╪ñ┘â╪»╪⌐╪î ╪¬╪¡╪░┘è╪▒╪º╪¬ ╪º┘ä┘à╪╣╪º╪▒╪╢╪⌐╪î ┘ê╪º┘ä┘à╪╡╪º╪»╪▒ ╪º┘ä┘à┘ê╪½┘é╪⌐.""")
+        prompt = ChatPromptTemplate.from_template("""صغ تقريراً استخباراتياً احترافياً بـ Markdown.
+        التوقيت: {current_time}
+        التحليل: {analysis}
+        اعتراضات المعارض: {debate}
+        تدقيق الحقائق: {fact_check}
+        المصادر: {sources}
+        يجب أن يحتوي التقرير على أقسام: المعلومات المؤكدة، تحذيرات المعارضة، والمصادر الموثقة.""")
         return self.robust_invoke("creative", prompt, {
             "current_time": current_time, "analysis": self.state["analysis"], 
             "debate": self.state["debate"], "fact_check": self.state["fact_check"], "sources": sources_list
         })
 
     def memory_agent(self, final_report):
-        """┘ê┘â┘è┘ä ╪º┘ä╪░╪º┘â╪▒╪⌐ (Memory Agent) ┘ä╪ú╪▒╪┤┘ü╪⌐ ╪º┘ä╪¼┘ä╪│╪º╪¬"""
-        print(f"\n[≡ƒºá] Memory Agent: ╪ú╪▒╪┤┘ü╪⌐ ╪º┘ä╪¼┘ä╪│╪⌐...")
-        sum_prompt = ChatPromptTemplate.from_template("┘ä╪«╪╡ ┘ç╪░┘ç ╪º┘ä┘à┘ç┘à╪⌐ ┘ê┘å╪¬╪º╪ª╪¼┘ç╪º ┘ü┘è ╪│╪╖╪▒┘è┘å: ╪º┘ä┘à┘ç┘à╪⌐: {task} | ╪º┘ä╪¬┘é╪▒┘è╪▒: {report}")
+        """وكيل الذاكرة (Memory Agent) لأرشفة الجلسات"""
+        print(f"\n[🧠] Memory Agent: أرشفة الجلسة...")
+        sum_prompt = ChatPromptTemplate.from_template("لخص هذه المهمة ونتائجها في سطرين: المهمة: {task} | التقرير: {report}")
         summary = self.robust_invoke("fast", sum_prompt, {"task": self.state["task"], "report": final_report})
         
         self.memory["sessions"].append({
@@ -242,9 +242,9 @@ class ProMultiAgentSystem:
         self._save_memory()
 
     def save_report(self, report, start_time):
-        fail_msgs = ["ΓÜá∩╕Å ╪╣╪░╪▒╪º┘ï", "ΓÜá∩╕Å ┘ü╪┤┘ä╪¬ ╪º┘ä┘à╪¡╪º┘ê┘ä╪º╪¬"]
+        fail_msgs = ["⚠️ عذراً", "⚠️ فشلت المحاولات"]
         if any(msg in report for msg in fail_msgs):
-            print("\n[ΓÜá∩╕Å] ╪¬┘à ╪Ñ┘ä╪║╪º╪í ╪¡┘ü╪╕ ╪º┘ä╪¬┘é╪▒┘è╪▒ ┘ä╪╣╪»┘à ┘ê╪¼┘ê╪» ╪¿┘è╪º┘å╪º╪¬ ┘à┘ü┘è╪»╪⌐.")
+            print("\n[⚠️] تم إلغاء حفظ التقرير لعدم وجود بيانات مفيدة.")
             return
 
         safe_text = unicodedata.normalize('NFKD', self.state["task"]).encode('ascii', 'ignore').decode('ascii')
@@ -256,7 +256,7 @@ class ProMultiAgentSystem:
         with open(report_path, "w", encoding="utf-8") as f: f.write(report)
         rag_path = os.path.join(KNOWLEDGE_BASE_DIR, f"Last_Session_{filename}")
         with open(rag_path, "w", encoding="utf-8") as f: f.write(report)
-        print(f"\nΓÅ▒ ╪º┘ä┘ê┘é╪¬: {round(time.time() - start_time, 2)} ╪½╪º┘å┘è╪⌐ | [≡ƒÆ╛] ╪¡┘ü╪╕: {filename}")
+        print(f"\n⏱ الوقت: {round(time.time() - start_time, 2)} ثانية | [💾] حفظ: {filename}")
 
     def run(self, task):
         self.state["task"] = task
@@ -280,12 +280,12 @@ class ProMultiAgentSystem:
         self.save_report(final_report, start_time)
         
         # Memory
-        sum_prompt = ChatPromptTemplate.from_template("┘ä╪«╪╡ ╪º┘ä┘à┘ç┘à╪⌐: {task} | ╪º┘ä╪¬┘é╪▒┘è╪▒: {report}")
+        sum_prompt = ChatPromptTemplate.from_template("لخص المهمة: {task} | التقرير: {report}")
         summary = self.robust_invoke("fast", sum_prompt, {"task": task, "report": final_report})
         self.memory["sessions"].append({"timestamp": datetime.now().isoformat(), "task": task, "summary": summary})
         self._save_memory()
 
 if __name__ == "__main__":
     system = ProMultiAgentSystem()
-    user_task = input("\n┘à╪º ┘ç┘è ╪º┘ä┘à┘ç┘à╪⌐ ╪º┘ä╪º╪│╪¬╪«╪¿╪º╪▒╪º╪¬┘è╪⌐ ┘ä┘ä┘è┘ê┘à╪ƒ ")
+    user_task = input("\nما هي المهمة الاستخباراتية لليوم؟ ")
     system.run(user_task)
