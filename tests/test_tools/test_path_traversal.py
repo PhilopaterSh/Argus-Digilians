@@ -1,3 +1,4 @@
+import os
 import subprocess
 from unittest.mock import MagicMock, patch
 
@@ -261,6 +262,12 @@ class TestPathTraversalScan:
         assert len(probe_calls) <= 5
 
 
+@pytest.mark.skipif(
+    os.name != "posix",
+    reason="Exercises real POSIX shell quoting (sh/bash + touch canary); "
+    "the Windows host cannot honour it. CI runs these on Linux, and the "
+    "production path executes probes through WSL/Kali.",
+)
 class TestShellInjectionHardening:
     """A hostile scan target must never be able to execute commands on the
     operator's own host via the probe strings this scanner builds.

@@ -62,7 +62,7 @@ def main() -> int:
         return 1
 
     print(f"[ingest] Indexed {chunk_count} chunks "
-          f"(index size: {store.index_size()} vectors)")
+          f"(index size: {store.index_size} vectors)")
 
     if args.no_verify:
         return 0
