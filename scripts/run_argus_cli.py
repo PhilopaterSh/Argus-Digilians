@@ -14,6 +14,7 @@ from app.core.agent.brain import ArgusBrain
 from app.core.agent.brain_tools import build_argus_tools
 from app.core.agent.react_callback import ConsoleTraceCallbackHandler
 from app.core.config import ArgusConfig
+from app.core.memory.memory_service import archive_and_reset_db
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -92,6 +93,14 @@ def run_analysis(target_url):
     Args:
         target_url (str): The URL to analyze.
     """
+    # Per-scan isolation: this process runs exactly one scan, so resetting the
+    # blackboard here means each scan starts empty and cannot inherit crawler
+    # links or findings from a previous run. Must precede any ArgusMemory use
+    # (run_analysis -> WSLBridgeTools). ARGUS_KEEP_MEMORY=1 opts out.
+    _archived = archive_and_reset_db()
+    if _archived:
+        print(f"[*] [Argus-Core] Previous blackboard archived to {_archived}")
+
     bridge = WSLBridgeTools()
     model = config.model_name
 
