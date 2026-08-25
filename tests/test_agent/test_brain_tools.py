@@ -26,8 +26,11 @@ EXPECTED_TOOL_NAMES = {
     # when the screenshot feature landed but never added here - so this
     # "canonical" list drifted again and both assertions below failed.
     "Capture_Vulnerability_Screenshot",
-    # The dedicated PathTraversalScanner existed and was fully tested, but was
-    # registered nowhere - so no pipeline could call it.
+    # Dedicated path-traversal / LFI scanner (multi-encoding, hybrid param
+    # discovery) - promoted from a branch inside advanced_vuln_probe to a
+    # first-class tool and exposed to the ReAct exploiter role. Existed and
+    # was fully tested, but was registered nowhere - so no pipeline could
+    # call it.
     "Path_Traversal_Scan",
 }
 EXPECTED_TOOL_COUNT = len(EXPECTED_TOOL_NAMES)

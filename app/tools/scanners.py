@@ -108,9 +108,24 @@ class VulnerabilityScanners:
         clean_url = url.rstrip('/')
         wordlist = "/usr/share/seclists/Discovery/Web-Content/common.txt"
 
+        # FFUF tuning. `-ac` (auto-calibration) is the key fix for CDN/WAF
+        # targets (e.g. Akamai-fronted sites) that blanket-redirect every
+        # unknown path: ffuf sends random probes first, learns the wildcard
+        # baseline response, and auto-filters it - so the site-wide 301 stops
+        # registering as a false hit on every word and the scan surfaces only
+        # genuinely distinct responses instead of burning its whole budget on
+        # noise. `-rate 100` caps request throughput so 50-thread bursts don't
+        # trip WAF throttling (429s), which otherwise slows every request and
+        # makes the wordlist unfinishable inside -maxtime. The explicit runner
+        # timeout (maxtime + 20s buffer) bounds the phase even if ffuf stalls
+        # at the socket level instead of honouring its own -maxtime.
+        FFUF_MAXTIME = 110
+        ffuf_flags = f"-mc 200,204,301,302,307,401,403 -ac -t 40 -rate 100 -maxtime {FFUF_MAXTIME} -s"
+        runner_timeout = FFUF_MAXTIME + 20
+
         print(f"[*] Starting FFUF Path Discovery for: {clean_url}")
-        cmd = f"ffuf -w {wordlist} -u {clean_url}/FUZZ -mc 200,301,302 -s -t 50 -maxtime 110"
-        res = self.runner.run(cmd)
+        cmd = f"ffuf -w {wordlist} -u {clean_url}/FUZZ {ffuf_flags}"
+        res = self.runner.run(cmd, timeout=runner_timeout)
 
         if not res.strip():
             fallback_url = None
@@ -120,8 +135,8 @@ class VulnerabilityScanners:
                 fallback_url = "https://" + clean_url[len("http://"):]
             if fallback_url:
                 print(f"[!] FFUF found nothing on {clean_url} - retrying with {fallback_url}...")
-                fallback_cmd = f"ffuf -w {wordlist} -u {fallback_url}/FUZZ -mc 200,301,302 -s -t 50 -maxtime 110"
-                fallback_res = self.runner.run(fallback_cmd)
+                fallback_cmd = f"ffuf -w {wordlist} -u {fallback_url}/FUZZ {ffuf_flags}"
+                fallback_res = self.runner.run(fallback_cmd, timeout=runner_timeout)
                 if fallback_res.strip():
                     url, clean_url, res = fallback_url, fallback_url, fallback_res
 

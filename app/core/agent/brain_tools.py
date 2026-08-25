@@ -24,7 +24,7 @@ from app.tools.tool_registry import WSLBridgeTools
 # see config.yaml's enable_multi_agent_roles) FR-002's tool partition, kept
 # here as the one place that lists which tool names belong to which role
 # (Constitution IX) - `build_argus_tools(bridge, role=...)` below filters
-# the full 18-tool list against this mapping rather than maintaining a
+# the full 19-tool list against this mapping rather than maintaining a
 # second, separately-constructed tool list per role.
 # Collector: reconnaissance/discovery only. Exploiter: vulnerability
 # scanning/exploitation only. Planner/Summarizer: read-only memory access,
@@ -59,12 +59,12 @@ def build_argus_tools(bridge: WSLBridgeTools, role: Optional[str] = None) -> lis
             `"planner"`, `"summarizer"` (specs/020, feature-flagged off by
             default) to return only that role's tool subset per
             `ROLE_TOOL_PARTITIONS`/`_PLANNER_SUMMARIZER_TOOLS`. `None`
-            (default) returns the full 18-tool list, unchanged from before
+            (default) returns the full 19-tool list, unchanged from before
             this parameter existed - every existing caller (`019` and
             earlier) is unaffected.
 
     Returns:
-        list[Tool]: The full 18-tool list covering recon, memory/graph
+        list[Tool]: The full 19-tool list covering recon, memory/graph
         queries, scanning, exploitation research, reflective
         self-verification, and raw command execution when `role` is `None`
         (see the module docstring's 2026-07-09 audit for how this list was
@@ -138,7 +138,7 @@ def build_argus_tools(bridge: WSLBridgeTools, role: Optional[str] = None) -> lis
         Tool(
             name="Path_Traversal_Scan",
             func=bridge.run_traversal_scan,
-            description="Dedicated path-traversal scan: applies a full encoding matrix (raw, single/double URL-encoded, UTF-8 overlong, backslash, collapse) across every discovered parameter, and confirms hits from real response content.",
+            description="Dedicated, in-depth path-traversal / LFI probe. Applies a full encoding matrix (raw, single/double URL-encoding, UTF-8 overlong, backslash, '....//' collapse) across multiple depths and multiple injectable parameters (auto-discovered from crawled links, with a static fallback). Prefer this over Advanced_Evasion_Probe when the target specifically looks vulnerable to file inclusion / directory traversal.",
         ),
         Tool(
             name="Capture_Vulnerability_Screenshot",
@@ -184,7 +184,7 @@ def partition_tools_by_role(tools: list) -> dict:
     """Split an already-built flat tool list into role subsets, using the
     same `ROLE_TOOL_PARTITIONS` mapping `build_argus_tools(bridge, role=...)`
     filters against - so a caller that already has `ArgusBrain`'s flat
-    18-tool list (no `WSLBridgeTools` reference of its own) doesn't need to
+    19-tool list (no `WSLBridgeTools` reference of its own) doesn't need to
     rebuild tools from a bridge just to get the specs/020 multi-role
     partition (Constitution IX - one partition definition, two entry points).
 
@@ -194,7 +194,7 @@ def partition_tools_by_role(tools: list) -> dict:
     Returns:
         dict: `{"collector": [...], "exploiter": [...]}` - tools whose name
         isn't in either partition (there shouldn't be any, given
-        `ROLE_TOOL_PARTITIONS` covers all 17) are silently omitted from
+        `ROLE_TOOL_PARTITIONS` covers all 19) are silently omitted from
         both, matching `build_argus_tools(role=...)`'s own filtering
         behavior.
     """

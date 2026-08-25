@@ -14,6 +14,8 @@ from app.core.agent.brain_tools import build_argus_tools
 from app.core.agent.contracts import (
     AGENT_RUN_MODE_DEMO,
     AGENT_RUN_MODE_TEST,
+    append_run_event,
+    build_run_event,
     build_run_snapshot,
     load_json_file,
     normalize_run_mode,
@@ -38,8 +40,14 @@ from app.tools.tool_registry import WSLBridgeTools
 # (30 min) on 2026-08-02 - still not enough headroom for a run that also
 # needs to reach the endpoint-discovery fallback + a live
 # Advanced_Evasion_Probe + capture_vulnerability() screenshot before the
-# clock runs out. Override via AGENT_TIMEOUT_SECONDS if a run needs more
-# headroom than this.
+# clock runs out.
+#
+# 1800s also covers the "full" scan profile's deterministic pipeline
+# (Subdomain_Enumeration + Recon_Suite + Run_Nikto + Run_FFUF +
+# Path_Traversal_Scan + Advanced_Evasion_Probe) plus chained follow-ups,
+# which can likewise exceed the old 900s budget on a slow target. Set
+# ARGUS_SCAN_PROFILE=fast for the trimmed run, or override
+# AGENT_TIMEOUT_SECONDS if a run needs more headroom than this.
 DEFAULT_TIMEOUT_SECONDS = 1800
 
 ANALYSIS_QUERY_TEMPLATE = (
@@ -73,7 +81,24 @@ def run_brain_analysis(target: str, run_id: str, mode: str, state_file: str, res
         brain = ArgusBrain(model_name, tools, memory=bridge.memory)
         handler = LiveFeedCallbackHandler(state_file, run_id, target, mode)
         query = ANALYSIS_QUERY_TEMPLATE.format(target=target)
-        result_box['result'] = brain.ask(query, callbacks=[handler])
+
+        # Run the DETERMINISTIC pipeline, not the free-form ReAct loop. With a
+        # weak local model the ReAct loop repeatedly re-calls a single tool
+        # (observed: Smart_Web_Search x N) and never fires the exploit tools,
+        # so nothing is ever detected. Passing on_phase makes brain.ask()
+        # dispatch to ask_deterministic(): fixed Python-ordered phases
+        # (recon -> scan -> Path_Traversal_Scan/Advanced_Evasion_Probe) plus a
+        # single LLM call to synthesize the SecurityReport. Detection is
+        # guaranteed by the pipeline, not left to the model's tool choice.
+        def on_phase(index, total, tool_name, observation):
+            event = build_run_event(
+                'agent', 'completed',
+                f'[Phase {index}/{total}] {tool_name}\n{str(observation)[:500]}',
+                run_id=run_id, target=target, mode=mode,
+            )
+            append_run_event(state_file, event)
+
+        result_box['result'] = brain.ask(query, callbacks=[handler], on_phase=on_phase)
     except Exception as e:
         result_box['error'] = str(e)
     finally:
