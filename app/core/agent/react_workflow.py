@@ -248,6 +248,52 @@ _FILE_PARAM_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Signals that the target's vulnerability class is path traversal / LFI, and
+# so that the dedicated PathTraversalScanner - not the generic evasion probe -
+# is the right tool to attempt it with. (Ported from argus/SALMA.)
+_TRAVERSAL_SIGNALS = (
+    "path traversal", "directory traversal", "file inclusion", "lfi",
+    "file path", "/etc/passwd", "filename=", "?file=", "?page=",
+)
+
+
+def _recommended_tool_for(text: str) -> str:
+    """Name the tool that should actually attempt the suggested vuln class.
+
+    This used to be a hardcoded "e.g. Advanced_Evasion_Probe or
+    Exploit_Suggester" regardless of class, which actively steered the model
+    away from `Path_Traversal_Scan` on traversal targets. Observed live: on a
+    PortSwigger "File path traversal, simple case" lab the hint fired three
+    times, the model dutifully called `Advanced_Evasion_Probe` each time, and
+    the dedicated scanner - which would have discovered `/image?filename=`
+    and confirmed the read - was never invoked at all.
+
+    Args:
+        text (str): Tool result / observation text that triggered the hint.
+
+    Returns:
+        str: A sentence naming the tool to use next, ending in a period.
+    """
+    lower = (text or "").lower()
+    # `_FILE_PARAM_RE` as well as the literal signals: _TRAVERSAL_SIGNALS only
+    # lists `filename=`, `?file=` and `?page=`, so a crawler-discovered
+    # `?doc=`/`?template=`/`?download=` sink previously fell through to the
+    # generic advice below and steered the model to the WRONG tool.
+    if any(sig in lower for sig in _TRAVERSAL_SIGNALS) or _FILE_PARAM_RE.search(text or ""):
+        return (
+            "Use Path_Traversal_Scan on the target URL - it is the dedicated "
+            "tool for this class: it finds the injectable endpoint itself "
+            "(including one only visible in an <img src>), sweeps the full "
+            "depth x encoding matrix, and confirms on real file content. Do "
+            "not hand-build a traversal payload into a URL for "
+            "Advanced_Evasion_Probe, which only tries a fixed `?item=` param."
+        )
+    return (
+        "Test it directly with the tool that matches that class (e.g. "
+        "Advanced_Evasion_Probe for SQLi/WAF-evasive probes, or "
+        "Exploit_Suggester to research payloads first)."
+    )
+
 
 def _matched_vuln_keywords(text: str) -> list[str]:
     """Return the `_VULN_CLASS_KEYWORDS` entries that appear verbatim

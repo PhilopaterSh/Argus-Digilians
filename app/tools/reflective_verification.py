@@ -2,7 +2,11 @@ import re
 import json
 import urllib.parse
 from app.core.memory.memory_service import ArgusMemory
-from app.tools.utils import normalize_domain_for_memory, find_sensitive_content_match
+from app.tools.utils import (
+    SENSITIVE_CONTENT_INDICATORS,
+    find_sensitive_content_match,
+    normalize_domain_for_memory,
+)
 
 MAX_HISTORY = 10
 LOOP_THRESHOLD = 3
