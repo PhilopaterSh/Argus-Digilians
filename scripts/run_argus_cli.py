@@ -14,6 +14,7 @@ from app.core.agent.brain import ArgusBrain
 from app.core.agent.brain_tools import build_argus_tools
 from app.core.agent.react_callback import ConsoleTraceCallbackHandler
 from app.core.config import ArgusConfig
+from app.core.memory.memory_service import archive_and_reset_db
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -158,6 +159,15 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Argus AI CLI")
     parser.add_argument("target", nargs="?", default="https://cultbeauty.co.uk/", help="Target URL")
     args = parser.parse_args()
+
+    # Per-scan isolation: this process runs exactly one scan, so resetting the
+    # blackboard here means each scan starts empty and cannot inherit crawler
+    # links or findings from a previous run. Must precede any ArgusMemory use
+    # (run_analysis -> WSLBridgeTools). ARGUS_KEEP_MEMORY=1 opts out.
+    _archived = archive_and_reset_db()
+    if _archived:
+        print(f"[*] [Argus-Core] Previous blackboard archived to {_archived}")
+
     run_analysis(args.target)
 
 

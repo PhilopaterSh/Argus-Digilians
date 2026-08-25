@@ -1,5 +1,10 @@
 import streamlit as st
 
+from app.GUI.components.export import (
+    generate_run_report_markdown,
+    run_report_filename,
+)
+
 
 def _reconcile_agent_running_state(session_agent_running, controller):
     """Resolve the true running/finished state against the controller's process
@@ -180,34 +185,43 @@ def render_agent():
                 st.caption(f"Attack surface: {final_state['attack_surface_stats']}")
 
             if findings:
-                with st.expander(f':mag: Findings ({len(findings)})', expanded=False):
-                    for f in findings:
-                        st.markdown(
-                            f"**[{f.get('severity', '?')}] {f.get('issue', 'Unknown issue')}** - `{f.get('target', '?')}`\n\n"
-                            f"{f.get('description', '')}\n\n"
-                            f"*Suggested payload*: `{f.get('suggested_payload') or 'n/a'}`  \n"
-                            f"*Remediation*: {f.get('remediation', '')}"
-                        )
-                        st.markdown('---')
+                st.markdown(f"**Findings ({len(findings)})**")
+                for f in findings:
+                    st.markdown(
+                        f"**[{f.get('severity', '?')}] {f.get('issue', 'Unknown issue')}** - `{f.get('target', '?')}`\n\n"
+                        f"{f.get('description', '')}\n\n"
+                        f"*Proof-of-concept payload*: `{f.get('suggested_payload') or 'n/a'}`  \n"
+                        f"*Remediation*: {f.get('remediation') or 'n/a'}"
+                    )
+                    st.markdown('---')
+            elif status_label == 'completed':
+                st.info('No vulnerabilities were confirmed by the tools run in this assessment.')
 
             next_steps = final_state.get('next_steps', [])
             if next_steps:
-                with st.expander(':arrow_right: Next Steps', expanded=False):
-                    for step in next_steps:
-                        st.markdown(f"- {step}")
+                st.markdown('**Next steps**')
+                for step in next_steps:
+                    st.markdown(f"- {step}")
 
-            if final_state.get('output'):
-                with st.expander(':page_facing_up: Full Security Report', expanded=False):
-                    st.markdown(final_state['output'])
-
-            with st.expander(':card_index_drawer: View Full State', expanded=False):
-                st.json(current_state)
-
-            if controller:
-                log_tail = controller.get_log_tail()
-                if log_tail.strip():
-                    with st.expander(':page_facing_up: Agent Process Log (stdout/stderr)', expanded=False):
-                        st.code(log_tail, language=None)
+            # Everything else - the step-by-step tool trace, each tool's raw
+            # output, the model's own long-form report and the process log -
+            # goes into a downloadable file rather than onto the screen. Those
+            # used to be four inline expanders (including a raw `st.json` dump
+            # of the entire run state), which buried the actual findings.
+            st.markdown('---')
+            report_markdown = generate_run_report_markdown(
+                current_state,
+                controller.get_log_tail() if controller else '',
+            )
+            st.download_button(
+                label=':inbox_tray: Download full report (.md)',
+                data=report_markdown,
+                file_name=run_report_filename(current_state),
+                mime='text/markdown',
+                help='Complete record: every tool call and its output, the full '
+                     'process log, and the conclusion.',
+                key=f"dl_{current_state.get('run_id', 'run')}",
+            )
         else:
             st.info('No results yet. Results populate here once the agent run completes.')
 

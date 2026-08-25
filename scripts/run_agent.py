@@ -23,6 +23,7 @@ from app.core.agent.contracts import (
 from app.core.agent.react_callback import LiveFeedCallbackHandler
 from app.core.agent.brain import ArgusBrain
 from app.core.config import ArgusConfig
+from app.core.memory.memory_service import archive_and_reset_db
 from app.tools.tool_registry import WSLBridgeTools
 
 
@@ -169,6 +170,17 @@ def main() -> None:
     mode = normalize_run_mode(os.getenv('AGENT_RUN_MODE') or os.getenv('ARGUS_AGENT_MODE'))
     timeout_seconds = int(os.getenv('AGENT_TIMEOUT_SECONDS', str(DEFAULT_TIMEOUT_SECONDS)))
     started_at = utc_now_iso()
+
+    # Per-scan isolation. This process is spawned fresh for every scan (see
+    # app/GUI/utils/agent_controller.py), so resetting here gives each scan an
+    # empty blackboard and stops findings - crawler links especially, which
+    # PathTraversalScanner reuses as injection points with no recency filter -
+    # leaking in from previous runs and making results non-reproducible.
+    # Must happen before WSLBridgeTools/ArgusBrain construct ArgusMemory.
+    # Set ARGUS_KEEP_MEMORY=1 to chain scans against a shared blackboard.
+    archived = archive_and_reset_db()
+    if archived:
+        print(f'[*] [Argus-Core] Previous blackboard archived to {archived}')
 
     persist_run_snapshot(
         state_file,

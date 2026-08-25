@@ -110,7 +110,22 @@ class ReflectiveVerificationService:
 
         clean_target = normalize_domain_for_memory(url)
 
-        # 1. WAF Block Page Verification
+        # 1. Confirmed-impact verification FIRST.
+        # A real sensitive-content signature (an actual /etc/passwd body, a
+        # leaked DB_PASSWORD, win.ini's section header) is positive proof that
+        # content came back, and it outranks every heuristic below. This check
+        # used to run last, after the WAF scan - so a genuine traversal read on
+        # a Cloudflare-fronted target was discarded as "BLOCKED" the moment the
+        # word "cloudflare" appeared anywhere in the captured output (a Server
+        # header is enough), silently downgrading a real compromise to a
+        # non-finding. Heuristics may never veto hard evidence.
+        for indicator, summary in SENSITIVE_CONTENT_INDICATORS.items():
+            if indicator in raw_output:
+                # Document finding directly in memory
+                self.memory.add_finding(clean_target, "reflective_verification", "high_severity_vulnerability", command, f"VERIFIED: {summary}")
+                return f"SUCCESS: High-severity finding verified. {summary}"
+
+        # 2. WAF Block Page Verification
         waf_indicators = [
             "cloudflare", "sucuri", "incapsula", "akamai", "mod_security",
             "access denied", "blocked by waf", "request blocked", "403 forbidden"
@@ -119,7 +134,7 @@ class ReflectiveVerificationService:
             if ind.lower() in raw_output.lower():
                 return f"ALERT: Target responded with a WAF block/challenge page. Action should be marked as BLOCKED."
 
-        # 2. Redirect/Honeypot/False Positive Verification (e.g., 200 OK with login page or size 0)
+        # 3. Redirect/Honeypot/False Positive Verification (e.g., 200 OK with login page or size 0)
         # Check if HTTP status codes are printed
         http_code_match = re.search(r'\b(200|301|302|404|500)\b', raw_output)
         if http_code_match:
@@ -141,6 +156,7 @@ class ReflectiveVerificationService:
             # Document finding directly in memory
             self.memory.add_finding(clean_target, "reflective_verification", "high_severity_vulnerability", command, f"VERIFIED: {summary}")
             return f"SUCCESS: High-severity finding verified. {summary}"
+
 
         return "Analysis: Command executed successfully. No immediate false positives or exploit signatures detected."
 

@@ -27,6 +27,7 @@ from app.tools.path_traversal import PathTraversalScanner
 from app.tools.browser_manager import BrowserManager
 from app.tools.self_heal import SelfHealingService
 from app.tools.reflective_verification import ReflectiveVerificationService
+from app.tools.fuzzing import SensitiveFileFuzzer
 
 logger = logging.getLogger(__name__)
 
@@ -83,9 +84,11 @@ class WSLBridgeTools:
         self.registry = ToolRegistry()
 
         self.report_writer = JSONReportWriter()
+        self.fuzzer = SensitiveFileFuzzer(self.runner)
         self.recon = ReconService(
             runner=self.runner,
             memory=self.memory,
+            fuzzer=self.fuzzer,
             report_writer=self.report_writer
         )
         self.scanners = VulnerabilityScanners(self.runner, self.memory)
@@ -168,6 +171,13 @@ class WSLBridgeTools:
         ))
         self.registry.register(_ToolServiceAdapter(
             "knowledge_graph", "Query knowledge graph insights", self.memory, "get_graph_insights"
+        ))
+        self.registry.register(_ToolServiceAdapter(
+            "fuzz_sensitive_files", "Fuzz common sensitive file paths", self.fuzzer, "fuzz_sensitive_files"
+        ))
+        self.registry.register(_ToolServiceAdapter(
+            "path_traversal", "Dedicated multi-parameter, multi-encoding path-traversal probe",
+            self.path_traversal, "run_traversal_scan"
         ))
         logger.info("Registered %d tools in registry", len(self.registry))
 
@@ -283,6 +293,30 @@ class WSLBridgeTools:
         """Delegate to ArgusMemory.get_graph_insights(). `_` is accepted
         and ignored for call-site compatibility."""
         return self.memory.get_graph_insights()
+
+    def fuzz_sensitive_files(self, url):
+        """Delegate to SensitiveFileFuzzer.fuzz_sensitive_files()."""
+        return self.fuzzer.fuzz_sensitive_files(url)
+
+    def run_traversal_scan(self, url, params=None, max_probes=None,
+                           max_guess_probes=27, max_total_probes=720):
+        """Delegate to PathTraversalScanner.run_traversal_scan().
+
+        Budgets are *per injection point*: `max_probes` for observed params
+        (`None` = the full payload list returned by `_build_payloads()`,
+        i.e. the capped Payloads.db read or the generated fallback),
+        `max_guess_probes` for blind static guesses. `max_total_probes` is the
+        global ceiling.
+
+        `max_guess_probes` must track PathTraversalScanner's own default (27,
+        three round-robin rows over the nine payload classes) - this signature
+        re-declares it, so a stale value here would silently override the
+        scanner's default on every agent-initiated scan.
+        """
+        return self.path_traversal.run_traversal_scan(
+            url, params=params, max_probes=max_probes,
+            max_guess_probes=max_guess_probes, max_total_probes=max_total_probes,
+        )
 
     def run_kali_command(self, command):
         """Proxy for manual command execution in Kali.

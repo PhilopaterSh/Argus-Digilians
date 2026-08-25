@@ -14,6 +14,101 @@ _ROOT_DB_PATH = "argus_intelligence.db"
 _SCHEMA_VERSION = 3
 _PRIORITY_TARGET_BAD_SUBSTRINGS = ("error", "---", "code ", "suggestion:", "not found", "command")
 
+# Per-scan isolation (see archive_and_reset_db). Archives live beside the live
+# DB so a run is always recoverable; the newest `_ARCHIVE_KEEP` are retained.
+_ARCHIVE_DIRNAME = "archive"
+_ARCHIVE_KEEP = 20
+# SQLite runs in WAL mode here, so the logical database is three files. Moving
+# only the .db and leaving a populated -wal behind lets the "wiped" rows come
+# straight back on the next open - the reset has to take all of them.
+_DB_SIDECAR_SUFFIXES = ("", "-wal", "-shm")
+# Escape hatch for workflows that deliberately chain scans (or for debugging a
+# run against the previous run's blackboard).
+_KEEP_MEMORY_ENV = "ARGUS_KEEP_MEMORY"
+
+
+def archive_and_reset_db(db_path: str = _DEFAULT_DB_PATH, keep: int = _ARCHIVE_KEEP) -> Optional[str]:
+    """Archive the current Blackboard DB and leave a clean slate behind.
+
+    Call this once at the *start of a scan process*, before anything opens the
+    database. Do not call it from `ArgusMemory.__init__`: four call sites
+    construct `ArgusMemory`, and each LangGraph node re-instantiates it, so
+    resetting on construction would wipe the blackboard repeatedly mid-scan.
+
+    Why this exists: findings persist indefinitely and are read back by later
+    scans - `PathTraversalScanner` treats crawler links recovered from memory
+    as first-class injection points, with no recency filter. That makes a scan
+    depend on whatever happened to be in the DB from previous sessions, so the
+    same target could be reported vulnerable on one run and clean on the next.
+
+    Set `ARGUS_KEEP_MEMORY=1` to skip the reset and keep accumulating.
+
+    Args:
+        db_path (str): Path to the live SQLite database.
+        keep (int): Number of timestamped archives to retain; older ones are
+            pruned oldest-first.
+
+    Returns:
+        str | None: Path of the archived database, or None when nothing was
+        archived (no existing DB, or the reset was skipped/failed).
+    """
+    if os.getenv(_KEEP_MEMORY_ENV) == "1":
+        logger.info("%s=1 - keeping existing blackboard", _KEEP_MEMORY_ENV)
+        return None
+    if not os.path.exists(db_path):
+        return None
+
+    parent = os.path.dirname(os.path.abspath(db_path))
+    archive_dir = os.path.join(parent, _ARCHIVE_DIRNAME)
+    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    base = os.path.basename(db_path)
+    name, ext = os.path.splitext(base)
+    archived = os.path.join(archive_dir, f"{name}_{stamp}{ext}")
+
+    try:
+        os.makedirs(archive_dir, exist_ok=True)
+        for suffix in _DB_SIDECAR_SUFFIXES:
+            src = db_path + suffix
+            if os.path.exists(src):
+                shutil.move(src, archived + suffix)
+        logger.info("Blackboard archived to %s", archived)
+    except Exception as e:
+        # Never let archiving failure abort a scan - fall back to leaving the
+        # DB in place rather than half-moving it.
+        logger.error("archive_and_reset_db failed for %s: %s", db_path, e)
+        return None
+
+    _prune_archives(archive_dir, name, ext, keep)
+    return archived
+
+
+def _prune_archives(archive_dir: str, name: str, ext: str, keep: int) -> None:
+    """Delete all but the `keep` newest archived databases.
+
+    Args:
+        archive_dir (str): Directory holding the timestamped archives.
+        name (str): Archived filename stem (e.g. "argus_intelligence").
+        ext (str): Archived filename extension (e.g. ".db").
+        keep (int): How many archives to retain.
+
+    Returns:
+        None
+    """
+    if keep is None or keep <= 0:
+        return
+    try:
+        archives = sorted(
+            f for f in os.listdir(archive_dir)
+            if f.startswith(f"{name}_") and f.endswith(ext)
+        )
+        for stale in archives[:-keep]:
+            for suffix in _DB_SIDECAR_SUFFIXES:
+                path = os.path.join(archive_dir, stale + suffix)
+                if os.path.exists(path):
+                    os.remove(path)
+    except Exception as e:
+        logger.warning("Could not prune old blackboard archives: %s", e)
+
 
 class ArgusMemory:
     def __init__(self, db_path: str = _DEFAULT_DB_PATH) -> None:
