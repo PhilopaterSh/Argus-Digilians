@@ -26,6 +26,7 @@ def _runner(*pages):
     bodies = list(pages) or [""]
 
     def _run(cmd, timeout=None):
+        """Pop one queued HTML body per fetch so pages differ across requests."""
         return bodies.pop(0) if len(bodies) > 1 else bodies[0]
 
     runner = MagicMock()
@@ -102,6 +103,7 @@ class TestAttributeExtraction:
     """
 
     def test_img_src_endpoint_becomes_a_param_finding(self):
+        """An <img src> endpoint yields a parameter finding just like <a href> ones."""
         html = (
             '<html><body>'
             '<img src="/image?filename=23.jpg">'
@@ -129,6 +131,7 @@ class TestAttributeExtraction:
             memory, "param")
 
     def test_whitespace_around_equals_is_tolerated(self):
+        """href = '...' spacing around the equals sign is parsed normally."""
         html = '<a href = "/download?file=x.txt">d</a>'
         memory = MagicMock()
         svc = CrawlerService(_runner(html, ""), memory)
@@ -139,6 +142,7 @@ class TestAttributeExtraction:
             memory, "param")
 
     def test_javascript_and_anchor_hrefs_are_skipped(self):
+        """javascript: and bare #anchor hrefs are never treated as endpoints."""
         html = '<a href="javascript:void(0)">x</a><a href="#top">y</a>'
         memory = MagicMock()
         svc = CrawlerService(_runner(html, ""), memory)
@@ -169,6 +173,7 @@ class TestFormExtraction:
     `?param=` anywhere in the markup."""
 
     def test_input_names_become_injection_points(self):
+        """Form input names (text and select) become /search?doc|lang injection points."""
         html = (
             '<form action="/search" method="GET">'
             '<input type="text" name="doc">'
@@ -185,6 +190,7 @@ class TestFormExtraction:
         assert f"http://example.com/search{PARAM_FINDING_SEP}lang" in params
 
     def test_actionless_form_falls_back_to_the_page_url(self):
+        """A form without action= attaches its inputs to the current page URL."""
         html = '<form><input name="file"></form>'
         memory = MagicMock()
         svc = CrawlerService(_runner(html, ""), memory)
@@ -202,6 +208,7 @@ class TestSinkCollapse:
     only in filename value consumed the whole persist budget for one sink."""
 
     def test_duplicate_sinks_collapse_to_one_representative(self):
+        """Thirty thumbs sharing /image?filename=N collapse to one representative sink."""
         thumbs = "".join(
             f'<img src="/image?filename={i}.jpg">' for i in range(30)
         )
@@ -217,6 +224,7 @@ class TestSinkCollapse:
         assert f"http://example.com/p{PARAM_FINDING_SEP}productId" in params
 
     def test_distinct_param_sets_on_one_path_stay_separate(self):
+        """/view?file= and /view?page= stay separate - collapsing by path alone would drop a sink."""
         html = (
             '<a href="/view?file=a">1</a>'
             '<a href="/view?page=2">2</a>'
@@ -233,6 +241,7 @@ class TestSinkCollapse:
 
 class TestRanking:
     def test_file_ish_params_are_persisted_before_bare_links(self):
+        """File-bearing parameters are persisted ahead of bare links as higher-value sinks."""
         html = (
             '<a href="/about">a</a>'
             '<a href="/track?ref=hp">r</a>'
@@ -251,6 +260,7 @@ class TestRanking:
 
 class TestBreadthFirstCrawl:
     def test_follows_links_one_hop_to_find_a_deeper_sink(self):
+        """One BFS hop from a link-only seed page reaches the deeper download sink on /catalog."""
         seed = '<a href="/catalog">catalog</a>'
         catalog = '<img src="/download?file=manual.pdf">'
         memory = MagicMock()
@@ -262,6 +272,7 @@ class TestBreadthFirstCrawl:
             memory, "param")
 
     def test_depth_zero_reproduces_single_page_behaviour(self):
+        """max_depth=0 keeps single-page behaviour: only the seed page is fetched."""
         seed = '<a href="/catalog">catalog</a>'
         catalog = '<img src="/download?file=manual.pdf">'
         runner = _runner(seed, catalog, "")
@@ -272,6 +283,7 @@ class TestBreadthFirstCrawl:
         assert runner.run.call_count == 1
 
     def test_max_pages_bounds_the_fetch_count(self):
+        """max_pages bounds total page fetches no matter how many links the pages carry."""
         many = "".join(f'<a href="/p{i}">p</a>' for i in range(50))
         runner = _runner(many, "", "", "", "", "", "")
         svc = CrawlerService(runner, MagicMock())
@@ -316,6 +328,7 @@ class TestJavaScriptEndpointExtraction:
     an href/src attribute, so an attribute-only scan cannot see it."""
 
     def test_fetch_call_endpoint_is_extracted(self):
+        """A fetch() call inside a <script> block yields an endpoint/parameter pair."""
         html = '<script>fetch("/api/report?template=summary").then(r => r.json());</script>'
         memory = MagicMock()
         svc = CrawlerService(_runner(html, ""), memory)
@@ -337,6 +350,7 @@ class TestJavaScriptEndpointExtraction:
             memory, "param")
 
     def test_xhr_open_endpoint_is_extracted(self):
+        """An XHR .open('GET', ...) target is harvested as an endpoint with its parameter."""
         html = '<script>x.open("GET", "/data/fetch?doc=a");</script>'
         memory = MagicMock()
         svc = CrawlerService(_runner(html, ""), memory)
@@ -347,6 +361,7 @@ class TestJavaScriptEndpointExtraction:
             memory, "param")
 
     def test_prose_outside_a_script_block_is_not_treated_as_an_endpoint(self):
+        """URL-shaped text in ordinary HTML prose must not become an endpoint."""
         html = '<p>Visit "/not/an?endpoint=1" for details</p>'
         memory = MagicMock()
         svc = CrawlerService(_runner(html, ""), memory)
@@ -356,6 +371,7 @@ class TestJavaScriptEndpointExtraction:
         assert _findings(memory, "param") == []
 
     def test_offhost_js_endpoint_is_dropped(self):
+        """Cross-origin JavaScript endpoints are dropped; only same-host ones survive."""
         html = '<script>fetch("https://cdn.other.net/a?file=x");</script>'
         memory = MagicMock()
         svc = CrawlerService(_runner(html, ""), memory)
@@ -377,6 +393,7 @@ class TestAttackSurfaceStructure:
     )
 
     def test_surface_exposes_the_documented_keys(self):
+        """harvest_attack_surface() exposes exactly the documented surface keys."""
         svc = CrawlerService(_runner(self.HTML, "", ""), MagicMock())
 
         surface = svc.harvest_attack_surface("http://example.com", max_depth=0)
@@ -386,6 +403,7 @@ class TestAttackSurfaceStructure:
             assert key in surface, f"missing key: {key}"
 
     def test_injection_points_are_endpoint_param_pairs(self):
+        """injection_points entries are (absolute endpoint, parameter) pairs."""
         svc = CrawlerService(_runner(self.HTML, "", ""), MagicMock())
 
         surface = svc.harvest_attack_surface("http://example.com", max_depth=0)
@@ -409,6 +427,7 @@ class TestAttackSurfaceStructure:
         assert sources["http://example.com/search"] == "html"
 
     def test_parameterless_endpoints_become_path_segment_candidates(self):
+        """Query-less endpoints land in path_segments as path-traversal candidates."""
         svc = CrawlerService(_runner(self.HTML, "", ""), MagicMock())
 
         surface = svc.harvest_attack_surface("http://example.com", max_depth=0)
@@ -434,15 +453,19 @@ class TestStandaloneShims:
     blackboard - the shims satisfy the same duck-typed contracts."""
 
     def test_local_runner_returns_stdout(self):
+        """LocalCurlRunner returns the command's stdout."""
         assert LocalCurlRunner().run("echo hello").strip() == "hello"
 
     def test_local_runner_swallows_failure(self):
+        """A non-zero exit yields empty output instead of raising."""
         assert LocalCurlRunner().run("exit 7") == ""
 
     def test_local_runner_accepts_commandrunner_kwargs(self):
+        """CommandRunner-style kwargs (timeout, show_prompt) are accepted harmlessly."""
         assert LocalCurlRunner().run("echo x", timeout=5, show_prompt=True).strip() == "x"
 
     def test_in_memory_blackboard_roundtrips_findings(self):
+        """InMemoryBlackboard persists findings per host and filters them on read."""
         mem = InMemoryBlackboard()
         mem.add_finding("example.com", "crawler", "param", "a\tb", "s")
         mem.add_finding("other.com", "crawler", "param", "c\td", "s")

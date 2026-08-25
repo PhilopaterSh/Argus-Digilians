@@ -214,24 +214,24 @@ class EncodingLadder:
     @staticmethod
     def _unicode_fullwidth(p: str) -> str:
         """Raw (non-ASCII) fullwidth metacharacters - no percent-encoding:
-        ``.`` -> ``．`` (FULLWIDTH FULL STOP), ``/`` -> ``／``
-        (FULLWIDTH SOLIDUS), ``\\`` -> ``＼``. Some frameworks Unicode-
+        ``.`` -> ``\uff0e`` (FULLWIDTH FULL STOP), ``/`` -> ``\uff0f``
+        (FULLWIDTH SOLIDUS), ``\\`` -> ``\uff3c``. Some frameworks Unicode-
         normalize these back to ``./\\`` after the WAF has inspected raw bytes."""
         return (
-            p.replace(".", "．")
-             .replace("/", "／")
-             .replace("\\", "＼")
+            p.replace(".", "\uff0e")
+             .replace("/", "\uff0f")
+             .replace("\\", "\uff3c")
         )
 
     @staticmethod
     def _unicode_alt(p: str) -> str:
         """Second raw-Unicode variant using different confusables:
-        ``.`` -> ``․`` (ONE DOT LEADER), ``/`` -> ``∕``
-        (DIVISION SLASH), ``\\`` -> ``⧵`` (REVERSE SOLIDUS OPERATOR)."""
+        ``.`` -> ``\u2024`` (ONE DOT LEADER), ``/`` -> ``\u2215``
+        (DIVISION SLASH), ``\\`` -> ``\u29f5`` (REVERSE SOLIDUS OPERATOR)."""
         return (
-            p.replace(".", "․")
-             .replace("/", "∕")
-             .replace("\\", "⧵")
+            p.replace(".", "\u2024")
+             .replace("/", "\u2215")
+             .replace("\\", "\u29f5")
         )
 
 

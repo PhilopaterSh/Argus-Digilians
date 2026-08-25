@@ -94,7 +94,16 @@ class CrawlerService:
                 as a str.
             memory (ArgusMemory): Blackboard memory service used to persist
                 discovered links and injection points.
+
+        Raises:
+            TypeError: If either collaborator is omitted - both are required
+                for every crawl operation, and failing fast here beats an
+                AttributeError surfacing mid-crawl.
         """
+        if runner is None or memory is None:
+            raise TypeError(
+                "CrawlerService requires both a command runner and a memory service"
+            )
         self.runner = runner
         self.memory = memory
 

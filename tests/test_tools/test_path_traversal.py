@@ -300,6 +300,16 @@ class TestShellInjectionHardening:
             """Executes for real, so a breakout would actually create the canary."""
 
             def run(self, command, timeout=None):
+                """Run through the real shell so a quoting breakout would actually execute.
+
+                Args:
+                    command (str): The probe command line to execute.
+                    timeout (float | None): Accepted for CommandRunner
+                        compatibility; unused here.
+
+                Returns:
+                    str: Always ``""`` - command output is not asserted.
+                """
                 captured.append(command)
                 subprocess.run(command, shell=True, capture_output=True, timeout=10)
                 return ""
@@ -331,6 +341,16 @@ class TestShellInjectionHardening:
 
         class Capture:
             def run(self, command, timeout=None):
+                """Capture the built probe command without executing anything.
+
+                Args:
+                    command (str): The probe command line to record.
+                    timeout (float | None): Accepted for CommandRunner
+                        compatibility; unused here.
+
+                Returns:
+                    str: Always ``""`` - nothing is executed in this fake.
+                """
                 captured.append(command)
                 return ""
 
@@ -681,6 +701,7 @@ class TestFilterBypassPayloadClasses:
         assert "/etc/passwd" in self._payloads()
 
     def test_absolute_class_covers_windows_and_encoding(self):
+        """The generated matrix covers Windows-absolute and percent-encoded Unix absolute paths."""
         payloads = self._payloads()
         assert "/windows/win.ini" in payloads
         assert "%2fetc%2fpasswd" in payloads
@@ -710,6 +731,7 @@ class TestFilterBypassPayloadClasses:
         assert self._payloads()[0] == "/etc/passwd"
 
     def test_matrix_is_deduplicated(self):
+        """The encoding matrix emits each unique payload string exactly once."""
         payloads = self._payloads()
         assert len(payloads) == len(set(payloads))
 
@@ -805,6 +827,7 @@ class TestPayloadDatabaseSource:
     }
 
     def test_db_supplies_the_payloads_when_present(self):
+        """With Payloads.db built, probe payloads come from the wordlist DB."""
         if not self._db_available():
             pytest.skip("Payloads.db not built")
         runner = MagicMock()
@@ -830,6 +853,7 @@ class TestPayloadDatabaseSource:
             assert required in payloads, f"{lab}: {required} fell outside the cap"
 
     def test_db_payloads_are_deduplicated(self):
+        """DB-sourced payloads enter the probe set deduplicated."""
         if not self._db_available():
             pytest.skip("Payloads.db not built")
         runner = MagicMock()
@@ -878,6 +902,7 @@ class TestPayloadDatabaseSource:
             "absolute", "raw", "collapse", "single", "double"]
 
     def test_unclassifiable_payloads_are_probed_last(self):
+        """_order_payloads pushes unrecognised payloads behind classified ones."""
         runner = MagicMock()
         runner.run.return_value = ""
         svc = PathTraversalScanner(runner, MagicMock())
@@ -887,6 +912,7 @@ class TestPayloadDatabaseSource:
         assert ordered[-1] == "..2fetc2fpasswd"
 
     def test_classifier_assigns_each_lab_payload_to_its_own_class(self):
+        """Each PortSwigger-lab payload maps to its expected class label."""
         expected = {
             "../../../etc/passwd": "raw",
             "/etc/passwd": "absolute",

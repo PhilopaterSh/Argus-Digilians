@@ -34,6 +34,13 @@ _VERIFY_QUERIES = [
 
 
 def main() -> int:
+    """Parse CLI flags, rebuild the FAISS index from knowledge_base/,
+    and run playbook-grounded retrieval verification unless disabled.
+
+    Returns:
+        int: 0 on success; 1 when the knowledge base directory is missing,
+            index construction fails, or verification finds no hits.
+    """
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--no-verify", action="store_true",
                         help="skip post-build retrieval verification")

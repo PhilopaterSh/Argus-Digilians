@@ -121,6 +121,9 @@ class TestArchiveAndReset:
 
         Args:
             db_path: Fixture-provided Blackboard DB path.
+
+        Returns:
+            None: The assertions inside the test carry the outcome.
         """
         from app.tools.path_traversal import PathTraversalScanner
 
@@ -131,6 +134,15 @@ class TestArchiveAndReset:
             """Every fetch fails, so any tier-0 point must come from the DB."""
 
             def run(self, command, timeout=None):
+                """Execute nothing.
+
+                Args:
+                    command (str): Ignored probe command.
+                    timeout (float | None): Ignored.
+
+                Returns:
+                    str: Always ``""``.
+                """
                 return ""
 
         def observed_points():
