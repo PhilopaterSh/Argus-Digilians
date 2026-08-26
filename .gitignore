@@ -90,3 +90,6 @@ node_modules/
 # Nested self-duplicate of the repository (must not be committed; see
 # docs/ARCHITECTURE_AUDIT_REPORT.md "Cleanup Manifest" item C1 - remove this directory)
 /Argus-Digilians-fix-copy-setup-to-scripts/
+
+# WSL/9p filesystem artifacts
+.fuse_hidden*
