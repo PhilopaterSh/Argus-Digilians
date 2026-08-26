@@ -15,6 +15,7 @@ from app.tools.utils import (
 import json
 import os
 import re
+from datetime import datetime
 from typing import Dict, Any, Optional, List
 
 # Ordered, deterministic recon phases. These run directly in Python -
@@ -42,7 +43,12 @@ DETERMINISTIC_PHASES: List[str] = [
     # Exploitation phases. Until these were added, no deterministic run ever
     # attempted an exploit, so no finding was ever confirmed and
     # specs/029's screenshot evidence could never trigger - the whole
-    # pipeline stopped at reconnaissance.
+    # pipeline stopped at reconnaissance. These are guaranteed to run in
+    # every deterministic pass so detection never depends on a weak local
+    # LLM choosing the right tool. Path_Traversal_Scan self-discovers the
+    # vulnerable endpoint (e.g. /image?filename=) from the live page, so it
+    # works even when recon/nikto/ffuf surfaced no explicit traversal hint -
+    # which is exactly the case for PortSwigger's file-path-traversal lab.
     "Path_Traversal_Scan",
     "Advanced_Evasion_Probe",
 ]
@@ -467,96 +473,148 @@ class ArgusBrain:
 
     def ask_deterministic(self, target: str, callbacks=None, on_phase: Optional[Any] = None) -> Dict[str, Any]:
         """
-        Runs the fixed recon pipeline directly, then makes exactly one LLM call
-        to synthesize the results into a SecurityReport.
-
-        Args:
-            target (str): The target to analyze (run through
-                `_extract_target` first in case it's embedded in a
-                longer instruction).
-            callbacks: Currently unused by this method's own body -
-                accepted for call-site compatibility with `ask`.
-            on_phase (callable | None): Forwarded to
-                `run_deterministic_recon` - see that method's docstring.
-
-        Returns:
-            Dict[str, Any]: `{"output": <SecurityReport-shaped dict>}` on
-            success (with `_raw_tool_observations` attached); an error
-            dict (`synthesis_llm_failed` or, after retries,
-            `synthesis_echoed_schema`) if the LLM call fails or keeps
-            echoing the schema instead of a real report.
+        Runs the fixed pipeline directly, then builds the SecurityReport
+        deterministically from the confirmed findings the tools recorded in
+        memory - NO LLM synthesis. A weak local model both (a) added 30-360s
+        of latency and retries here and (b) routinely failed to emit valid
+        report JSON, dropping real findings. Building the report straight from
+        the scanner findings makes it fast and truthful: a confirmed
+        `[signature: root:x:0:0:]` traversal always surfaces.
         """
         self._refresh_blackboard()
         clean_target = self._extract_target(target)
         if clean_target != target.strip():
             print(f"[BRAIN] Extracted target '{clean_target}' from input text.")
+        # Capture the run start BEFORE any tool fires so the report includes
+        # only THIS run's findings. The blackboard is a persistent SQLite DB -
+        # without this bound, get_detailed_findings() returns every finding
+        # ever recorded for this host (stale Nikto dumps, prior runs), which
+        # would falsely appear as results of the current scan.
+        run_started = datetime.now().isoformat()
         observations = self.run_deterministic_recon(clean_target, on_phase=on_phase)
+        return {"output": self._build_deterministic_report(clean_target, observations, run_started)}
 
-        tool_observations = "\n\n".join(
-            f"--- {name} ---\n{obs}" for name, obs in observations.items()
-        )
+    # Keyword -> (severity, remediation) mapping for deterministic findings.
+    _VULN_CLASSIFIERS = (
+        (("traversal", "lfi", "passwd", "shadow", "file inclusion", "web.config", "win.ini"),
+         "High", "Canonicalize and validate file-path input; reject '../' and encoded "
+         "traversal sequences; serve files from an allowlist, never from user input."),
+        (("rce", "command execution", "id command"),
+         "Critical", "Never pass user input to a shell/eval; use safe APIs and strict input validation."),
+        (("sqli", "sql injection", "sql syntax", "sql error"),
+         "High", "Use parameterized queries / prepared statements; never concatenate user input into SQL."),
+        (("secret", "api key", "credential", "password", "db_password"),
+         "High", "Rotate the exposed secret immediately; remove secrets from responses and source."),
+    )
 
-        prompt_text = SYNTHESIS_PROMPT_TEMPLATE.format(
-            target=clean_target,
-            blackboard_context=self._blackboard_context or "(none)",
-            tool_observations=tool_observations or "(no tools returned data)",
-        )
+    _SEVERITY_SCORE = {"Critical": 10, "High": 9, "Medium": 6, "Low": 3, "Info": 1}
 
-        MAX_SYNTHESIS_RETRIES = 2
-        last_raw_response = None
-        for attempt in range(MAX_SYNTHESIS_RETRIES + 1):
+    # Only these tools produce a *content-verified* exploit finding (a real
+    # /etc/passwd read, a SQL-error signature, a leaked secret). Recon/scanner
+    # tools like Nikto store every "+" output line - including pure info
+    # (Server banner, Start Time, "1 host tested", "[FAIL] Unable to connect")
+    # - as data_type "vulnerability", which is noise, not a confirmed finding.
+    # The report lists only verified exploits; raw recon output stays in
+    # `_raw_tool_observations` for context.
+    _CONFIRMED_VULN_TOOLS = frozenset({
+        "path_traversal", "evasion_probe", "reflective_verification", "secrets",
+    })
+
+    def _classify_finding(self, text: str):
+        """Map a finding's text to (severity, remediation) deterministically."""
+        low = (text or "").lower()
+        for keywords, severity, remediation in self._VULN_CLASSIFIERS:
+            if any(k in low for k in keywords):
+                return severity, remediation
+        return "Medium", "Review and sanitize the affected input; validate against an allowlist."
+
+    def _build_deterministic_report(
+        self, target: str, observations: Dict[str, str], since: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Assemble a SecurityReport-shaped dict from confirmed memory findings.
+
+        Reads back the content-verified exploit findings the active probes
+        persisted THIS run (`since` bounds out stale findings from the
+        persistent blackboard) and renders them directly - no model in the
+        loop, so nothing a confirmed scan proved can be lost or hallucinated,
+        and nothing it did not prove can be fabricated.
+
+        Args:
+            target (str): The scanned target (URL or host) the report covers.
+            observations (Dict[str, str]): Raw per-phase tool observations
+                keyed by phase name; surfaced for provenance/debugging.
+            since (Optional[str]): Blackboard timestamp bound - only findings
+                recorded at or after it count as confirmed THIS run.
+
+        Returns:
+            Dict[str, Any]: SecurityReport-shaped dict with summary, risk,
+            findings, and next_steps fields.
+        """
+        from app.tools.utils import normalize_domain_for_memory
+
+        findings: list[dict] = []
+        seen: set[str] = set()
+        if self.memory is not None:
             try:
-                raw_response = self.llm.invoke(prompt_text)
-                response_content = getattr(raw_response, "content", raw_response)
-            except Exception as e:
-                return {
-                    "output": {
-                        "error": "synthesis_llm_failed",
-                        "message": str(e),
-                        "raw_tool_observations": observations,
-                    }
-                }
-
-            last_raw_response = response_content
-            processed = self._process_output(response_content, str(response_content))
-            output = processed.get("output")
-
-            if self._looks_like_schema_echo(output):
-                print(
-                    f"[BRAIN] Synthesis attempt {attempt + 1} echoed the JSON "
-                    f"schema/instructions instead of writing a real report."
+                raw = self.memory.get_detailed_findings(
+                    normalize_domain_for_memory(target), since=since
                 )
-                if attempt < MAX_SYNTHESIS_RETRIES:
-                    prompt_text += (
-                        "\n\nSTOP. Your previous answer repeated the field "
-                        "names / schema definition instead of writing real "
-                        "values. Do not include the words '$defs', "
-                        "'properties', or 'required'. Replace every field "
-                        "with an actual sentence or number based on the "
-                        "RAW TOOL OUTPUT above."
-                    )
+            except Exception as e:
+                print(f"[BRAIN] could not read findings for report: {e}")
+                raw = []
+            for f in raw or []:
+                if f.get("data_type") not in ("vulnerability", "high_severity_vulnerability"):
                     continue
+                # Only content-verified exploit tools count as confirmed
+                # findings; recon/Nikto info lines are excluded (kept in raw
+                # observations) so metadata never masquerades as a vuln.
+                if f.get("tool_name") not in self._CONFIRMED_VULN_TOOLS:
+                    continue
+                raw_data = (f.get("raw_data") or "").strip()
+                summary = (f.get("summary") or raw_data).strip()
+                dedupe_key = f"{f.get('tool_name')}::{raw_data}"
+                if not raw_data or dedupe_key in seen:
+                    continue
+                seen.add(dedupe_key)
+                severity, remediation = self._classify_finding(f"{summary} {raw_data}")
+                payload = raw_data.split("=", 1)[1].strip() if "=" in raw_data else "n/a"
+                findings.append({
+                    "target": target,
+                    "issue": summary,
+                    "severity": severity,
+                    "description": raw_data,
+                    "suggested_payload": payload,
+                    "remediation": remediation,
+                })
 
-            if isinstance(output, dict):
-                output["_raw_tool_observations"] = observations
-            # Same provenance repair the ReAct path gets: this synthesis call
-            # is one LLM turn over a text blob of tool output, so it drops
-            # concrete evidence at least as readily.
-            self._reconcile_findings_with_blackboard(processed, clean_target)
-            return processed
+        risk = max((self._SEVERITY_SCORE.get(f["severity"], 1) for f in findings), default=1)
+        sev_counts: Dict[str, int] = {}
+        for f in findings:
+            sev_counts[f["severity"]] = sev_counts.get(f["severity"], 0) + 1
+        counts_str = ", ".join(f"{n} {sev}" for sev, n in sev_counts.items()) or "none"
+
+        phases_run = ", ".join(observations.keys()) or "(none)"
+        summary = (
+            f"Deterministic security scan of {target} complete. "
+            f"Phases executed: {phases_run}. "
+            f"Confirmed findings: {len(findings)} ({counts_str})."
+        )
+        next_steps = (
+            ["Remediate the confirmed findings above, highest severity first.",
+             "Re-run with ARGUS_SCAN_PROFILE=full for deep recon (nmap/nikto/ffuf/subdomains)."]
+            if findings else
+            ["No vulnerabilities were confirmed by the active probes.",
+             "Re-run with ARGUS_SCAN_PROFILE=full for a deeper sweep."]
+        )
 
         return {
-            "output": {
-                "error": "synthesis_echoed_schema",
-                "message": (
-                    "The model repeated the JSON schema/instructions "
-                    f"{MAX_SYNTHESIS_RETRIES + 1} times instead of writing "
-                    "an actual report. Raw tool data is included below so "
-                    "nothing is lost."
-                ),
-                "raw_llm_response": str(last_raw_response),
-                "raw_tool_observations": observations,
-            }
+            "summary": summary,
+            "attack_surface_stats": f"Phases run: {len(observations)} | confirmed findings: {len(findings)}",
+            "findings": findings,
+            "overall_risk_score": risk,
+            "next_steps": next_steps,
+            "output": summary,
+            "_raw_tool_observations": observations,
         }
 
     _BARE_HOSTNAME_TOOLS = {"Check_Reachability"}
@@ -666,156 +724,6 @@ class ArgusBrain:
     # ------------------------------------------------------------------
     # Deterministic report
     # ------------------------------------------------------------------
-    @staticmethod
-    def _classify_finding(text: str) -> tuple:
-        """Map a finding's text to `(issue, remediation)`.
-
-        Args:
-            text (str): The finding's summary and raw data, lowercased.
-
-        Returns:
-            tuple[str, str]: Human-readable issue title and its remediation.
-        """
-        if any(term in text for term in _TRAVERSAL_TERMS):
-            return "Path Traversal / Local File Inclusion", _TRAVERSAL_REMEDIATION
-        if any(term in text for term in _SQLI_TERMS):
-            return "SQL Injection", _SQLI_REMEDIATION
-        return "Confirmed vulnerability", _GENERIC_REMEDIATION
-
-    @staticmethod
-    def _extract_payload(raw_data: str) -> Optional[str]:
-        """Recover the payload string a finding was confirmed with.
-
-        Findings are stored as free text by the tool that found them, in two
-        shapes: a full request URL (`Traversal: https://x/image?filename=P`)
-        or a bare label plus payload (`SQLi: 1 OR 1=1`). The query-string
-        form is checked first, since splitting that one on ": " would return
-        the whole URL rather than the payload.
-
-        Args:
-            raw_data (str): The finding's stored raw text.
-
-        Returns:
-            str or None: The payload, or None when none can be recovered.
-        """
-        if not raw_data:
-            return None
-        if "?" in raw_data:
-            query = raw_data.split("?", 1)[1].strip()
-            last_param = query.split("&")[-1]
-            if "=" in last_param:
-                value = last_param.split("=", 1)[1].strip()
-                if value:
-                    return value
-        if ": " in raw_data:
-            return raw_data.split(": ", 1)[1].strip() or None
-        return raw_data.strip() or None
-
-    def _build_deterministic_report(
-        self,
-        target: str,
-        observations: Dict[str, str],
-        since: Optional[str] = None,
-    ) -> Dict[str, Any]:
-        """Build the run's report directly from confirmed findings in memory.
-
-        No LLM is involved. The tools already decided what counts as
-        confirmed (content-based signature matches, see
-        `app/tools/utils.py::find_sensitive_content_match`); this method only
-        renders those decisions, so a weak local model can neither invent a
-        finding nor drop a real one.
-
-        Args:
-            target (str): The scan target, used as each finding's `target`.
-            observations (Dict[str, str]): `{phase_label: raw_observation}`
-                from `run_deterministic_recon`, summarised in
-                `attack_surface_stats`.
-            since (str, optional): ISO timestamp of this run's start. The
-                blackboard is persistent and holds earlier runs' findings, so
-                without this the report would replay old results.
-
-        Returns:
-            Dict[str, Any]: A `SecurityReport`-shaped dict with `summary`,
-            `attack_surface_stats`, `findings`, `overall_risk_score` and
-            `next_steps`.
-        """
-        if self.memory is None:
-            stored = []
-        else:
-            try:
-                # Findings are keyed by the same normalisation the tools used
-                # when writing them (evasion.py / path_traversal.py both call
-                # normalize_domain_for_memory), so the report must look them
-                # up under that exact key or it finds nothing.
-                stored = self.memory.get_detailed_findings(
-                    normalize_domain_for_memory(target), since=since
-                ) or []
-            except Exception as e:
-                print(f"[BRAIN] Could not read findings for the report: {e}")
-                stored = []
-
-        findings: List[Dict[str, Any]] = []
-        seen: set = set()
-
-        for entry in stored:
-            if (entry.get("data_type") or "").lower() != "vulnerability":
-                continue
-            tool_name = (entry.get("tool_name") or "").lower()
-            if tool_name in _RECON_NOISE_TOOLS:
-                continue
-
-            raw_data = entry.get("raw_data") or ""
-            summary = entry.get("summary") or ""
-            issue, remediation = self._classify_finding(f"{summary} {raw_data}".lower())
-            payload = self._extract_payload(raw_data)
-
-            key = (issue, payload)
-            if key in seen:
-                continue
-            seen.add(key)
-
-            findings.append({
-                "target": target,
-                "issue": issue,
-                "severity": "High",
-                "description": summary or raw_data,
-                "suggested_payload": payload,
-                "remediation": remediation,
-                "tool_source": entry.get("tool_name"),
-            })
-
-        if findings:
-            risk = 9
-            summary_text = (
-                f"{len(findings)} confirmed vulnerability finding(s) on {target}, "
-                f"each verified from real response content."
-            )
-            next_steps = [
-                "Review the proof-of-concept screenshots saved under artifacts/screenshots/.",
-                "Apply the remediation listed for each finding, then re-run the scan to confirm it no longer reproduces.",
-            ]
-        else:
-            risk = 1
-            summary_text = (
-                f"No vulnerabilities were confirmed on {target} in this run."
-            )
-            next_steps = [
-                "No vulnerabilities were confirmed. Re-run with ARGUS_SCAN_PROFILE=full "
-                "for the deeper recon sweep, or widen the scope to other endpoints.",
-            ]
-
-        return {
-            "target": target,
-            "scan_target": target,
-            "summary": summary_text,
-            "attack_surface_stats": (
-                f"{len(observations)} scan phase(s) completed against {target}."
-            ),
-            "findings": findings,
-            "overall_risk_score": risk,
-            "next_steps": next_steps,
-        }
-
     def _run_tool_safely(self, tool_name: str, target: str) -> str:
         """Call a registered tool by name, converting to a bare hostname
         for tools that need one and retrying once after a self-heal

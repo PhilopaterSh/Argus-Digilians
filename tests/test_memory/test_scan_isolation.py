@@ -158,12 +158,29 @@ class TestArchiveAndReset:
                 if tier == 0
             ]
 
+        def crawler_derived_params():
+            """Return the discovered param names sourced from the seeded
+            crawler `link` findings (`productId` - not in
+            `DEFAULT_CANDIDATE_PARAMS`, so its presence unambiguously means
+            it was recovered from a persisted link finding rather than the
+            static fallback, which `_discover_injection_points` always
+            includes regardless of the blackboard's contents).
+
+            Returns:
+                list[str]: Matching parameter names, empty if none observed.
+            """
+            svc = PathTraversalScanner(Unreachable(), ArgusMemory(db_path))
+            points = svc._discover_injection_points(f"https://{host}/", None)
+            return [p for _u, p in points if p == "productId"]
+
         assert observed_points(), "test setup: stale links should be reachable before reset"
+        assert crawler_derived_params(), "test setup: stale links should be reachable before reset"
 
         archive_and_reset_db(db_path)
         ArgusMemory(db_path)
 
         assert observed_points() == [], "previous scan's crawl leaked into the next scan"
+        assert crawler_derived_params() == [], "previous scan's crawl leaked into the next scan"
 
     def test_keep_memory_env_var_opts_out(self, db_path, monkeypatch):
         """Chained-scan workflows need a way to keep accumulating.

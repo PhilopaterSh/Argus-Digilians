@@ -93,6 +93,14 @@ def run_analysis(target_url):
     Args:
         target_url (str): The URL to analyze.
     """
+    # Per-scan isolation: this process runs exactly one scan, so resetting the
+    # blackboard here means each scan starts empty and cannot inherit crawler
+    # links or findings from a previous run. Must precede any ArgusMemory use
+    # (run_analysis -> WSLBridgeTools). ARGUS_KEEP_MEMORY=1 opts out.
+    _archived = archive_and_reset_db()
+    if _archived:
+        print(f"[*] [Argus-Core] Previous blackboard archived to {_archived}")
+
     bridge = WSLBridgeTools()
     model = config.model_name
 

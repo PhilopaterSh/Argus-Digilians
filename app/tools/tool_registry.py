@@ -17,6 +17,7 @@ from app.tools.wsl_bridge import WSLBridge, WSLConfig
 from app.tools.command_runner import CommandRunner
 from app.tools.recon import ReconService
 from app.tools.scanners import VulnerabilityScanners
+from app.tools.path_traversal import PathTraversalScanner
 from app.tools.payloads import PayloadSuggester
 from app.tools.secrets import SecretAnalyzer
 from app.tools.web_search import SmartWebSearch
@@ -92,6 +93,7 @@ class WSLBridgeTools:
             report_writer=self.report_writer
         )
         self.scanners = VulnerabilityScanners(self.runner, self.memory)
+        self.path_traversal = PathTraversalScanner(self.runner, self.memory)
         self.payloads = PayloadSuggester(self.runner)
         self.secrets = SecretAnalyzer(self.runner, self.memory)
         self.web = SmartWebSearch(self.memory)
@@ -127,6 +129,10 @@ class WSLBridgeTools:
         ))
         self.registry.register(_ToolServiceAdapter(
             "ffuf", "Run FFUF for path discovery", self.scanners, "run_ffuf_discovery"
+        ))
+        self.registry.register(_ToolServiceAdapter(
+            "path_traversal", "Dedicated path-traversal / LFI probe (multi-encoding, hybrid param discovery)",
+            self.path_traversal, "run_traversal_scan"
         ))
         self.registry.register(_ToolServiceAdapter(
             "payloads", "Suggest exploit payloads", self.payloads, "suggest_payloads"
@@ -227,6 +233,9 @@ class WSLBridgeTools:
     def run_ffuf_discovery(self, url):
         """Delegate to VulnerabilityScanners.run_ffuf_discovery()."""
         return self.scanners.run_ffuf_discovery(url)
+
+    def run_traversal_scan(self, url, params=None, max_probes=60):
+        return self.path_traversal.run_traversal_scan(url, params=params, max_probes=max_probes)
 
     def suggest_payloads(self, vulnerability_type):
         """Delegate to PayloadSuggester.suggest_payloads()."""

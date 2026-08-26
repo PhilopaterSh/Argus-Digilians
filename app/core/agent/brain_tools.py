@@ -138,7 +138,7 @@ def build_argus_tools(bridge: WSLBridgeTools, role: Optional[str] = None) -> lis
         Tool(
             name="Path_Traversal_Scan",
             func=bridge.run_traversal_scan,
-            description="Dedicated path-traversal scan: applies a full encoding matrix (raw, single/double URL-encoded, UTF-8 overlong, backslash, collapse) across every discovered parameter, and confirms hits from real response content.",
+            description="Dedicated, in-depth path-traversal / LFI probe. Applies a full encoding matrix (raw, single/double URL-encoding, UTF-8 overlong, backslash, '....//' collapse) across multiple depths and multiple injectable parameters (auto-discovered from crawled links, with a static fallback). Prefer this over Advanced_Evasion_Probe when the target specifically looks vulnerable to file inclusion / directory traversal.",
         ),
         Tool(
             name="Capture_Vulnerability_Screenshot",
@@ -199,7 +199,7 @@ def partition_tools_by_role(tools: list) -> dict:
     Returns:
         dict: `{"collector": [...], "exploiter": [...]}` - tools whose name
         isn't in either partition (there shouldn't be any, given
-        `ROLE_TOOL_PARTITIONS` covers all 17) are silently omitted from
+        `ROLE_TOOL_PARTITIONS` covers all 19) are silently omitted from
         both, matching `build_argus_tools(role=...)`'s own filtering
         behavior.
     """

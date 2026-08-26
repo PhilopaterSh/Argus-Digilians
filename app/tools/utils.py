@@ -92,6 +92,9 @@ SENSITIVE_CONTENT_INDICATORS = {
     "DB_PASSWORD": "Secret Disclosure Confirmed (Database configuration leaked)",
     "appSettings": "Web Configuration Leak Confirmed (web.config read success)",
     "uid=": "RCE Confirmed (id command executed successfully)",
+    # Windows/IIS traversal targets: win.ini's canonical section header and
+    # boot.ini's loader block prove a genuine read on Windows hosts where
+    # /etc/passwd never exists (dedicated PathTraversalScanner probes both).
     # PathTraversalScanner._build_payloads() has always sent Windows payloads
     # (`..\windows\win.ini`) alongside the Unix ones, but no signature here
     # could ever confirm one - so a real traversal on a Windows target read
