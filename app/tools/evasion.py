@@ -412,8 +412,18 @@ class EvasionService:
         # evidence the target was actually clean. Fall back to a
         # lightweight, same-page link discovery and retry against up to 3
         # promising same-host endpoints before giving up.
+        # Computed lazily, at most once, the first time either vulnerability
+        # class actually needs it - it's a real live fetch of the page, and
+        # both the traversal fallback below and the SQLi fallback further
+        # down want the identical candidate list, but neither should pay
+        # for it when its own bare-root probe already found something
+        # (`None` means "not fetched yet", not "nothing found").
+        discovered_urls = None
+
         if not results and not existing_params:
-            for discovered_url in self._discover_candidate_paths(base_url):
+            if discovered_urls is None:
+                discovered_urls = self._discover_candidate_paths(base_url)
+            for discovered_url in discovered_urls:
                 d_parsed = urlsplit(discovered_url)
                 d_existing = parse_qsl(d_parsed.query, keep_blank_values=True)
                 d_base = urlunsplit((d_parsed.scheme, d_parsed.netloc, d_parsed.path, "", ""))
@@ -454,6 +464,35 @@ class EvasionService:
         )
         results.extend(results_here)
         screenshot_evidence.extend(evidence_here)
+
+        # 2026-08-26: same false-negative fix as the traversal fallback
+        # above, applied to SQLi. Live-observed on PortSwigger's own SQLi
+        # labs: Crawl_Target correctly found the real vulnerable endpoint
+        # (e.g. "/filter?category=..."), but this probe only ever guessed
+        # parameter NAMES against the bare root "/" - it never tried the
+        # real PATH those parameters actually live on, so "category" was
+        # tested at "/?category=..." (a page that doesn't use it) instead
+        # of "/filter?category=..." (the one that does). Reuses
+        # `discovered_urls` computed above rather than fetching the page a
+        # second time. Gated on the overall `results` (not just this
+        # section's `results_here`) - if the traversal probe above already
+        # confirmed a hit, there's nothing left to discover for either
+        # vulnerability class, so don't spend an extra live fetch on it.
+        if not results and not existing_params:
+            if discovered_urls is None:
+                discovered_urls = self._discover_candidate_paths(base_url)
+            for discovered_url in discovered_urls:
+                d_parsed = urlsplit(discovered_url)
+                d_existing = parse_qsl(d_parsed.query, keep_blank_values=True)
+                d_base = urlunsplit((d_parsed.scheme, d_parsed.netloc, d_parsed.path, "", ""))
+                d_candidates = [d_existing[-1][0]] if d_existing else sqli_param_candidates
+                results_n, evidence_n, _sqli_confirmed_param = self._probe_sqli_target(
+                    d_base, d_candidates, sqli_payloads, sqli_error_signatures, clean_target, _sqli_confirmed_param
+                )
+                results.extend(results_n)
+                screenshot_evidence.extend(evidence_n)
+                if results_n:
+                    break
 
         if not results:
             return "No vulnerabilities detected with advanced evasion probes."
