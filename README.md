@@ -3,6 +3,31 @@
 Argus is a professional-grade security analysis system and autonomous AI agent
 studio, bridging Windows accessibility with Kali Linux's offensive power.
 
+> **ABSTRACT** — Argus is a single-agent AI system for automated discovery and
+> verification of web application vulnerabilities, organized around the OWASP
+> Top 10 and designed to replace signature-based scanning with evidence-driven
+> reasoning. The agent couples a locally hosted large language model (via
+> Ollama — no cloud dependency) with a LangGraph/ReAct control loop that plans,
+> executes, and interprets a modular tool suite: reconnaissance and subdomain
+> enumeration; a breadth-first crawler that harvests concrete
+> `(endpoint, parameter)` injection points rather than raw URL lists; a
+> dedicated path-traversal scanner sweeping a depth × encoding matrix drawn
+> from a curated payload database of 4,400+ entries; SQL-injection, XSS, and
+> WAF-evasion probes; and sensitive-file fuzzing. Findings are accepted only
+> when confirmed by response *content* — such as the actual bytes of
+> `/etc/passwd` or `win.ini` — never by HTTP status alone, suppressing false
+> positives at the architectural level; every confirmation is captured as
+> repeatable Proof-of-Concept evidence, including headless-browser screenshots.
+> A persistent blackboard memory isolates concurrent scans and grounds
+> decisions in prior evidence, while a retrieval-augmented layer — a FAISS
+> vector index over a 1,040-scenario exploitation playbook — injects curated
+> attack knowledge into reasoning. Reflective command verification,
+> self-healing recovery, and deterministic safety guardrails bound agent
+> behavior end-to-end. The system is validated by benchmark fixtures modeled
+> on PortSwigger's training labs, 550+ automated tests, and seven enforced
+> code-quality gates, offering a reproducible, on-premises foundation for
+> trustworthy AI-driven penetration testing.
+
 ```mermaid
 graph TB
     User((Security Researcher))
@@ -146,3 +171,7 @@ This README is a quick start, not the full picture. For anything beyond it:
 ---
 
 *Maintained by: Argus Security Framework Team | June 2026*
+
+## License
+
+Distributed under the [Apache License 2.0](LICENSE). Vulnerability-scanning tooling is provided for authorized security testing and education only.
