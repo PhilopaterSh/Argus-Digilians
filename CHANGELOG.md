@@ -2,6 +2,49 @@
 
 All notable changes to this project will be documented in this file.
 
+## Unified release: merged orphan branches `argus/SALMA` + assets from `momen`/`MOUSTAFA-PC` into main (2026-08-25, branch `release/unified`)
+
+These branches were created as independent repository uploads (no shared git
+history), so content was ported via a 3-way merge against SALMA's working
+snapshot base (`9cb999f`, per MERGE_NOTES) rather than a git merge.
+
+**From `argus/SALMA`:**
+- `app/tools/crawler.py`: full BFS HTML crawler that harvests
+  `(endpoint, parameter)` injection points for the dedicated scanner
+  (replaces the 35-line curl+grep version; same `CrawlerService` interface).
+- `app/tools/path_traversal.py` (+ its tests): feature-superset rewrite -
+  Payloads.db-backed wordlists, tiered injection-point discovery, richer
+  encoding matrix, boot.ini//etc/shadow confirmation signatures.
+- `app/tools/fuzzing.py` + `Fuzz_Sensitive_Files` tool registration.
+- `app/core/agent/brain.py`: `_parse_vulnerability_finding()` /
+  `_reconcile_findings_with_blackboard()` (wired on both the legacy and
+  LangGraph paths).
+- `react_workflow.py`: `_recommended_tool_for()` routing directive (main's
+  comments referenced it but the function had never been adopted).
+- `reflective_verification.py`: evidence-before-WAF ordering fix (a real
+  bug: a Cloudflare Server header downgraded confirmed reads to BLOCKED).
+- `reflective_verification.py`/`utils.py`: union of both sides' sensitive
+  content indicators; +82 path-traversal payloads in `Payload_data/`.
+- GUI: report export component + agent-tab enhancements.
+
+**From `momen`:**
+- `knowledge_base/agent_playbook_scenarios.json`: 1040-scenario agent
+  playbook, ingested into the real vector RAG (1750 chunks verified
+  retrievable). His static-dict `rag_kb.py` code itself was superseded by
+  `app/core/rag/` and is preserved as reference only under
+  `docs/reference/momen/` alongside his architectural audit.
+
+**Infrastructure fixes surfaced by the merge:**
+- `vector_store.build_index` now embeds in 128-chunk sub-batches: one-shot
+  embedding of large corpora made Ollama's runner fail tokenization
+  (HTTP 400), which would have blocked any real knowledge-base ingestion.
+
+**Verification:** 554 tests pass / 0 fail (incl. 36 integration tests run
+live against Ollama+SQLite+FAISS); Streamlit Studio boots (HTTP 200);
+CLI entrypoint renders usage; secret scan of added content clean;
+main's accumulated `data/argus_intelligence.db` restored after the binary
+add/add resolution initially dropped it.
+
 ## Added: Advanced_Evasion_Probe falls back to endpoint discovery when a bare-root probe finds nothing (2026-08-01)
 
 Live runs (`b84499b0`, `5f71e301`, others) against the same PortSwigger path-traversal lab all

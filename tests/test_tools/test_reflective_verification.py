@@ -182,7 +182,7 @@ class TestPostExecuteVerify:
 
     def test_no_issues(self, verifier):
         """Verify No issues.
-        
+
         Args:
             verifier: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
         """
@@ -190,6 +190,45 @@ class TestPostExecuteVerify:
             "http://x.com", "ls", "file1\nfile2"
         )
         assert "no immediate" in result.lower()
+
+    def test_confirmed_signature_outranks_waf_banner(self, verifier):
+        """Regression: the WAF substring scan used to run *before* the
+        sensitive-content check, so a genuine /etc/passwd read on a target
+        fronted by Cloudflare was discarded as "BLOCKED" - a real compromise
+        silently downgraded to a non-finding by nothing more than a Server
+        header. Hard evidence must outrank the heuristic.
+
+        Args:
+            verifier: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
+        """
+        result = verifier.post_execute_verify(
+            "http://x.com",
+            "Path_Traversal_Scan",
+            "Server: cloudflare\nroot:x:0:0:root:/root:/bin/bash",
+        )
+
+        assert "SUCCESS" in result.upper()
+        assert "blocked" not in result.lower()
+        verifier.memory.add_finding.assert_called()
+
+    def test_traversal_report_line_is_reconfirmed(self, verifier):
+        """The scanner embeds the raw matched token as `[signature: ...]` so
+        this verifier independently re-confirms the finding and exploit_node
+        can set exploit_success=True. That handoff must hold.
+
+        Args:
+            verifier: test parameter provided by this test's own setup (a pytest fixture or a mock/patch injected via a decorator - see the test's parameters/decorators for which).
+        """
+        report = (
+            "[!] Path Traversal Success (endpoint=http://x.com/image, param=filename, "
+            "payload=../../../etc/passwd): LFI/Path Traversal Confirmed "
+            "(/etc/passwd read success) [signature: root:x:0:0:]"
+        )
+
+        result = verifier.post_execute_verify("http://x.com", "Path_Traversal_Scan", report)
+
+        assert "SUCCESS" in result.upper()
+        assert "/etc/passwd read success" in result
 
 
 class TestTaskDifficultyAssessment:

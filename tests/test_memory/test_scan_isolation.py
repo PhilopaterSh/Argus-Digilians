@@ -121,6 +121,9 @@ class TestArchiveAndReset:
 
         Args:
             db_path: Fixture-provided Blackboard DB path.
+
+        Returns:
+            None: The assertions inside the test carry the outcome.
         """
         from app.tools.path_traversal import PathTraversalScanner
 
@@ -131,7 +134,29 @@ class TestArchiveAndReset:
             """Every fetch fails, so any tier-0 point must come from the DB."""
 
             def run(self, command, timeout=None):
+                """Execute nothing.
+
+                Args:
+                    command (str): Ignored probe command.
+                    timeout (float | None): Ignored.
+
+                Returns:
+                    str: Always ``""``.
+                """
                 return ""
+
+        def observed_points():
+            """Return tier-0 injection points recoverable from memory alone.
+
+            Returns:
+                list[tuple[str, str]]: `(request_url, param)` pairs.
+            """
+            svc = PathTraversalScanner(Unreachable(), ArgusMemory(db_path))
+            return [
+                (u, p)
+                for u, p, tier in svc._discover_injection_points_tiered(f"https://{host}/", None)
+                if tier == 0
+            ]
 
         def crawler_derived_params():
             """Return the discovered param names sourced from the seeded
@@ -148,11 +173,13 @@ class TestArchiveAndReset:
             points = svc._discover_injection_points(f"https://{host}/", None)
             return [p for _u, p in points if p == "productId"]
 
+        assert observed_points(), "test setup: stale links should be reachable before reset"
         assert crawler_derived_params(), "test setup: stale links should be reachable before reset"
 
         archive_and_reset_db(db_path)
         ArgusMemory(db_path)
 
+        assert observed_points() == [], "previous scan's crawl leaked into the next scan"
         assert crawler_derived_params() == [], "previous scan's crawl leaked into the next scan"
 
     def test_keep_memory_env_var_opts_out(self, db_path, monkeypatch):

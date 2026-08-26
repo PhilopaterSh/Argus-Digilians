@@ -100,6 +100,7 @@ class TestBlackboardReconciliation:
         return brain
 
     def _traversal_row(self):
+        """Build a blackboard row shaped like a recorded path-traversal finding."""
         return {
             "tool_name": "path_traversal",
             "data_type": "vulnerability",
@@ -109,6 +110,7 @@ class TestBlackboardReconciliation:
         }
 
     def test_backfills_the_payload_the_model_dropped(self):
+        """Reconciliation backfills concrete payload evidence the report prose omitted."""
         brain = self._brain_with_findings([self._traversal_row()])
         result = {"output": {"findings": [{
             "target": self.TARGET,
@@ -141,6 +143,7 @@ class TestBlackboardReconciliation:
         assert findings[0]["target"].endswith("/image")
 
     def test_does_not_duplicate_a_finding_already_reported(self):
+        """A blackboard finding already reflected in the report is not appended twice."""
         brain = self._brain_with_findings([self._traversal_row()])
         result = {"output": {"findings": [{
             "target": "https://0a6700e3.web-security-academy.net/image",
@@ -157,6 +160,7 @@ class TestBlackboardReconciliation:
         assert len(result["output"]["findings"]) == 1
 
     def test_never_overwrites_a_value_the_model_supplied(self):
+        """Model-supplied field values win; reconciliation only fills gaps."""
         brain = self._brain_with_findings([self._traversal_row()])
         result = {"output": {"findings": [{
             "target": "https://0a6700e3.web-security-academy.net/image",
@@ -175,6 +179,7 @@ class TestBlackboardReconciliation:
         assert finding["tool_source"] == "manual"
 
     def test_noop_without_memory(self):
+        """With brain.memory unset, reconciliation is a harmless no-op."""
         brain = ArgusBrain("test-model", [], rag_config={"enabled": False})
         brain.memory = None
         result = {"output": {"findings": []}}
@@ -196,6 +201,7 @@ class TestBlackboardReconciliation:
         assert result["output"]["findings"] == []
 
     def test_error_output_is_left_alone(self):
+        """Error-shaped results bypass reconciliation completely."""
         brain = self._brain_with_findings([self._traversal_row()])
         result = {"output": {"error": "no_final_answer", "message": "..."}}
 
@@ -204,6 +210,7 @@ class TestBlackboardReconciliation:
         assert result["output"] == {"error": "no_final_answer", "message": "..."}
 
     def test_blackboard_read_failure_is_swallowed(self):
+        """A raising memory backend degrades to a no-op instead of failing the run."""
         class _Broken:
             def get_detailed_findings(self, domain, since=None):
                 """Raise, as a corrupt/locked DB would."""

@@ -61,8 +61,26 @@ class TestBuildReactSystemPrompt:
         for tool_name in [
             "Crawl_Target", "Secret_Scanner", "Advanced_Evasion_Probe",
             "Reflective_Pre_Verify", "Task_Difficulty_Assessment",
+            # 2026-07-27: same failure, two more tools. Path_Traversal_Scan and
+            # Fuzz_Sensitive_Files were registered in brain_tools.py but named
+            # nowhere in the phase guidance, so the model never picked them.
+            # Observed on a PortSwigger "File path traversal, simple case" lab:
+            # the agent identified the vulnerability class three times and each
+            # time reached for Advanced_Evasion_Probe, because that was the only
+            # exploitation tool the prompt actually told it about.
+            "Path_Traversal_Scan", "Fuzz_Sensitive_Files",
         ]:
             assert tool_name in prompt, f"{tool_name} not mentioned in phase guidance"
+
+    def test_traversal_guidance_routes_to_the_dedicated_scanner(self):
+        """The prompt must steer traversal/LFI at Path_Traversal_Scan rather
+        than leaving Advanced_Evasion_Probe as the only named option - the
+        latter tries a single fixed `?item=` parameter and cannot discover the
+        vulnerable endpoint the way the dedicated scanner does."""
+        prompt = build_react_system_prompt(_make_state())
+        assert "Path traversal / LFI" in prompt
+        assert "use Path_Traversal_Scan" in prompt
+        assert "not a\n    substitute" in prompt or "NOT a" in prompt
 
     def test_includes_thoroughness_rule(self):
         """Verify Includes thoroughness rule."""

@@ -166,8 +166,8 @@ def changed_files(base_ref):
     """
     out = subprocess.run(
         ["git", "diff", "--name-only", f"{base_ref}...HEAD"],
-        capture_output=True, text=True, check=True,
-    ).stdout
+        capture_output=True, check=True,
+    ).stdout.decode("utf-8", errors="replace")
     return {line.strip() for line in out.splitlines() if line.strip()}
 
 

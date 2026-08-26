@@ -1,0 +1,84 @@
+# GitLab CI for Argus-Digilians — mirrors .github/workflows/ci.yml gates.
+# Fast structural/lint gates run on every push & MR; unit tests install the
+# full runtime deps once (heavy: langchain/faiss/torchvision).
+
+stages:
+  - validate
+  - test
+
+variables:
+  GIT_DEPTH: "0"            # full history: docstring/duplication gates diff against a base SHA
+  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+cache:
+  key:
+    files:
+      - config/requirements.txt
+      - config/requirements-dev.txt
+  paths:
+    - .cache/pip
+
+.gates_base:
+  stage: validate
+  image: python:3.12
+  before_script:
+    - python --version
+    - pip install --quiet ruff mypy pytest
+    - ruff --version && mypy --version
+
+validate_specs:
+  extends: .gates_base
+  script:
+    - python scripts/validate_specs.py
+
+validate_ascii:
+  extends: .gates_base
+  script:
+    - python scripts/validate_ascii.py
+
+ruff_lint:
+  extends: .gates_base
+  script:
+    - ruff check .
+
+mypy_typed_modules:
+  extends: .gates_base
+  script:
+    - mypy app/core/rag/manifest.py app/core/rag/vector_store.py app/core/rag/embeddings.py
+      app/core/llm_factory.py app/core/agent/brain.py app/core/agent/agent_factory.py
+      app/core/agent/react_workflow.py scripts/validate_specs.py
+      scripts/validate_ascii.py scripts/get_port.py
+
+compileall:
+  extends: .gates_base
+  script:
+    - python -m compileall -q app scripts tests
+
+docstrings_gate:
+  extends: .gates_base
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  script:
+    - BASE="${CI_MERGE_REQUEST_DIFF_BASE_SHA:-HEAD~1}"
+    - python scripts/check_docstrings.py --diff "$BASE" app scripts tests
+
+duplication_gate:
+  extends: .gates_base
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  script:
+    - BASE="${CI_MERGE_REQUEST_DIFF_BASE_SHA:-HEAD~1}"
+    - python scripts/check_duplication.py --diff "$BASE" app scripts Setup
+
+unit_tests:
+  stage: test
+  image: python:3.12
+  before_script:
+    - python --version
+    - pip install --quiet -r config/requirements.txt -r config/requirements-dev.txt
+  script:
+    - pytest -m unit -q
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
