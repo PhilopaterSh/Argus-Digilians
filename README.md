@@ -145,4 +145,36 @@ This README is a quick start, not the full picture. For anything beyond it:
 
 ---
 
-*Maintained by: Argus Security Framework Team | June 2026*
+## Showcase & Interactive Demo
+
+- **Live Showcase & Web Studio Demo:** [https://philopatersh.github.io/Argus-Welcome/](https://philopatersh.github.io/Argus-Welcome/)
+
+---
+
+## Development Team (Digilians — Round 1)
+
+- **Philopater Shenouda Sedkiy** — Project Lead & Core Contributor
+- **Momen Medhat Farouk** — Security Researcher & Engineer
+- **Mohamed Ibrahim Nasef** — Security Researcher & Engineer
+- **Mostafa Hussein Ebrahim** — Security Researcher & Engineer
+- **Fatma Ali Hassan** — Security Researcher & Engineer
+- **Habiba Ashraf Moatamed** — Security Researcher & Engineer
+- **Salma Nasser Mohamed** — Security Researcher & Engineer
+
+---
+
+## Supervision & Academic Leadership
+
+- **Project Supervisor:** Eng. Wesam Ahmed
+- **General Supervisors:**
+  - **Dr. Ibrahim Gomaa**, Assistant Professor, National Telecommunication Institute (NTI)
+  - **Dr. Rabab M. Nabawy**, Assistant Professor, MSA University
+- **Academic Director:** Prof. Dr. Ahmed Tobal
+- **Executive Director:** Prof. Ali El Semary
+
+> *"Insisting on evidence rather than enthusiasm at every review point — measuring rather than assuming."*  
+> — **Eng. Wesam Ahmed**, Project Supervisor
+
+---
+
+*Maintained by: Argus Security Framework Team | August 2026*
