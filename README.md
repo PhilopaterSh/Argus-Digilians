@@ -138,8 +138,8 @@ Argus-Digilians/
 
 ## Key Features
 
-- **Parallel Reconnaissance:** Executes multiple tools (WhatWeb, Wafw00f, Nikto, etc.)
-  simultaneously for maximum speed.
+- **Recon Suite:** Runs WhatWeb, nmap, and dig sequentially inside Kali per
+  `ReconService.recon_suite`; Nikto and FFUF run as separate tool calls.
 - **AI Intelligence:** Integrated with WhiteRabbitNeo for advanced security reasoning.
 - **WSL Bridge:** Securely executes offensive tools inside a native Linux environment
   via SSH (port 22).

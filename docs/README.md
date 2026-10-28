@@ -85,10 +85,10 @@ automated is done (see `ARCHITECTURE_AUDIT_REPORT.md`'s Cleanup Manifest table).
 | **Language** | Python | 3.12 |
 | **UI Framework** | Streamlit | Latest |
 | **AI/LLM** | WhiteRabbitNeo | V3-7B |
-| **Tool Orchestration** | LangChain | 0.1+ |
+| **Tool Orchestration** | LangChain | Unpinned (`langgraph>=0.2.0`) |
 | **Security Tools** | Kali Linux | Rolling |
 | **Virtualization** | WSL2 | Windows Subsystem for Linux |
-| **Bridge/SSH** | Paramiko | 3.x |
+| **Bridge/SSH** | Paramiko | Unpinned |
 
 ## Documentation Structure
 
