@@ -102,3 +102,7 @@ logs/
 # WSL/9p filesystem artifacts
 .fuse_hidden*
 >>>>>>> origin/release/unified
+
+# SQLite transient journal artifacts
+Payloads/*.db-journal
+*.db-journal
