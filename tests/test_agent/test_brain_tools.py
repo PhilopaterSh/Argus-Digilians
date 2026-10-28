@@ -32,6 +32,8 @@ EXPECTED_TOOL_NAMES = {
     # was fully tested, but was registered nowhere - so no pipeline could
     # call it.
     "Path_Traversal_Scan",
+    # Dedicated sensitive-file fuzzing (merged from argus/SALMA).
+    "Fuzz_Sensitive_Files",
 }
 EXPECTED_TOOL_COUNT = len(EXPECTED_TOOL_NAMES)
 
@@ -84,6 +86,12 @@ def test_new_chk090_tools_delegate_to_the_correct_bridge_methods():
 
     tool_by_name["Task_Difficulty_Assessment"].func("http://example.com")
     bridge.assess_difficulty.assert_called_once_with("http://example.com")
+
+    tool_by_name["Fuzz_Sensitive_Files"].func("http://example.com")
+    bridge.fuzz_sensitive_files.assert_called_once_with("http://example.com")
+
+    tool_by_name["Path_Traversal_Scan"].func("http://example.com")
+    bridge.run_traversal_scan.assert_called_once_with("http://example.com")
 
 
 class TestRolePartitioning:

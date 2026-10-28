@@ -16,6 +16,43 @@ def clean_ansi_codes(text):
     return ansi_escape.sub('', text)
 
 
+def shell_quote(value: str) -> str:
+    """Render `value` inert as a single `sh -c` argument.
+
+    Every live probe in this package is a curl command string executed through
+    a shell (`CommandRunner.run` hands it to `bash -c` via WSL/SSH), and the
+    values spliced into those strings are hostile by nature:
+
+      * Attack payloads are metacharacter-dense by construction. Both the
+        hardcoded `1'/**/OR/**/1=1/**/--` SQLi string and the quote-bearing
+        entries in PayloadsAllTheThings' dotdotpwn.txt contain single quotes,
+        which terminated the surrounding quoted argument and left the command
+        syntactically invalid - bash aborted with "unexpected EOF" and curl
+        never ran, so those payloads were silently never tested.
+      * URLs and parameter names can be attacker-*controlled*: they are mined
+        from crawler links persisted in memory, and `app/tools/crawler.py`'s
+        extractor (`grep -oE 'href="[^"]+"' | cut -d'"' -f2`) only excludes
+        double quotes, so a hostile target page can plant shell metacharacters
+        that reach the command line verbatim - a confirmed remote code
+        execution against the operator's own host.
+
+    Prefer this over `shlex.quote()`: shlex leaves already-safe strings
+    unquoted, so the emitted command shape would vary with the payload and
+    make probes harder to reason about and assert on. This always wraps in
+    single quotes, which POSIX sh treats as fully literal; the only character
+    needing care is the single quote itself, closed and reopened via the
+    standard `'"'"'` idiom.
+
+    Args:
+        value (str): Raw, possibly hostile string to pass as one argument.
+
+    Returns:
+        str: `value` wrapped in single quotes and safe to interpolate into a
+        shell command string.
+    """
+    return "'" + value.replace("'", "'\"'\"'") + "'"
+
+
 def normalize_domain_for_memory(url: str) -> str:
     """Strip scheme and port so the same real site maps to one Blackboard
     target regardless of which port-qualified variant a caller scanned.
@@ -62,8 +99,10 @@ SENSITIVE_CONTENT_INDICATORS = {
     # (`..\windows\win.ini`) alongside the Unix ones, but no signature here
     # could ever confirm one - so a real traversal on a Windows target read
     # the file and was still reported as "no vulnerabilities confirmed".
-    "; for 16-bit app support": "Path Traversal Confirmed (win.ini read success)",
-    "[boot loader]": "Path Traversal Confirmed (boot.ini read success)",
+    # This comment line is boilerplate at the top of a standard win.ini and
+    # is specific enough not to fire on ordinary page content.
+    "for 16-bit app support": "LFI/Path Traversal Confirmed (win.ini read success)",
+    "[boot loader]": "LFI/Path Traversal Confirmed (boot.ini read success)",
     # /etc/shadow: only readable via a privileged/misconfigured sink - a
     # higher-severity confirmation than /etc/passwd.
     "root:$": "LFI/Path Traversal Confirmed (/etc/shadow read success - privileged)",

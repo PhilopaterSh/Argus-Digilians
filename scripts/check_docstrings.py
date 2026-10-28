@@ -66,8 +66,8 @@ def changed_line_ranges(base_ref):
     """
     out = subprocess.run(
         ["git", "diff", "--unified=0", f"{base_ref}...HEAD", "--", "*.py"],
-        capture_output=True, text=True, check=True,
-    ).stdout
+        capture_output=True, check=True,
+    ).stdout.decode("utf-8", errors="replace")
     result = {}
     current_file = None
     for line in out.splitlines():

@@ -53,7 +53,17 @@ class VectorStore:
 
         from langchain_community.vectorstores import FAISS
 
-        self._store = FAISS.from_documents(chunks, self.embeddings)
+        # Embed in bounded sub-batches: a single FAISS.from_documents() call
+        # hands the whole corpus to the embedder at once, and Ollama's
+        # server-side runner fails tokenization of very large batches
+        # (observed live: >~500 inputs -> runner /tokenize dial refused,
+        # HTTP 400). Slices of 128 keep each request small and let partial
+        # progress reuse already-built indexes.
+        batch_size = 128
+        self._store = FAISS.from_documents(chunks[:batch_size], self.embeddings)
+        for start in range(batch_size, len(chunks), batch_size):
+            slice_ = chunks[start:start + batch_size]
+            self._store.merge_from(FAISS.from_documents(slice_, self.embeddings))
         self._persist()
         rag_manifest.write_manifest(
             self.config.vector_store_dir,

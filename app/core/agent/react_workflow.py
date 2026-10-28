@@ -226,6 +226,74 @@ _VULN_CLASS_KEYWORDS = (
     "request smuggling", "cache poisoning", "information disclosure",
 )
 
+# Evidence-level signal, as opposed to the class-*name* signals above.
+#
+# Live failure, PortSwigger Lab 2 (2026-07-27): Crawl_Target correctly
+# reported `/image?filename=` and `/product?productId=` and handed both
+# parameters off to the blackboard, but its report names no vulnerability
+# class and carries no whatweb `Title[...]` - so `_extract_vulnerability_hints`
+# returned `[]`, the `if vuln_hints:` gate below never opened, and the
+# `_recommended_tool_for` directive naming Path_Traversal_Scan (which DOES
+# match `filename=`) was unreachable. The model was left to guess, guessed
+# "SQL Injection", called Exploit_Suggester with a URL twice, and concluded
+# with zero findings. Path_Traversal_Scan was never invoked in the entire run.
+#
+# Lab 1 only passed because Recon_Suite happened to surface
+# `Title[File path traversal, simple case]`, which hits _VULN_CLASS_KEYWORDS.
+# Relying on a page title to advertise the bug class is not a strategy.
+#
+# Longest alternatives first so `?filename=` reports `filename`, not `file`.
+_FILE_PARAM_RE = re.compile(
+    r"[?&](filename|file|document|download|template|include|path|page|doc|view)=",
+    re.IGNORECASE,
+)
+
+# Signals that the target's vulnerability class is path traversal / LFI, and
+# so that the dedicated PathTraversalScanner - not the generic evasion probe -
+# is the right tool to attempt it with. (Ported from argus/SALMA.)
+_TRAVERSAL_SIGNALS = (
+    "path traversal", "directory traversal", "file inclusion", "lfi",
+    "file path", "/etc/passwd", "filename=", "?file=", "?page=",
+)
+
+
+def _recommended_tool_for(text: str) -> str:
+    """Name the tool that should actually attempt the suggested vuln class.
+
+    This used to be a hardcoded "e.g. Advanced_Evasion_Probe or
+    Exploit_Suggester" regardless of class, which actively steered the model
+    away from `Path_Traversal_Scan` on traversal targets. Observed live: on a
+    PortSwigger "File path traversal, simple case" lab the hint fired three
+    times, the model dutifully called `Advanced_Evasion_Probe` each time, and
+    the dedicated scanner - which would have discovered `/image?filename=`
+    and confirmed the read - was never invoked at all.
+
+    Args:
+        text (str): Tool result / observation text that triggered the hint.
+
+    Returns:
+        str: A sentence naming the tool to use next, ending in a period.
+    """
+    lower = (text or "").lower()
+    # `_FILE_PARAM_RE` as well as the literal signals: _TRAVERSAL_SIGNALS only
+    # lists `filename=`, `?file=` and `?page=`, so a crawler-discovered
+    # `?doc=`/`?template=`/`?download=` sink previously fell through to the
+    # generic advice below and steered the model to the WRONG tool.
+    if any(sig in lower for sig in _TRAVERSAL_SIGNALS) or _FILE_PARAM_RE.search(text or ""):
+        return (
+            "Use Path_Traversal_Scan on the target URL - it is the dedicated "
+            "tool for this class: it finds the injectable endpoint itself "
+            "(including one only visible in an <img src>), sweeps the full "
+            "depth x encoding matrix, and confirms on real file content. Do "
+            "not hand-build a traversal payload into a URL for "
+            "Advanced_Evasion_Probe, which only tries a fixed `?item=` param."
+        )
+    return (
+        "Test it directly with the tool that matches that class (e.g. "
+        "Advanced_Evasion_Probe for SQLi/WAF-evasive probes, or "
+        "Exploit_Suggester to research payloads first)."
+    )
+
 
 def _matched_vuln_keywords(text: str) -> list[str]:
     """Return the `_VULN_CLASS_KEYWORDS` entries that appear verbatim
@@ -248,17 +316,25 @@ def _matched_vuln_keywords(text: str) -> list[str]:
 
 
 def _extract_vulnerability_hints(text: str) -> list[str]:
-    """Scan a tool result for explicit signals of a specific vulnerability
-    class - a page title naming it (whatweb-style `Title[...]` fingerprint
-    output, as real training labs often do) or a known vulnerability-class
-    keyword appearing verbatim.
+    """Scan a tool result for signals of a specific vulnerability class.
+
+    Three independent signal tiers, any of which is enough to open the
+    caller's reflection gate:
+
+      1. A page title naming the class (whatweb-style `Title[...]`
+         fingerprint output, as real training labs often do).
+      2. A known vulnerability-class keyword appearing verbatim.
+      3. *Evidence* rather than a name: a file-ish query parameter
+         (`?filename=`, `?file=`, `?page=`...) observed in the output. This
+         tier exists because the highest-signal producer - Crawl_Target's
+         injection-point report - emits exactly this and never names a class,
+         so tiers 1-2 alone silently dropped it (see `_FILE_PARAM_RE`).
 
     Args:
         text (str): Tool result / observation text to scan.
 
     Returns:
-        list[str]: Human-readable hint strings (one for a title match, one
-        for any matched keywords), or `[]` if neither is present.
+        list[str]: Human-readable hint strings, or `[]` if no tier matched.
     """
     if not text:
         return []
@@ -269,6 +345,13 @@ def _extract_vulnerability_hints(text: str) -> list[str]:
     matched = _matched_vuln_keywords(text)
     if matched:
         hints.append(f"the output mentions vulnerability-class keyword(s): {', '.join(matched)}")
+    file_params = sorted({m.lower() for m in _FILE_PARAM_RE.findall(text)})
+    if file_params:
+        hints.append(
+            "exposes file-ish query parameter(s) "
+            f"({', '.join('?' + p + '=' for p in file_params)}), which are the "
+            "classic path-traversal/LFI sink"
+        )
     return hints
 
 

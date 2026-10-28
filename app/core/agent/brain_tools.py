@@ -24,7 +24,7 @@ from app.tools.tool_registry import WSLBridgeTools
 # see config.yaml's enable_multi_agent_roles) FR-002's tool partition, kept
 # here as the one place that lists which tool names belong to which role
 # (Constitution IX) - `build_argus_tools(bridge, role=...)` below filters
-# the full 19-tool list against this mapping rather than maintaining a
+# the full 20-tool list against this mapping rather than maintaining a
 # second, separately-constructed tool list per role.
 # Collector: reconnaissance/discovery only. Exploiter: vulnerability
 # scanning/exploitation only. Planner/Summarizer: read-only memory access,
@@ -38,7 +38,7 @@ ROLE_TOOL_PARTITIONS = {
         "Check_Reachability", "Subdomain_Enumeration", "Recon_Suite",
         "Crawl_Target", "Secret_Scanner", "Smart_Web_Search",
         "Task_Difficulty_Assessment", "Archive_Research_Subagent",
-        "Reflective_Pre_Verify", "System_Self_Heal",
+        "Reflective_Pre_Verify", "System_Self_Heal", "Fuzz_Sensitive_Files",
     },
     "exploiter": {
         "Run_Nikto", "Run_FFUF", "Exploit_Suggester", "Advanced_Evasion_Probe",
@@ -59,12 +59,12 @@ def build_argus_tools(bridge: WSLBridgeTools, role: Optional[str] = None) -> lis
             `"planner"`, `"summarizer"` (specs/020, feature-flagged off by
             default) to return only that role's tool subset per
             `ROLE_TOOL_PARTITIONS`/`_PLANNER_SUMMARIZER_TOOLS`. `None`
-            (default) returns the full 19-tool list, unchanged from before
+            (default) returns the full 20-tool list, unchanged from before
             this parameter existed - every existing caller (`019` and
             earlier) is unaffected.
 
     Returns:
-        list[Tool]: The full 19-tool list covering recon, memory/graph
+        list[Tool]: the full 20-tool list covering recon, memory/graph
         queries, scanning, exploitation research, reflective
         self-verification, and raw command execution when `role` is `None`
         (see the module docstring's 2026-07-09 audit for how this list was
@@ -170,6 +170,11 @@ def build_argus_tools(bridge: WSLBridgeTools, role: Optional[str] = None) -> lis
             func=bridge.run_kali_command,
             description="Execute ANY raw command in the Kali Linux terminal (WSL). Use this for manual subdomain discovery (subfinder, assetfinder), fixing tools, or custom reconnaissance chains.",
         ),
+        Tool(
+            name="Fuzz_Sensitive_Files",
+            func=bridge.fuzz_sensitive_files,
+            description="Check common sensitive file paths (.env, .git/config, backup.sql, etc.) for accidental exposure.",
+        ),
     ]
     if role is None:
         return all_tools
@@ -184,7 +189,7 @@ def partition_tools_by_role(tools: list) -> dict:
     """Split an already-built flat tool list into role subsets, using the
     same `ROLE_TOOL_PARTITIONS` mapping `build_argus_tools(bridge, role=...)`
     filters against - so a caller that already has `ArgusBrain`'s flat
-    19-tool list (no `WSLBridgeTools` reference of its own) doesn't need to
+    20-tool list (no `WSLBridgeTools` reference of its own) doesn't need to
     rebuild tools from a bridge just to get the specs/020 multi-role
     partition (Constitution IX - one partition definition, two entry points).
 
