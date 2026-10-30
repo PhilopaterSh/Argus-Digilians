@@ -107,13 +107,27 @@ class SafetyLayer:
 
             try:
                 ip = ipaddress.ip_address(host)
+                is_ip = True
+            except ValueError:
+                is_ip = False
+            if is_ip:
                 if not self.allow_internal:
                     for private_range in PRIVATE_RANGES:
                         if ip in private_range:
                             self._log_block("private_ip", host)
                             return False, f"Target IP {host} is in a private range."
-            except ValueError:
-                pass
+            else:
+                # Strict hostname allowlist (pentest ARG-03 remediation): the
+                # interpolated target must be a plain FQDN so shell
+                # metacharacters, wildcards, and paths can never survive into
+                # a command string. Numeric targets were handled above.
+                if not re.fullmatch(
+                    r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?"
+                    r"(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+",
+                    host,
+                ):
+                    self._log_block("invalid_hostname", host)
+                    return False, f"Target hostname '{host}' is not a valid FQDN (allowlist rejected)."
 
             return True, "Target validated."
         except Exception as e:

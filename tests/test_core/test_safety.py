@@ -24,17 +24,38 @@ class TestSafetyLayerPorted:
         v, r = sl.validate_target("sketchfab.com", "aggressive")
         assert v, r
 
-    def test_validate_wildcard_pattern(self):
-        """Verify Validate wildcard pattern."""
+    def test_validate_wildcard_pattern_rejected(self):
+        """Verify wildcard hostnames fail the FQDN allowlist (ARG-03)."""
         sl = SafetyLayer()
         v, r = sl.validate_target("*.example.com", "aggressive")
-        assert v, r
+        assert not v
+        assert "fqdn" in r.lower()
 
-    def test_validate_dir_wildcard(self):
-        """Verify Validate dir wildcard."""
+    def test_validate_metacharacters_rejected(self):
+        """Verify shell metacharacters in a target fail the allowlist (ARG-03)."""
+        sl = SafetyLayer()
+        v, r = sl.validate_target("example.com; rm -rf /", "aggressive")
+        assert not v
+        assert "fqdn" in r.lower()
+
+    def test_validate_dir_wildcard_host_ok(self):
+        """Verify a path-bearing URL still validates via its hostname."""
         sl = SafetyLayer()
         v, r = sl.validate_target("example.com/*/*/*", "aggressive")
         assert v, r
+
+    def test_guard_command_blocks_destructive(self):
+        """Verify guard_command blocks destructive payloads."""
+        sl = SafetyLayer()
+        safe, r = sl.guard_command("rm -rf /tmp/target")
+        assert not safe
+        assert "BLOCKED" in r
+
+    def test_guard_command_allows_safe(self):
+        """Verify guard_command passes benign commands."""
+        sl = SafetyLayer()
+        safe, r = sl.guard_command("nikto -h https://example.com")
+        assert safe, r
 
     def test_validate_private_ip_blocked(self):
         """Verify Validate private ip blocked."""

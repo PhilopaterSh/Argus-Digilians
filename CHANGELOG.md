@@ -26,6 +26,11 @@ merges both lines so `main` holds everything:
   "parallel reconnaissance" claim corrected to the sequential
   whatweb -> nmap -> dig suite, `CONTRIBUTING.md` npm boilerplate dropped.
 - CI: both workflows green on the merge commit.
+- Activated the dormant SafetyLayer (`app/core/safety.py`): every target-taking
+  facade method now runs `validate_target()` first (strict FQDN allowlist added -
+  wildcards and shell metacharacters are rejected), `Run_Kali_Command` runs
+  `guard_command()` (destructive-pattern blocking) before execution, and the
+  Streamlit server binds to `localhost` only (ARG-01 loopback mitigation).
 - Wired the dormant `app/tools/xss_classifier.py` into the live tool
   surface: `WSLBridgeTools.classify_xss()` sends a marker-carrying probe
   via `curl` in Kali and classifies the reflection with

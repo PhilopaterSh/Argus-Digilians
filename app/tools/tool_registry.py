@@ -31,6 +31,7 @@ from app.tools.self_heal import SelfHealingService
 from app.tools.reflective_verification import ReflectiveVerificationService
 from app.tools.fuzzing import SensitiveFileFuzzer
 from app.tools.xss_classifier import MARKER, classify_xss_reflection
+from app.core.safety import SafetyLayer
 
 logger = logging.getLogger(__name__)
 
@@ -81,10 +82,28 @@ class WSLBridgeTools:
         """Construct every concrete tool service and register their
         adapters into a fresh ToolRegistry."""
         self.memory = ArgusMemory()
+        self.safety = SafetyLayer()
         self.bridge = WSLBridge(WSLConfig())
         self.runner = CommandRunner(self.bridge)
 
         self.registry = ToolRegistry()
+
+    def _check_target(self, target):
+        """Run the safety layer's target validation for a supplied target.
+
+        Args:
+            target (str): The URL or host a tool is about to touch.
+
+        Returns:
+            str | None: A refusal string when the safety layer rejects
+            the target, or `None` when it is cleared for use.
+        """
+        allowed, reason = self.safety.validate_target(target)
+        if not allowed:
+            return f"[SAFETY] Target rejected: {reason}"
+        return None
+
+
 
         self.report_writer = JSONReportWriter()
         self.fuzzer = SensitiveFileFuzzer(self.runner)
@@ -207,28 +226,65 @@ class WSLBridgeTools:
         """Delegate to CommandRunner.run() - see that method's docstring."""
         return self.runner.run(command, show_prompt)
 
+    def _check_targets_list(self, targets):
+        """Validate every comma-separated target with the safety layer.
+
+        Args:
+            targets (list[str] | str): One target or a comma-
+            separated target list.
+
+        Returns:
+            str | None: A refusal string naming the first rejected
+            target, or `None` when all are cleared.
+        """
+        items = targets if isinstance(targets, list) else [p.strip() for p in str(targets).split(',')]
+        for item in items:
+            if item:
+                blocked = self._check_target(item)
+                if blocked:
+                    return blocked
+        return None
+
     def check_reachability(self, domain):
         """Delegate to ReachabilityService.check_reachability()."""
+        blocked = self._check_target(domain)
+        if blocked:
+            return blocked
         return self.reachability.check_reachability(domain)
 
     def recon_suite(self, url, selected_targets=None):
         """Delegate to ReconService.recon_suite() - see that method's docstring."""
+        blocked = self._check_target(url)
+        if blocked:
+            return blocked
         return self.recon.recon_suite(url, selected_targets)
 
     def enumerate_subdomains(self, domain):
         """Delegate to ReconService.enumerate_subdomains()."""
+        blocked = self._check_target(domain)
+        if blocked:
+            return blocked
         return self.recon.enumerate_subdomains(domain)
 
     def prioritize_targets(self, targets):
         """Delegate to ReconService.prioritize_targets()."""
+        blocked = self._check_targets_list(targets)
+        if blocked:
+            return blocked
         return self.recon.prioritize_targets(targets)
 
     def run_nikto(self, url):
         """Delegate to VulnerabilityScanners.run_nikto()."""
+        blocked = self._check_target(url)
+        if blocked:
+            return blocked
         return self.scanners.run_nikto(url)
 
     def run_ffuf_discovery(self, url):
         """Delegate to VulnerabilityScanners.run_ffuf_discovery()."""
+        blocked = self._check_target(url)
+        if blocked:
+            return blocked
         return self.scanners.run_ffuf_discovery(url)
 
     def run_traversal_scan(self, url, params=None, max_probes=60):
@@ -240,6 +296,9 @@ class WSLBridgeTools:
 
     def analyze_secrets(self, url):
         """Delegate to SecretAnalyzer.analyze_secrets()."""
+        blocked = self._check_target(url)
+        if blocked:
+            return blocked
         return self.secrets.analyze_secrets(url)
 
     def smart_web_search(self, query):
@@ -252,14 +311,23 @@ class WSLBridgeTools:
 
     def crawl_target(self, url):
         """Delegate to CrawlerService.crawl_target()."""
+        blocked = self._check_target(url)
+        if blocked:
+            return blocked
         return self.crawler.crawl_target(url)
 
     def advanced_vuln_probe(self, url):
         """Delegate to EvasionService.advanced_vuln_probe()."""
+        blocked = self._check_target(url)
+        if blocked:
+            return blocked
         return self.evasion.advanced_vuln_probe(url)
 
     def run_traversal_scan(self, url):
         """Delegate to PathTraversalScanner.run_traversal_scan()."""
+        blocked = self._check_target(url)
+        if blocked:
+            return blocked
         return self.path_traversal.run_traversal_scan(url)
 
     def capture_vulnerability_screenshot(self, url, vulnerability_type="path_traversal", payload=None, note=None):
@@ -267,6 +335,9 @@ class WSLBridgeTools:
         automatic capture already wired into advanced_vuln_probe(), for
         when the agent/operator wants a screenshot of a specific URL
         outside that flow."""
+        blocked = self._check_target(url)
+        if blocked:
+            return blocked
         return self.browser_manager.capture_vulnerability(vulnerability_type, url, payload=payload, note=note)
 
     def close_browser(self):
@@ -288,6 +359,9 @@ class WSLBridgeTools:
 
     def assess_difficulty(self, targets):
         """Assess difficulty."""
+        blocked = self._check_targets_list(targets)
+        if blocked:
+            return blocked
         return self.verifier.task_difficulty_assessment(targets)
 
     def get_intelligence_summary(self, _=None):
@@ -302,6 +376,9 @@ class WSLBridgeTools:
 
     def fuzz_sensitive_files(self, url):
         """Delegate to SensitiveFileFuzzer.fuzz_sensitive_files()."""
+        blocked = self._check_target(url)
+        if blocked:
+            return blocked
         return self.fuzzer.fuzz_sensitive_files(url)
 
     def classify_xss(self, url, payload=None):
@@ -325,6 +402,9 @@ class WSLBridgeTools:
             includes the fetched-response size and probed URL so the caller
             can tell a clean no-hit apart from a failed fetch.
         """
+        blocked = self._check_target(url)
+        if blocked:
+            return blocked
         probe = payload or f'{MARKER}"><img src=x onerror=alert(1)>'
         sep = "&" if "?" in url else "?"
         probe_url = f"{url}{sep}argusxss={quote(probe, safe='')}"
@@ -371,6 +451,10 @@ class WSLBridgeTools:
             str: The command's output, per CommandRunner.run() (with
             `show_prompt=True`, so it's prefixed with a fake shell prompt).
         """
+        safe, reason = self.safety.guard_command(command)
+        if not safe:
+            return reason
+
         # Ensure Go bins are in PATH for the command execution
         full_command = f"export PATH=$PATH:/home/kali/go/bin:/home/kali/.pdtm/go/bin && {command}"
         return self.runner.run(full_command, show_prompt=True)
