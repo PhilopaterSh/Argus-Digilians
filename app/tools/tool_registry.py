@@ -31,7 +31,7 @@ from app.tools.browser_manager import BrowserManager
 from app.tools.self_heal import SelfHealingService
 from app.tools.reflective_verification import ReflectiveVerificationService
 from app.tools.fuzzing import SensitiveFileFuzzer
-from app.tools.xss_classifier import XSS_MARKER, classify_xss_reflection
+from app.tools.xss_classifier import MARKER, classify_xss_reflection
 
 logger = logging.getLogger(__name__)
 
@@ -326,7 +326,7 @@ class WSLBridgeTools:
             includes the fetched-response size and probed URL so the caller
             can tell a clean no-hit apart from a failed fetch.
         """
-        probe = payload or f'{XSS_MARKER}"><img src=x onerror=alert(1)>'
+        probe = payload or f'{MARKER}"><img src=x onerror=alert(1)>'
         sep = "&" if "?" in url else "?"
         probe_url = f"{url}{sep}argusxss={quote(probe, safe='')}"
         command = f"curl -s -L --max-time 45 {shlex.quote(probe_url)}"
