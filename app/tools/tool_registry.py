@@ -26,7 +26,6 @@ from app.tools.web_search import SmartWebSearch
 from app.tools.reachability import ReachabilityService, JSONReportWriter
 from app.tools.crawler import CrawlerService
 from app.tools.evasion import EvasionService
-from app.tools.path_traversal import PathTraversalScanner
 from app.tools.browser_manager import BrowserManager
 from app.tools.self_heal import SelfHealingService
 from app.tools.reflective_verification import ReflectiveVerificationService
