@@ -172,7 +172,7 @@ This README is a quick start, not the full picture. For anything beyond it:
 
 ## Showcase & Interactive Demo
 
-- **Showcase & Web Studio Demo:** [docs/welcome/](docs/welcome/index.html) (merged from the former Argus-Welcome site; open `docs/welcome/index.html` locally or serve the `docs/` folder)
+- **Showcase & Web Studio Demo:** live at <https://philopatersh.github.io/Argus-Digilians/welcome/> (merged from the former standalone Argus-Welcome site; sources in [docs/welcome/](docs/welcome/index.html), also openable locally)
 
 ---
 
