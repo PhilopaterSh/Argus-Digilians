@@ -98,7 +98,8 @@ def manifest_path(store_dir: str) -> str:
 
 
 def write_manifest(store_dir: str, embedder_name: str, embedder_provider: str,
-                   dimension: int, knowledge_base_dir: str) -> EmbeddingManifest:
+                   dimension: int, knowledge_base_dir: str,
+                   index_sha256: str = "") -> EmbeddingManifest:
     """Build and persist a manifest for a freshly built index.
 
     Args:
@@ -109,6 +110,9 @@ def write_manifest(store_dir: str, embedder_name: str, embedder_provider: str,
         dimension (int): The index's vector dimensionality.
         knowledge_base_dir (str): Source directory to hash via
             `compute_kb_hash`.
+        index_sha256 (str): Hex digest of the persisted `index.pkl`, pinned
+            for the ARG-08 integrity check (empty for a manifest written
+            before the pickle existed).
 
     Returns:
         EmbeddingManifest: The manifest that was written.
@@ -121,6 +125,7 @@ def write_manifest(store_dir: str, embedder_name: str, embedder_provider: str,
         knowledge_base_hash=compute_kb_hash(knowledge_base_dir),
         built_at=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         schema_version=SCHEMA_VERSION,
+        index_sha256=index_sha256,
     )
     with open(manifest_path(store_dir), "w", encoding="utf-8") as f:
         json.dump(manifest.to_dict(), f, indent=2, sort_keys=True)
