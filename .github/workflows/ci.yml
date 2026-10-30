@@ -43,7 +43,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install dev tools
-        run: pip install -r config/requirements-dev.txt
+        run: pip install -r config/requirements-dev.txt -c config/requirements-lock.txt
       - name: Ruff lint (syntax + undefined names)
         run: ruff check .
       - name: Mypy (typed modules)
@@ -74,8 +74,8 @@ jobs:
           python-version: "3.12"
       - name: Install runtime + dev dependencies
         run: |
-          pip install -r config/requirements.txt
-          pip install -r config/requirements-dev.txt
+          pip install -r config/requirements.txt -c config/requirements-lock.txt
+          pip install -r config/requirements-dev.txt -c config/requirements-lock.txt
       - name: Run unit tests
         run: pytest -m unit --cov --cov-report=term-missing
 
@@ -91,8 +91,8 @@ jobs:
           python-version: "3.12"
       - name: Install runtime + dev dependencies
         run: |
-          pip install -r config/requirements.txt
-          pip install -r config/requirements-dev.txt
+          pip install -r config/requirements.txt -c config/requirements-lock.txt
+          pip install -r config/requirements-dev.txt -c config/requirements-lock.txt
       - name: Run full test suite (informational)
         run: pytest -m "not eval and not slow" --cov --cov-report=term-missing
 
@@ -111,8 +111,8 @@ jobs:
           python-version: "3.12"
       - name: Install runtime + dev dependencies
         run: |
-          pip install -r config/requirements.txt
-          pip install -r config/requirements-dev.txt
+          pip install -r config/requirements.txt -c config/requirements-lock.txt
+          pip install -r config/requirements-dev.txt -c config/requirements-lock.txt
       - name: AI-evaluation (recall@k / faithfulness; agent-loop termination)
         run: pytest -m eval || python tests/manual/ai_benchmark.py
 

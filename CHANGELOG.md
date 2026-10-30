@@ -26,6 +26,12 @@ merges both lines so `main` holds everything:
   "parallel reconnaissance" claim corrected to the sequential
   whatweb -> nmap -> dig suite, `CONTRIBUTING.md` npm boilerplate dropped.
 - CI: both workflows green on the merge commit.
+- ARG-06 fixed: all top-level dependencies pinned to the last green CI
+  set (config/requirements*.txt) and a 160-package constraints file
+  (`config/requirements-lock.txt`) wired into every CI install so
+  transitive dependencies cannot drift either. Motivation was live: an
+  unpinned new streamlit release changed `AppTest.from_file` path
+  semantics and broke the GUI suite between two commits.
 - ARG-09 fixed: a durable, append-only command audit trail
   (`app/core/audit.py` -> `data/audit_log.jsonl`, one JSON event per
   line). Every Kali command executed through `CommandRunner` and every
