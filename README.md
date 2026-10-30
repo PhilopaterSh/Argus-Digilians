@@ -172,7 +172,7 @@ This README is a quick start, not the full picture. For anything beyond it:
 
 ## Showcase & Interactive Demo
 
-- **Live Showcase & Web Studio Demo:** [https://philopatersh.github.io/Argus-Welcome/](https://philopatersh.github.io/Argus-Welcome/)
+- **Showcase & Web Studio Demo:** [docs/welcome/](docs/welcome/index.html) (merged from the former Argus-Welcome site; open `docs/welcome/index.html` locally or serve the `docs/` folder)
 
 ---
 

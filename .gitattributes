@@ -16,3 +16,6 @@
 *.zip binary
 *.png binary
 *.jpg binary
+
+# Welcome landing media
+*.mp4 filter=lfs diff=lfs merge=lfs -text
