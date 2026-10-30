@@ -1,4 +1,5 @@
 import re
+import shlex
 
 from app.tools.utils import normalize_domain_for_memory
 
@@ -44,7 +45,7 @@ class SecretAnalyzer:
         }
 
         # Fetch page content via curl
-        page_content = self.runner.run(f"curl -s -L --max-time 15 --connect-timeout 5 {url} | head -n 500")
+        page_content = self.runner.run(f"curl -s -L --max-time 15 --connect-timeout 5 {shlex.quote(url)} | head -n 500")
         
         found = []
         clean_target = normalize_domain_for_memory(url)

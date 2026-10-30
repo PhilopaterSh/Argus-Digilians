@@ -37,6 +37,7 @@ class EmbeddingManifest:
     knowledge_base_hash: str
     built_at: str = ""
     schema_version: int = SCHEMA_VERSION
+    index_sha256: str = ""
 
     def to_dict(self) -> dict:
         """To dict."""
@@ -52,6 +53,7 @@ class EmbeddingManifest:
             knowledge_base_hash=str(data["knowledge_base_hash"]),
             built_at=str(data.get("built_at", "")),
             schema_version=int(data.get("schema_version", SCHEMA_VERSION)),
+            index_sha256=str(data.get("index_sha256", "")),
         )
 
 
@@ -120,6 +122,31 @@ def write_manifest(store_dir: str, embedder_name: str, embedder_provider: str,
         built_at=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         schema_version=SCHEMA_VERSION,
     )
+    with open(manifest_path(store_dir), "w", encoding="utf-8") as f:
+        json.dump(manifest.to_dict(), f, indent=2, sort_keys=True)
+    return manifest
+
+
+def update_index_sha256(store_dir: str, index_sha256: str) -> EmbeddingManifest | None:
+    """Record (or refresh) the SHA-256 of the persisted FAISS pickle in the manifest.
+
+    The pickle is deserialized with ``allow_dangerous_deserialization=True``
+    (pentest finding ARG-08), so its bytes are pinned here at build time and
+    verified before every load; an attacker able to swap the file can no
+    longer smuggle a crafted pickle past a reload unnoticed.
+
+    Args:
+        store_dir (str): Directory containing `manifest.json` and `index.pkl`.
+        index_sha256 (str): Hex digest of the current `index.pkl` bytes.
+
+    Returns:
+        EmbeddingManifest | None: The updated manifest, or `None` when no
+        manifest exists to update (callers write one right after a build).
+    """
+    manifest = read_manifest(store_dir)
+    if manifest is None:
+        return None
+    manifest.index_sha256 = index_sha256
     with open(manifest_path(store_dir), "w", encoding="utf-8") as f:
         json.dump(manifest.to_dict(), f, indent=2, sort_keys=True)
     return manifest

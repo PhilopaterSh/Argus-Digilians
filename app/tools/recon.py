@@ -1,5 +1,6 @@
 import re
 import json
+import shlex
 from datetime import datetime
 
 from app.tools.utils import normalize_domain_for_memory
@@ -80,7 +81,7 @@ class ReconService:
         target_list = ",".join(targets) if isinstance(targets, list) else targets
         print(f"[*] Prioritizing {len(targets) if isinstance(targets, list) else 'targets'} via HTTPX...")
         
-        cmd = f"echo '{target_list.replace(',', '\n')}' | httpx -silent -sc -title -td"
+        cmd = f"echo {shlex.quote(target_list.replace(',', chr(10)))} | httpx -silent -sc -title -td"
         res = self.runner.run(cmd)
         
         # Parse results and update memory
@@ -146,11 +147,11 @@ class ReconService:
         # AGENT_TIMEOUT_SECONDS) and silently strand the graph on this node.
         # 1. Tech Stack (whatweb)
         print(f"[*] Identifying Tech Stack for {clean_target}...")
-        results['tech'] = self.runner.run(f"whatweb {url} --aggression 3", timeout=90)
+        results['tech'] = self.runner.run(f"whatweb {shlex.quote(url)} --aggression 3", timeout=90)
 
         # 2. Port Scan (nmap - lightweight)
         print(f"[*] Scanning Ports for {clean_target}...")
-        results['ports'] = self.runner.run(f"nmap -sV -T4 --top-ports 100 {clean_target}", timeout=180)
+        results['ports'] = self.runner.run(f"nmap -sV -T4 --top-ports 100 {shlex.quote(clean_target)}", timeout=180)
 
         if self._nmap_needs_fallback(results['ports']):
             # A full -sV top-100 scan is slow (per-port service
@@ -164,7 +165,7 @@ class ReconService:
             # genuine nmap-confirmed answer instead of just giving up.
             print(f"[!] Primary nmap scan failed/inconclusive for {clean_target}: {results['ports'][:150]}")
             print("[*] Retrying with a lighter -Pn degraded scan (skips host-discovery ping)...")
-            fallback_output = self.runner.run(f"nmap -Pn -T4 --top-ports 20 {clean_target}", timeout=60)
+            fallback_output = self.runner.run(f"nmap -Pn -T4 --top-ports 20 {shlex.quote(clean_target)}", timeout=60)
             results['ports_scan_degraded'] = True
             if not self._nmap_needs_fallback(fallback_output):
                 results['ports'] = fallback_output
@@ -174,7 +175,7 @@ class ReconService:
 
         # 3. DNS Recon
         print(f"[*] DNS Enumeration for {clean_target}...")
-        results['dns'] = self.runner.run(f"dig ANY {clean_target} +short", timeout=20)
+        results['dns'] = self.runner.run(f"dig ANY {shlex.quote(clean_target)} +short", timeout=20)
 
         self.last_recon_results = results
 

@@ -1,6 +1,7 @@
 import os
 import json
 import re
+import shlex
 from datetime import datetime
 
 from app.tools.utils import normalize_domain_for_memory
@@ -41,7 +42,7 @@ class ReachabilityService:
         # of whether the host was actually reachable, misleading the agent
         # into reporting a live target as "DOWN".
         host = normalize_domain_for_memory(domain)
-        res = self.runner.run(f"ping -c 4 {host}")
+        res = self.runner.run(f"ping -c 4 {shlex.quote(host)}")
         if "4 received" in res or "3 received" in res:
             self.memory.upsert_target(domain)
             return f"Target {domain} is REACHABLE.\n{res}"

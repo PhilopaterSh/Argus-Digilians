@@ -1,4 +1,5 @@
 import os
+import shlex
 from datetime import datetime
 
 from app.tools.utils import normalize_domain_for_memory
@@ -66,7 +67,7 @@ class VulnerabilityScanners:
         output_stem = f"{output_dir}/{base_name}"
         output_path = f"{output_stem}.txt"
 
-        cmd = f"nikto -h {url} -nointeractive -maxtime 120s -Format txt -o {output_stem}"
+        cmd = f"nikto -h {shlex.quote(url)} -nointeractive -maxtime 120s -Format txt -o {shlex.quote(output_stem)}"
         res = self.runner.run(cmd)
 
         if self._connection_failed(res):

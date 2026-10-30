@@ -3,6 +3,7 @@ import sys
 import subprocess
 import urllib.request
 import json
+import shlex
 import logging
 from typing import Any
 
@@ -77,7 +78,7 @@ class SelfHealingService(BaseToolService):
 
         # 2. Check if it's a Kali/System tool
         print(f"[*] Attempting to install Kali tool via apt: {tool_info}")
-        res = self.runner.run(f"sudo apt-get update && sudo apt-get install -y {tool_info}")
+        res = self.runner.run(f"sudo apt-get update && sudo apt-get install -y {shlex.quote(tool_info)}")
         if "Setting up" in res or "is already the newest version" in res:
             return f"Successfully installed/verified system tool: {tool_info}."
         

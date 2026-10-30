@@ -1,3 +1,4 @@
+import hashlib
 import logging
 import os
 from typing import TYPE_CHECKING, Any, List, Optional
@@ -71,6 +72,7 @@ class VectorStore:
             embedder_provider=EmbeddingFactory.get_provider() or 'unknown',
             dimension=self._store.index.d,
             knowledge_base_dir=self.config.knowledge_base_dir,
+            index_sha256=self._index_pkl_sha256(),
         )
         logger.info('[RAG] Indexed %s chunks into FAISS', len(chunks))
         return len(chunks)
@@ -121,6 +123,21 @@ class VectorStore:
             )
             return False
 
+        recorded_sha = manifest.index_sha256 if manifest is not None else ""
+        if recorded_sha:
+            current_sha = self._index_pkl_sha256()
+            if current_sha != recorded_sha:
+                logger.warning(
+                    '[RAG] index.pkl SHA-256 mismatch (manifest %s != on-disk %s); '
+                    'refusing to deserialize an unverified pickle - the caller will rebuild.',
+                    recorded_sha, current_sha,
+                )
+                return False
+        elif manifest is not None:
+            logger.warning(
+                '[RAG] Manifest predates index.pkl hash pinning; verifying by rebuild is recommended.',
+            )
+
         try:
             from langchain_community.vectorstores import FAISS
 
@@ -135,11 +152,32 @@ class VectorStore:
             logger.warning('[RAG] Failed to load index: %s', e)
             return False
 
+    def _index_pkl_sha256(self) -> str:
+        """Compute the SHA-256 of the persisted FAISS pickle, or "" if absent.
+
+        The FAISS ``save_local`` pickle is loaded with
+        ``allow_dangerous_deserialization=True`` (pentest finding ARG-08), so
+        its bytes are recorded in the manifest and verified before load.
+
+        Returns:
+            str: Hex digest, or an empty string when `index.pkl` is absent.
+        """
+        pkl_path = os.path.join(self.config.vector_store_dir, "index.pkl")
+        if not os.path.isfile(pkl_path):
+            return ""
+        h = hashlib.sha256()
+        with open(pkl_path, "rb") as fh:
+            for chunk in iter(lambda: fh.read(65536), b""):
+                h.update(chunk)
+        return h.hexdigest()
+
     def _persist(self):
         """Save the current in-memory FAISS index to `config.vector_store_dir`, if one exists."""
         if self._store is None:
             return
         self._store.save_local(self.config.vector_store_dir)
+        if rag_manifest.read_manifest(self.config.vector_store_dir) is not None:
+            rag_manifest.update_index_sha256(self.config.vector_store_dir, self._index_pkl_sha256())
         logger.info('[RAG] Saved FAISS index to %s', self.config.vector_store_dir)
 
     def similarity_search(self, query: str, k: Optional[int] = None) -> List[Document]:

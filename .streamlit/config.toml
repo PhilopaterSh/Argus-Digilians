@@ -6,7 +6,7 @@ textColor = "#ffffff"
 font = "monospace"
 
 [client]
-showErrorDetails = true
+showErrorDetails = false
 toolbarMode = "viewer"
 
 [server]
@@ -14,7 +14,7 @@ port = 8501
 headless = true
 runOnSave = true
 maxUploadSize = 200
-enableXsrfProtection = false
+enableXsrfProtection = true
 enableCORS = false
 
 [logger]
