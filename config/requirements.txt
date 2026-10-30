@@ -5,7 +5,7 @@ langchain-huggingface
 langchain-community
 langchain-core
 langchain-text-splitters
-langgraph>=0.2.0
+langgraph>=1.2.18
 streamlit
 # ddgs is the current package name (duckduckgo_search was renamed upstream);
 # app/tools/web_search.py falls back to duckduckgo_search only for compatibility.
