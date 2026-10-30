@@ -7,6 +7,8 @@ import ipaddress
 from typing import Any, Dict, List
 from urllib.parse import urlparse
 
+from app.core import audit
+
 # Patterns that are always blocked regardless of scan mode
 DESTRUCTIVE_PATTERNS = [
     r'rm\s+-rf', r'format\s+[a-zA-Z]:', r'mkfs\.', r'dd\s+if=',
@@ -167,6 +169,7 @@ class SafetyLayer:
             "content_preview": content[:200]
         }
         self._audit_log.append(entry)
+        audit.log_event("block", "safety-layer", content[:200], content[:200], "blocked", block_type)
 
     def get_audit_log(self) -> list:
         """Returns the full audit log of blocked actions."""

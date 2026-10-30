@@ -2,6 +2,7 @@ import socket
 import subprocess
 import time
 import paramiko
+from app.core import audit
 from app.core.config import ArgusConfig
 from app.tools.utils import clean_ansi_codes
 from app.tools.wsl_bridge import WSLBridge
@@ -73,6 +74,7 @@ class CommandRunner:
             error/suggestion message (WAF block, tool not found, timeout,
             etc.) - never raises for a normal command failure.
         """
+        audit.log_event("command", "agent", "", command, "executed")
         if self.config.host in ["127.0.0.1", "localhost"]:
             return self._run_direct_wsl(command, show_prompt, timeout=timeout)
         return self._run_ssh(command, timeout=timeout)

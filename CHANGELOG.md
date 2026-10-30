@@ -26,6 +26,12 @@ merges both lines so `main` holds everything:
   "parallel reconnaissance" claim corrected to the sequential
   whatweb -> nmap -> dig suite, `CONTRIBUTING.md` npm boilerplate dropped.
 - CI: both workflows green on the merge commit.
+- ARG-09 fixed: a durable, append-only command audit trail
+  (`app/core/audit.py` -> `data/audit_log.jsonl`, one JSON event per
+  line). Every Kali command executed through `CommandRunner` and every
+  safety-layer block/target rejection is recorded (kind, operator,
+  target, command, status, reason) with field truncation and
+  best-effort failure semantics - auditing never breaks execution.
 - Activated the dormant SafetyLayer (`app/core/safety.py`): every target-taking
   facade method now runs `validate_target()` first (strict FQDN allowlist added -
   wildcards and shell metacharacters are rejected), `Run_Kali_Command` runs
