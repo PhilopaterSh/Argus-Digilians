@@ -2,6 +2,31 @@
 
 All notable changes to this project will be documented in this file.
 
+## Reconciliation: `release/unified` merged back into `main` (2026-10-30)
+
+The end-of-August work had split into two parallel release lines. `main`
+kept the final team-roster docs and the SQLi false-negative fix
+(`evasion.py`); `release/unified` carried the rest. This reconciliation
+merges both lines so `main` holds everything:
+
+- Recovered from `release/unified`: Apache-2.0 `LICENSE` + README ABSTRACT,
+  the injection-harvesting crawler upgrade, per-injection-point
+  path-traversal scanner budgets, the `fuzz_sensitive_files` service
+  (`Fuzz_Sensitive_Files` tool), `knowledge_base/agent_playbook_scenarios.json`
+  + `scripts/ingest_scenarios_kb.py`, `docs/reference/` archives, and the
+  GitLab CI mirror of the GitHub quality gates.
+- Runtime artifacts stay untracked (`data/*.db`, `artifacts/screenshots/`);
+  `Payloads/Payloads.db-journal` removed from tracking.
+- Duplicate `path_traversal` registrations removed from
+  `WSLBridgeTools._register_defaults()` (was registered three times;
+  Constitution IX) - the registry now holds 20 services in 20
+  registrations, and the LLM-facing tool list is unchanged at 20 tools.
+- Stale doc counts corrected: architecture doc tool count 17 -> 20,
+  `docs/README.md` dependency versions marked unpinned, README
+  "parallel reconnaissance" claim corrected to the sequential
+  whatweb -> nmap -> dig suite, `CONTRIBUTING.md` npm boilerplate dropped.
+- CI: both workflows green on the merge commit.
+
 ## Unified release: merged orphan branches `argus/SALMA` + assets from `momen`/`MOUSTAFA-PC` into main (2026-08-25, branch `release/unified`)
 
 These branches were created as independent repository uploads (no shared git

@@ -153,10 +153,6 @@ class WSLBridgeTools:
             "evasion", "Advanced vulnerability probe with evasion", self.evasion, "advanced_vuln_probe"
         ))
         self.registry.register(_ToolServiceAdapter(
-            "path_traversal", "Dedicated multi-encoding path traversal scan",
-            self.path_traversal, "run_traversal_scan"
-        ))
-        self.registry.register(_ToolServiceAdapter(
             "capture_screenshot", "Capture a screenshot of a URL as vulnerability evidence",
             self.browser_manager, "capture_vulnerability"
         ))
@@ -180,10 +176,6 @@ class WSLBridgeTools:
         ))
         self.registry.register(_ToolServiceAdapter(
             "fuzz_sensitive_files", "Fuzz common sensitive file paths", self.fuzzer, "fuzz_sensitive_files"
-        ))
-        self.registry.register(_ToolServiceAdapter(
-            "path_traversal", "Dedicated multi-parameter, multi-encoding path-traversal probe",
-            self.path_traversal, "run_traversal_scan"
         ))
         logger.info("Registered %d tools in registry", len(self.registry))
 
