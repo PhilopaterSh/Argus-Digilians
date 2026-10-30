@@ -43,7 +43,7 @@ ROLE_TOOL_PARTITIONS = {
     "exploiter": {
         "Run_Nikto", "Run_FFUF", "Exploit_Suggester", "Advanced_Evasion_Probe",
         "Run_Kali_Command", "Reflective_Pre_Verify", "System_Self_Heal",
-        "Capture_Vulnerability_Screenshot", "Path_Traversal_Scan",
+        "Capture_Vulnerability_Screenshot", "Path_Traversal_Scan", "Classify_XSS",
     },
 }
 _PLANNER_SUMMARIZER_TOOLS = {"Query_Memory", "Query_Knowledge_Graph"}
@@ -174,6 +174,14 @@ def build_argus_tools(bridge: WSLBridgeTools, role: Optional[str] = None) -> lis
             name="Fuzz_Sensitive_Files",
             func=bridge.fuzz_sensitive_files,
             description="Check common sensitive file paths (.env, .git/config, backup.sql, etc.) for accidental exposure.",
+        ),
+        Tool(
+            name="Classify_XSS",
+            func=bridge.classify_xss,
+            description="Send a reflected-XSS probe carrying the ARGUSxSS7 marker to a URL parameter and classify the "
+                "response reflection (High/Medium severity with the reason, or an explicit no-exploitable-reflection "
+                "verdict). Distinguishes executable unencoded reflections from escaped/inert ones by content signature. "
+                "Use on parameters discovered by Crawl_Target when checking for cross-site scripting.",
         ),
     ]
     if role is None:

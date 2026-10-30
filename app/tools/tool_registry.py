@@ -8,6 +8,8 @@ populates one. If disambiguating by basename alone, check the full import
 path.
 """
 import logging
+import shlex
+from urllib.parse import quote
 from typing import Any
 
 from app.core.memory.memory_service import ArgusMemory
@@ -29,6 +31,7 @@ from app.tools.browser_manager import BrowserManager
 from app.tools.self_heal import SelfHealingService
 from app.tools.reflective_verification import ReflectiveVerificationService
 from app.tools.fuzzing import SensitiveFileFuzzer
+from app.tools.xss_classifier import XSS_MARKER, classify_xss_reflection
 
 logger = logging.getLogger(__name__)
 
@@ -177,6 +180,9 @@ class WSLBridgeTools:
         self.registry.register(_ToolServiceAdapter(
             "fuzz_sensitive_files", "Fuzz common sensitive file paths", self.fuzzer, "fuzz_sensitive_files"
         ))
+        self.registry.register(_ToolServiceAdapter(
+            "xss_classifier", "Send a marker XSS probe and classify the reflection severity", self, "classify_xss"
+        ))
         logger.info("Registered %d tools in registry", len(self.registry))
 
     # Legacy Properties for compatibility
@@ -298,6 +304,42 @@ class WSLBridgeTools:
     def fuzz_sensitive_files(self, url):
         """Delegate to SensitiveFileFuzzer.fuzz_sensitive_files()."""
         return self.fuzzer.fuzz_sensitive_files(url)
+
+    def classify_xss(self, url, payload=None):
+        """Send a marker-carrying XSS probe to `url` and classify the reflection.
+
+        Builds an injection URL (appending the probe as an `argusxss` query
+        parameter, creating one when absent), fetches the response with `curl`
+        inside Kali via the command runner, then classifies the body with
+        `app.tools.xss_classifier.classify_xss_reflection`, which separates
+        executable unencoded reflections from escaped/inert ones.
+
+        Args:
+            url (str): The target URL to probe.
+            payload (str | None): Optional custom XSS payload. Defaults to a
+                marker-carrying breakout probe
+                (`ARGUSxSS7"><img src=x onerror=alert(1)>`).
+
+        Returns:
+            str: Human-readable verdict: severity and reason when a reflection
+            is confirmed, or an explicit no-exploitable-reflection line that
+            includes the fetched-response size and probed URL so the caller
+            can tell a clean no-hit apart from a failed fetch.
+        """
+        probe = payload or f'{XSS_MARKER}"><img src=x onerror=alert(1)>'
+        sep = "&" if "?" in url else "?"
+        probe_url = f"{url}{sep}argusxss={quote(probe, safe='')}"
+        command = f"curl -s -L --max-time 45 {shlex.quote(probe_url)}"
+        body = self.runner.run(command)
+        verdict = classify_xss_reflection(body, probe)
+        if verdict:
+            severity, reason = verdict
+            return f"XSS reflection CONFIRMED ({severity}): {reason}. Probe: {probe}"
+        return (
+            f"No exploitable XSS reflection found for probe {probe} "
+            f"(fetched {len(body)} chars; URL: {probe_url}). Reflection may be "
+            "escaped, filtered by a WAF, or the parameter may not be reflected."
+        )
 
     def run_traversal_scan(self, url, params=None, max_probes=None,
                            max_guess_probes=27, max_total_probes=720):

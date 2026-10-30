@@ -34,6 +34,9 @@ EXPECTED_TOOL_NAMES = {
     "Path_Traversal_Scan",
     # Dedicated sensitive-file fuzzing (merged from argus/SALMA).
     "Fuzz_Sensitive_Files",
+    # Reflected-XSS marker-probe classifier (app/tools/xss_classifier.py),
+    # wired into the facade + registry on 2026-10-30 after sitting dormant.
+    "Classify_XSS",
 }
 EXPECTED_TOOL_COUNT = len(EXPECTED_TOOL_NAMES)
 

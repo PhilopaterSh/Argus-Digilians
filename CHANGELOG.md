@@ -26,6 +26,12 @@ merges both lines so `main` holds everything:
   "parallel reconnaissance" claim corrected to the sequential
   whatweb -> nmap -> dig suite, `CONTRIBUTING.md` npm boilerplate dropped.
 - CI: both workflows green on the merge commit.
+- Wired the dormant `app/tools/xss_classifier.py` into the live tool
+  surface: `WSLBridgeTools.classify_xss()` sends a marker-carrying probe
+  via `curl` in Kali and classifies the reflection with
+  `classify_xss_reflection()`; registered as `xss_classifier` and exposed
+  to the ReAct loop as `Classify_XSS` (registry now 21 services in 21
+  registrations, 21 LLM-facing tools).
 
 ## Unified release: merged orphan branches `argus/SALMA` + assets from `momen`/`MOUSTAFA-PC` into main (2026-08-25, branch `release/unified`)
 
