@@ -11,6 +11,10 @@ st.set_page_config(
     initial_sidebar_state='expanded',
 )
 
+# ARG-01: authenticate the control plane before any dashboard content.
+auth_gate.enforce()
+
+from app.GUI import auth_gate
 from app.core.agent.contracts import STREAMLIT_DASHBOARD_ENTRYPOINT
 from app.core.config import ArgusConfig
 from app.GUI.components.status_bar import render_status_bar
