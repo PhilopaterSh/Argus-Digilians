@@ -26,6 +26,13 @@ merges both lines so `main` holds everything:
   "parallel reconnaissance" claim corrected to the sequential
   whatweb -> nmap -> dig suite, `CONTRIBUTING.md` npm boilerplate dropped.
 - CI: both workflows green on the merge commit.
+- ARG-02/07 code remediation: optional key-based SSH auth
+  (`WSL_KEY_PATH` - the key is tried first, the password remains the
+  documented lab fallback) and host-key pinning (`WSL_HOST_KEY_SHA256`
+  - a `_FingerprintPolicy` that aborts on a substituted server key;
+  without a pin the legacy lab auto-accept applies). The operator
+  generates the key pair and sets the two env vars; defaults keep the
+  lab workflow unchanged.
 - ARG-06 fixed: all top-level dependencies pinned to the last green CI
   set (config/requirements*.txt) and a 160-package constraints file
   (`config/requirements-lock.txt`) wired into every CI install so

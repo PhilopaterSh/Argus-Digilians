@@ -1,3 +1,6 @@
+import base64
+import hashlib
+import os
 import socket
 import subprocess
 import time
@@ -20,6 +23,28 @@ try:
     DEFAULT_COMMAND_TIMEOUT = ArgusConfig.load().command_timeout_seconds
 except Exception:
     DEFAULT_COMMAND_TIMEOUT = 180
+
+class _FingerprintPolicy(paramiko.MissingHostKeyPolicy):
+    """Accept a host key only when its SHA-256 matches the pinned one.
+
+    Implements the ARG-07 remediation: with `WSL_HOST_KEY_SHA256` set, a
+    mismatching or substituted server key aborts the connection instead
+    of being silently auto-accepted (MITM protection). Without a pin,
+    the legacy lab AutoAddPolicy behavior applies unchanged.
+    """
+
+    def __init__(self, expected_sha256: str):
+        """Store the pinned fingerprint (OpenSSH or bare-base64 form)."""
+        self.expected = expected_sha256.strip().lower().removeprefix("sha256:")
+
+    def missing_host_key(self, client, hostname, key):
+        """Compare the presented key's fingerprint with the pin."""
+        fp = "sha256:" + base64.b64encode(hashlib.sha256(key.asbytes()).digest()).decode().rstrip("=").lower()
+        if fp != self.expected:
+            raise paramiko.SSHException(
+                f"Host key fingerprint mismatch for {hostname}: got {fp}, expected {self.expected}"
+            )
+        # Matching pin: accept without persisting to known_hosts.
 
 class CommandRunner:
     """Responsible only for executing commands through WSL or SSH fallback."""
@@ -180,14 +205,28 @@ class CommandRunner:
         for attempt in range(max_retries):
             self.bridge.ensure_ssh_service()
             client = paramiko.SSHClient()
-            client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+            pinned = (self.config.host_key_sha256 or "").strip()
+            if pinned:
+                client.set_missing_host_key_policy(_FingerprintPolicy(pinned))
+            else:
+                # Lab default (ARG-07): auto-accept only when the operator
+                # has not pinned a host key fingerprint.
+                client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
             try:
+                connect_kwargs = {
+                    "port": self.config.port,
+                    "username": self.config.user,
+                    "password": self.config.password,
+                    "timeout": 15,
+                }
+                key_path = (self.config.key_path or "").strip()
+                if key_path:
+                    # Key auth first (ARG-02); the password remains the
+                    # documented lab fallback if the key is refused.
+                    connect_kwargs["key_filename"] = os.path.expanduser(key_path)
                 client.connect(
                     self.config.host,
-                    port=self.config.port,
-                    username=self.config.user,
-                    password=self.config.password,
-                    timeout=15,
+                    **connect_kwargs,
                 )
                 # exec_command()'s own timeout only bounds the exec request itself;
                 # without settimeout() on the channel, stdout.read()/stderr.read()

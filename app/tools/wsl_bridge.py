@@ -17,6 +17,20 @@ class WSLConfig:
     password: str = os.getenv("WSL_PASS", "kali")
     port: int = int(os.getenv("WSL_PORT", 22))
     distro: str = os.getenv("WSL_DISTRO", "kali-linux")
+    # ARG-02: optional key-based auth; when set, the key is tried first and
+    # the password remains the documented lab fallback.
+    key_path: str = os.getenv("WSL_KEY_PATH", "")
+    # ARG-07: optional pinned server fingerprint (OpenSSH `SHA256:...` form or
+    # bare base64). When set, a mismatching host key aborts the connection
+    # instead of being auto-accepted.
+    host_key_sha256: str = os.getenv("WSL_HOST_KEY_SHA256", "")
+    # ARG-02: optional key-based auth; when set, the key is tried first and
+    # the password remains the documented lab fallback.
+    key_path: str = os.getenv("WSL_KEY_PATH", "")
+    # ARG-07: optional pinned server fingerprint (OpenSSH `SHA256:...` form or
+    # bare base64). When set, a mismatching host key aborts the connection
+    # instead of being auto-accepted.
+    host_key_sha256: str = os.getenv("WSL_HOST_KEY_SHA256", "")
 
 class WSLBridge:
     """Responsible only for WSL/SSH service configuration and readiness."""
