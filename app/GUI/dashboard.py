@@ -2,6 +2,8 @@ import streamlit as st
 import sys
 import os
 
+from app.GUI import auth_gate
+
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
 
 st.set_page_config(
@@ -13,8 +15,6 @@ st.set_page_config(
 
 # ARG-01: authenticate the control plane before any dashboard content.
 auth_gate.enforce()
-
-from app.GUI import auth_gate
 from app.core.agent.contracts import STREAMLIT_DASHBOARD_ENTRYPOINT
 from app.core.config import ArgusConfig
 from app.GUI.components.status_bar import render_status_bar
