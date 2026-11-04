@@ -55,9 +55,18 @@ class ReconService:
             for sub in subdomains:
                 self.memory.upsert_target(sub)
             
-            # Save structure to memory for the blackboard
-            if hasattr(self.memory, 'save_recon_data'):
-                self.memory.save_recon_data(domain, {"subdomains": subdomains})
+            # Persist to the blackboard via the existing memory APIs
+            # (the previously-called save_recon_data does not exist on
+            #  ArgusMemory - the hasattr guard silently dropped all data).
+            if self.memory is not None and hasattr(self.memory, "add_finding"):
+                self.memory.add_finding(
+                    domain=domain,
+                    tool_name="recon",
+                    data_type="subdomain_enum",
+                    raw_data=json.dumps({"subdomains": subdomains}, ensure_ascii=False),
+                    summary=f"{len(subdomains)} subdomains discovered",
+                    severity="Info",
+                )
             
             return f"```\n{res}\n```"
         
