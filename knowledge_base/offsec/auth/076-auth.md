@@ -1,0 +1,17 @@
+# AUTH — web_offensive_elite_v2_sft
+
+- source: web_offensive_elite_v2_sft
+- class: auth
+- cwe: CWE-287
+
+## Scenario
+
+Walk me through The Tangled Web — ANATOMY OF THE WEB (cont.) with practical steps from the source material.
+
+## Analysis / Response
+
+Based on The Tangled Web (ANATOMY OF THE WEB (cont.)):
+
+The method through which these credentials are exchanged is not specified as a part of the abstract URL syntax, and it is always protocol specific. For those protocols that do not support authentication, the behav- ior of a credential-bearing URL is simply undefined. When no credentials are supplied, the browser will attempt to fetch the resource anonymously. In the case of HTTP and several other protocols, this means not sending any authentication data; for FTP, it involves logging into a guest account named ftp with a bogus password. Most browsers accept almost any characters, other than general URL section delimiters, in this section with two exceptions: Safari, for unclear rea- sons, rejects a broader set of characters, including “<”, “>”, “{”, and “}”, while Firefox also rejects newlines.* Server Address For all fully qualified hierarchical URLs, the server address section must spec- ify a case-insensitive DNS name (such as example.com), a raw IPv4 address (such as 127.0.0.1), or an IPv6 address in square brackets (such as [0:0:0:0:0:0:0:1]), indicating the location of a server hosting the requested resource. Firefox will also accept IPv4 addresses and hostnames in square brackets, but other implementations reject them immediately. Although the RFC permits only canonical notations for IP addresses, stan- dard C libraries used by most applications are much more relaxed, accepting noncanonical IPv4 addresses that mix octal, decimal, and hexadecimal nota- tion or concatenate some or all of the octets into a single integer. As a result, the following options are recognized as equivalent:  http://127.0.0.1/ This is a canonical representation of an IPv4 address.  http://0x7f.1/ This is a representation of the same address that uses a hexadecimal number to represent the first octet and concatenates all the remaining octets into a single decimal value.  http://017700000001/ The same address is denoted using a 0-prefixed octal value, with all octets concatenated into a single 32-bit integer. * This is possibly out of the concern for FTP, which transmits user credentials without any encoding; in this protocol, a newline transmitted as is would be misinterpreted by the server as the beginning of a new FTP command. Other browsers may transmit FTP credentials in noncompliant percent-encoded form or simply strip any problematic characters later on. 26 Chapter 2 A similar laid-back approach can be seen with DNS names. Theoretically, DNS labels need to conform to a very narrow character set (specifically, alpha- numerics, “.”, and “-”, as defined in RFC 10355), but many browsers will happily ask the underlying operating system resolver to look up almost anything, and the operating system will usually also not make a fuss. The exact set of charac- ters accepted in the hostname and passed to the resolver varies from client to client. Safari is most rigorous, while Internet Explorer is the most permissive. Perhaps of note, several control characters in the 0x0A–0x0D and 0xA0–0xAD ranges are ignored by most browsers in this portion of the URL. NOTE One fascinating behavior of the URL parsers in all of the mainstream
+
+Use only on systems you are authorized to test; capture evidence and include remediation.

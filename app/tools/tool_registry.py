@@ -18,6 +18,7 @@ from app.core.registry.tool_registry import ToolRegistry
 from app.tools.wsl_bridge import WSLBridge, WSLConfig
 from app.tools.command_runner import CommandRunner
 from app.tools.recon import ReconService
+from app.tools.recon_assist import ReconAssistBriefService
 from app.tools.scanners import VulnerabilityScanners
 from app.tools.path_traversal import PathTraversalScanner
 from app.tools.payloads import PayloadSuggester
@@ -131,6 +132,10 @@ class WSLBridgeTools:
         self.path_traversal = PathTraversalScanner(self.runner, self.memory)
         self.self_heal = SelfHealingService(self.runner)
         self.verifier = ReflectiveVerificationService(self.runner, self.memory)
+        # specs/030: host-side bridge to the Recon-Assist differential recon
+        # pipeline (reads argus_brief.json written on the host by the pipeline;
+        # no WSL/SSH hop - see specs/030-recon-assist-integration/spec.md).
+        self.recon_assist = ReconAssistBriefService(memory=self.memory)
 
         self._register_defaults()
 
@@ -172,6 +177,18 @@ class WSLBridgeTools:
         ))
         self.registry.register(_ToolServiceAdapter(
             "evasion", "Advanced vulnerability probe with evasion", self.evasion, "advanced_vuln_probe"
+        ))
+        self.registry.register(_ToolServiceAdapter(
+            "recon_brief", "Load the Recon-Assist differential brief and ingest leads into memory",
+            self.recon_assist, "load_brief"
+        ))
+        self.registry.register(_ToolServiceAdapter(
+            "recon_new_hosts", "List new/changed hosts from the last Recon-Assist differential run",
+            self.recon_assist, "new_hosts"
+        ))
+        self.registry.register(_ToolServiceAdapter(
+            "recon_guidance", "Prioritized manual-testing guidance from the Recon-Assist brief",
+            self.recon_assist, "differential_guidance"
         ))
         self.registry.register(_ToolServiceAdapter(
             "capture_screenshot", "Capture a screenshot of a URL as vulnerability evidence",

@@ -1,0 +1,17 @@
+# AUTH — web_offensive_elite_v2_sft
+
+- source: web_offensive_elite_v2_sft
+- class: auth
+- cwe: CWE-287
+
+## Scenario
+
+What should a web pentester know about The Tangled Web — EXTRINSIC SITE PRIVILEGES (cont.)?
+
+## Analysis / Response
+
+Based on The Tangled Web (EXTRINSIC SITE PRIVILEGES (cont.)):
+
+drive,* and if the user consents, it will then automatically retrieve and paste this data into matching forms encountered later on. In Firefox, Chrome, and Safari, the process of retriev- ing a stored password is automatic; in Internet Explorer and Opera, an addi- tional user gesture may be required to confirm the intent. The design of password managers is fragile but has one clear benefit: It works right away even without official support (or, for that matter, informed consent) from any websites. Web applications that are unhappy about this feature may opt out by appending a poorly named autocomplete=off parameter to the offending password field,† but beyond that, the process is almost com- pletely seamless. The primary way that every in-browser password manager protects stored data is by tying the credentials to the SOP origin where they were originally entered—paying close attention to the hostname, protocol, and port. Some browsers also consider secondary indicators, such as the ordering or naming of form fields, the URL path to the form, or the address to which the creden- tials are sent. (As we know from Chapter 9, such scoping measures are not particularly useful from the security standpoint due to the operation of the same-origin policy.) In browsers that autocomplete login forms without the need for human interaction, it is sensible to look at the mechanism as a form of a privileged API: Any content executing in the appropriate origin will be able to request browser-stored credentials by constructing a believable-looking form and then waiting for it to be automatically populated with login data. In order to read back this information, the script merely needs to examine the value property of the DOM element associated with the password field. NOTE Removing the ability to inspect values of password fields may seem like a simple way to improve the scheme, but it is not a very good one. The data could still be stolen by, say, waiting for password autocompletion, changing the data submission method from POST to GET, and then calling submit() on the login form. These steps would result in navigation to a page that has the password plainly visible in the location.search string. (Plus, many web applications have legitimate uses for reading back these fields on the client side, for example, to advise on password strength.) As should be clear, the most serious risk associated with password managers is the amplification of XSS bugs. In web applications that use httponly cookies, a successful exploitation of an XSS flaw may give the attacker only transient access to a user’s account, but if the same vulnerability can be leveraged to steal a user’s password, the consequences are more dire and longer-lived.‡ * This data may be stored on disk as a plaintext representation, a naïvely obfuscated string, or a properly encrypted value protected with a “master” password that needs to be entered before- hand. All three methods are comparably vulnerable to determined attackers with access to the local system, but the plaintext
+
+Use only on systems you are authorized to test; capture evidence and include remediation.
