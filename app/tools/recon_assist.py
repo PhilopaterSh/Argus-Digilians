@@ -1,4 +1,4 @@
-"""Recon-Assist brief ingestion — host-side bridge to the differential
+"""Recon-Assist brief ingestion - host-side bridge to the differential
 reconnaissance pipeline (github.com/PhilopaterSh/Recon-Assist, v2.6).
 
 The pipeline writes ``argus_brief.json`` (schema
