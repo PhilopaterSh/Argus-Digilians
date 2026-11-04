@@ -1,0 +1,15 @@
+# PATHTRAVER — NVD CVE 2.0 annual feed
+
+- source: NVD CVE 2.0 annual feed
+- class: pathtraver
+- cve: ['CVE-2023-5815']
+
+## Scenario
+
+Give me a source-grounded overview of CVE-2023-5815.
+
+## Analysis / Response
+
+CVE-2023-5815: The News & Blog Designer Pack – WordPress Blog Plugin — (Blog Post Grid, Blog Post Slider, Blog Post Carousel, Blog Post Ticker, Blog Post Masonry) plugin for WordPress is vulnerable to Remote Code Execution via Local File Inclusion in all versions up to, and including, 3.4.1 via the bdp_get_more_post function hooked via a nopriv AJAX. This is due to function utilizing an unsafe extract() method to extract values from the POST variable and passing that input to the include() function. This makes it possible for unauthenticated attackers to include arbitrary PHP files and achieve remote code execution. On vulnerable Docker configurations it may be possible for an attacker to create a PHP file and then subsequently include it to achieve RCE.
+
+Source: https://nvd.nist.gov/vuln/detail/CVE-2023-5815

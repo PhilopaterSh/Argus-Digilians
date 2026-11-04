@@ -1,0 +1,117 @@
+# INSECURE_DESIGN — h1
+
+- source: h1
+- class: insecure_design
+- cwe: CWE-657
+- severity: low
+- program: rockstargames
+- quality_score: 13
+
+## Scenario
+
+Analyze the following vulnerability report and provide a structured security assessment.
+
+**Report Title:** use of unsafe host header leads to open redirect
+**Affected Asset:** socialclub.rockstargames.com
+
+**Vulnerability Description:**
+Hi guys
+
+I noticed you are using unsafe host header in generating short links.
+
+#Details 
+First i navigated to my account 
+`https://socialclub.rockstargames.com/member/xerojuzto`
+
+Then i created a new message , and i clicked on share button which shortens the url for example 
+
+From `https://socialclub.rockstargames.com/member/xerojuzto/feed/[REDACTED_PHONE]` 
+to `http://rsg.ms/517ae7c`
+
+I fetched the http requests to find the end-point which is used to shorten urls.
+`https://socialclub.rockstargames.com/some_dirs/share/Person/getcontent?_=[REDACTED_PHONE]`
+
+the end-point is taking all the url parts before `/Share/Person` and creates a short link corresponding to this cut url.
+
+I Guess the code looks like 
+```
+<?php
+$actual_link = "https://$_SERVER[HTTP_HOST]$_SERVER[REQUEST_URI]";
+$trimed_link=explode($actual_link,"/Share");
+
+$short=DB_Create_short_link($trimed_link);
+echo $short;
+?>
+```
+Did you notice the usage of `HTTP_HOST` which  is variable and could be changed by sending different host header values , this will result in creating malicious urls.
+
+The following request 
+```
+GET /feed/102126489/activity/[REDACTED_PHONE]/share/Person/getcontent?_=[REDACTED_PHONE] HTTP/1.1
+Host: socialclub.rockstargames.com
+```
+Is meant to shorten `/feed/102126489/activity/[REDACTED_PHONE]` to `http://rsg.ms/517ae7c`   but due to not sharing my wall , it will create another redirect to my profile `https://socialclub.rockstargames.com/member/xerojuzto`
+
+#Exploiting
+I tried to manipulate the host header to force it to redirect the client  to my domain
+
+```
+GET /feed/102126489/activity/[REDACTED_PHONE]/share/Person/getcontent?_=[REDACTED_PHONE] HTTP/1.1
+Host: socialclub.rockstargames.com.this.is.my.domain.evil.net
+```
+
+and it resulted in creating `http://rsg.ms/5350b75` if you visited it , you would be redirected to 
+
+`https://socialclub.rockstargames.com.this.is.my.domain.evil.net/member/xerojuzto/feed/[REDACTED_PHONE]` 
+Which is not your domain.
+
+#Consequences
+1- Phishing attacks
+2- Open redirects
+3- Cache poisoning and password reset leakage (Limited)
+
+#Steps to reproduce
+1- Log into your account at socialclub
+2- Navigate to your profile
+3- Post a new message
+4- Set up a proxy server (i used burp)
+5- Configure your browser(firefox in my case) to work with the proxy server
+6- Click on share button 
+7- Intercept the request
+8- Manipulate the host header and copy the generated shorten url (ex: rsg.ms/5350b75)
+9- Visit it and you will see a redirect to the injected domain.
+
+you can visit `http://rsg.ms/5350b75` , if you need a video just shout me .
+
+
+#Fix
+- If you are shortening urls from only `socialclub` , then you should correctly validate the host header 
+-If you are using many domains 
+   you should create a white list for the
+
+## Analysis / Response
+
+**Vulnerability Class:** insecure_design
+**CWE:** CWE-657
+**Weakness:** Violation of Secure Design Principles
+**Severity:** low
+**Endpoint Pattern:** GET /feed/102126489/activity/3073813190982488067/share/Person/getcontent?_=1488723542848
+
+**Impact Assessment:**
+1- Phishing attacks
+2- Open redirects
+3- Cache poisoning and password reset leakage (Limited)
+
+**Remediation:**
+- If you are shortening urls from only `socialclub` , then you should correctly validate the host header 
+-If you are using many domains 
+   you should create a white list for them before constructing urls.
+
+
+#Ref 
+http://www.skeletonscribe.net/2013/05/practical-http-host-header-attacks.html
+
+
+
+Best regards
+Yasser
