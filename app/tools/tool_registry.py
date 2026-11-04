@@ -19,6 +19,7 @@ from app.tools.wsl_bridge import WSLBridge, WSLConfig
 from app.tools.command_runner import CommandRunner
 from app.tools.recon import ReconService
 from app.tools.recon_assist import ReconAssistBriefService
+from app.tools.recon_assist_run import ReconAssistRunService
 from app.tools.scanners import VulnerabilityScanners
 from app.tools.path_traversal import PathTraversalScanner
 from app.tools.payloads import PayloadSuggester
@@ -136,6 +137,12 @@ class WSLBridgeTools:
         # pipeline (reads argus_brief.json written on the host by the pipeline;
         # no WSL/SSH hop - see specs/030-recon-assist-integration/spec.md).
         self.recon_assist = ReconAssistBriefService(memory=self.memory)
+        # specs/031 Phase 2: run-side - launch the differential pipeline via
+        # the same Kali bridge (bounded timeout; scope enforced by the
+        # pipeline's own scope guard).
+        self.recon_assist_run = ReconAssistRunService(
+            runner=self.runner, memory=self.memory
+        )
 
         self._register_defaults()
 
@@ -189,6 +196,14 @@ class WSLBridgeTools:
         self.registry.register(_ToolServiceAdapter(
             "recon_guidance", "Prioritized manual-testing guidance from the Recon-Assist brief",
             self.recon_assist, "differential_guidance"
+        ))
+        self.registry.register(_ToolServiceAdapter(
+            "recon_assist_run", "Run the Recon-Assist differential pipeline for one authorized domain (bounded 40min)",
+            self.recon_assist_run, "run_differential"
+        ))
+        self.registry.register(_ToolServiceAdapter(
+            "recon_assist_status", "Show the latest local Recon-Assist report summary (no new scan)",
+            self.recon_assist_run, "run_status"
         ))
         self.registry.register(_ToolServiceAdapter(
             "capture_screenshot", "Capture a screenshot of a URL as vulnerability evidence",
