@@ -70,3 +70,17 @@ SC-004 (allowed vs. rejected source).
 authorization gate and FR-004's RAG gating are **not** optional/flagged — they are a hard
 requirement to start a scan / ingest a document respectively, since their entire value is in
 being unconditional (an optional authorization gate would defeat its own purpose).
+
+## Traceability (design.md, 2026-10-31-r1)
+
+- DEC-01 (HMAC-SHA256 with a locally stored `AUDIT_LOG_KEY`, not unkeyed sha256) is
+  reflected in `app/core/audit.py`'s chaining design above.
+- DEC-02 (the authorization gate is unconditional; watermarking is opt-in) is
+  reflected in the brain/CLI/GUI gate and the `enable_payload_watermarking`
+  default-off rollout.
+- DEC-03 (the audit log lives at `logs/audit/audit_<YYYY-MM-DD>.jsonl`, separate
+  from `logs/agent_runs/*.json`) is reflected in the `AuditLog` write path (NFR-002).
+- RSK-01 acknowledged: FR-001 is a self-attestation gate only (accepted by the
+  design owner, gated until real authorization verification is designed).
+- RSK-02 acknowledged: the HMAC key lives on the same machine as the log
+  (accepted, gated until Argus becomes multi-user per NFR-001).
