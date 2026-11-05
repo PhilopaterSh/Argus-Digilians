@@ -92,3 +92,23 @@ new network services, no new credentials).
   brief format.
 - Phase 3 (future spec): RAG ingestion of brief Markdown; report drafting
   with mandatory human review.
+
+
+## Traceability Keys
+
+| Key | Requirement | Phase | Status |
+|-----|-------------|-------|--------|
+| FR-01 | Load argus_brief.json and ingest leads into ArgusMemory | Phase 1 | Implemented |
+| FR-02 | Render deterministic priority queue for ArgusBrain | Phase 1 | Implemented |
+| FR-03 | List new/changed hosts from the baseline diff | Phase 1 | Implemented |
+| FR-04 | Render manual-testing guidance ordered by priority | Phase 1 | Implemented |
+| SEC-01 | Domain-format validation before any command construction | Phase 1+2 | Implemented |
+| SEC-02 | No credentials or target data copied into briefs | Phase 1 | Implemented |
+| SEC-03 | Scope guard re-validates every discovered host | Phase 1 (pipeline) | Implemented |
+| NFR-01 | Host-side stdlib-only service (no WSL/SSH dependency) | Phase 1 | Implemented |
+| NFR-02 | Brief ingestion is idempotent (R1) | Phase 1 | Implemented |
+| DEC-01 | Loose coupling via files (no API service between repos) | v1 | Implemented |
+| DEC-02 | Deterministic scoring first; LLM refines, never invents | v1 | Implemented |
+| RSK-01 | Pipeline runs unattended via schedule (cron) — scope.txt is the authorization boundary | v2.9 | Implemented |
+| RSK-02 | JS secret indicators are candidates until manually verified | v1 | Documented |
+
