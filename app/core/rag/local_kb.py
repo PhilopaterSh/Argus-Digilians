@@ -1,3 +1,4 @@
+# VAULT: "34 Argus Local KB TECH_VULNS" - private component docs
 """
 Argus Local Knowledge Base - offline vulnerability intelligence (port from momen).
 Maps detected tech stacks to CVEs, attack patterns, and timeout analysis rules.

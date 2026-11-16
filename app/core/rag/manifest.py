@@ -1,3 +1,4 @@
+# VAULT: "05 Argus RAG Engine" - private component docs
 """EmbeddingManifest - one embedder per FAISS index (canonical RAG design).
 
 Implements specs/012-spec-reconciliation/spec.md section 3 (FR-C1..C5) and

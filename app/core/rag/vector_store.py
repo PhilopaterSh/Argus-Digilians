@@ -1,3 +1,4 @@
+# VAULT: "05 Argus RAG Engine" - private component docs
 import hashlib
 import logging
 import os

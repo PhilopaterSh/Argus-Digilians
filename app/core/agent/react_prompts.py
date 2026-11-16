@@ -1,3 +1,4 @@
+# VAULT: "43 Argus ReAct Prompts and Observability" - private component docs
 """Dynamic prompt builders for Argus LangGraph workflows.
 
 `build_react_system_prompt`'s PHASE 1-8 progression (specs/018 CHK085

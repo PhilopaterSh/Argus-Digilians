@@ -1,3 +1,4 @@
+# VAULT: "37 Argus Deterministic Recon Pipeline" - private component docs
 """Recon-Assist brief ingestion - host-side bridge to the differential
 reconnaissance pipeline (github.com/PhilopaterSh/Recon-Assist, v2.6).
 

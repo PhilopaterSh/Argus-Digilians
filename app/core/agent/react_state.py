@@ -1,3 +1,4 @@
+# VAULT: "43 Argus ReAct Prompts and Observability" - private component docs
 """State definitions for Argus LangGraph workflows.
 
 Two state schemas:

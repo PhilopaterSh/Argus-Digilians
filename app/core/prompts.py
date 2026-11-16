@@ -1,3 +1,4 @@
+# VAULT: "39 Argus Configuration Parameters" - private component docs
 from langchain_core.prompts import PromptTemplate
 
 

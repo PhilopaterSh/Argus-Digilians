@@ -1,3 +1,4 @@
+# VAULT: "09 Argus Studio GUI" - private component docs
 """Login gate for the Argus Security Studio (ARG-01 control-plane auth).
 
 Renders a password form before any dashboard content and stops the script

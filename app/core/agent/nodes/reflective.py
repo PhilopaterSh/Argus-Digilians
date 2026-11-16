@@ -1,3 +1,4 @@
+# VAULT: "21 Reflective Verification Service" - private component docs
 import logging
 
 from app.core.agent.contracts import record_state_event, utc_now_iso

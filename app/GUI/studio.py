@@ -1,3 +1,4 @@
+# VAULT: "09 Argus Studio GUI" - private component docs
 """
 Studio module - re-exports the canonical dashboard.
 

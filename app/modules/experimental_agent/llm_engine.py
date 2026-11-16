@@ -1,3 +1,4 @@
+# VAULT: "23 Argus Project Evolution and Multi-Version Integration" - private component docs
 """
 Argus LLM Engine
 Manages Ollama lifecycle and self-healing WhiteRabbitNeo inference.

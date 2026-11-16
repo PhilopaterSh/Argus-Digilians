@@ -1,3 +1,4 @@
+# VAULT: "07 Argus Tool Registry" - private component docs
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Any

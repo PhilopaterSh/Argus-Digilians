@@ -1,3 +1,4 @@
+# VAULT: "30 Argus Structured Output Decoding" - private component docs
 """Canonical runtime contracts for the tactical agent."""
 
 from __future__ import annotations

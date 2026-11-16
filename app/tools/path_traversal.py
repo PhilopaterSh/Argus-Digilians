@@ -1,3 +1,4 @@
+# VAULT: "44 Argus Path Traversal Scanner" - private component docs
 """Dedicated path-traversal / LFI probe service.
 
 Promotes path traversal from a single branch inside

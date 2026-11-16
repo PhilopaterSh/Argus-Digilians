@@ -1,3 +1,4 @@
+# VAULT: "39 Argus Configuration Parameters" - private component docs
 """Centralized configuration for the Argus Security Framework.
 
 Reads `config/config.yaml` and provides typed access to all settings.

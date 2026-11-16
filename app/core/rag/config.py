@@ -1,3 +1,4 @@
+# VAULT: "05 Argus RAG Engine" - private component docs
 from dataclasses import dataclass, field
 from typing import Optional
 import os

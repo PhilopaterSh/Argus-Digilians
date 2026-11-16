@@ -1,3 +1,4 @@
+# VAULT: "37 Argus Deterministic Recon Pipeline" - private component docs
 import re
 import json
 import shlex

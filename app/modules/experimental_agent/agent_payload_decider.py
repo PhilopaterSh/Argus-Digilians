@@ -1,3 +1,4 @@
+# VAULT: "23 Argus Project Evolution and Multi-Version Integration" - private component docs
 """
 core/agent_payload_decider.py
 

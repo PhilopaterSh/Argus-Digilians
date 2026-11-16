@@ -1,3 +1,4 @@
+# VAULT: "38 Argus Report Contract" - private component docs
 from pydantic import BaseModel, Field
 from typing import List, Optional
 from enum import Enum

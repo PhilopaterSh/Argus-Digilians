@@ -1,3 +1,4 @@
+# VAULT: "08 WSL Kali Bridge" - private component docs
 import base64
 import hashlib
 import os

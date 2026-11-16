@@ -1,3 +1,4 @@
+# VAULT: "43 Argus ReAct Prompts and Observability" - private component docs
 """Streams ArgusBrain's ReAct steps into the agent-run state file (specs/017).
 
 Replaces StreamlitCallbackHandler (which only works when the agent runs in

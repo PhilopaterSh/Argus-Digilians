@@ -1,3 +1,4 @@
+# VAULT: "06 ArgusMemory Blackboard" - private component docs
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 from app.core.memory import ArgusMemory

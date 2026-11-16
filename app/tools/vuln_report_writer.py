@@ -1,3 +1,4 @@
+# VAULT: "38 Argus Report Contract" - private component docs
 """JSON evidence-report writer for screenshot-backed vulnerability findings
 (specs/029-vulnerability-screenshot-evidence).
 

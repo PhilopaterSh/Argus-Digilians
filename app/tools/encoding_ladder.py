@@ -1,3 +1,4 @@
+# VAULT: "44 Argus Path Traversal Scanner" - private component docs
 """Encoding-ladder path-traversal prober.
 
 Takes a flat one-payload-per-line wordlist (e.g.

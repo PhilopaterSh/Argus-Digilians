@@ -1,3 +1,4 @@
+# VAULT: "09 Argus Studio GUI" - private component docs
 """Panel authentication crypto for the Argus Security Studio (ARG-01).
 
 Pure standard library: PBKDF2-HMAC-SHA256 with a per-password random salt,

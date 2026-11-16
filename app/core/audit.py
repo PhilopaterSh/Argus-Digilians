@@ -1,3 +1,4 @@
+# VAULT: "36 Argus Safety Layer" - private component docs
 """Durable, append-only command audit trail (pentest finding ARG-09 remediation).
 
 Every Kali command executed through ``CommandRunner`` and every safety-layer

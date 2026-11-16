@@ -1,3 +1,4 @@
+# VAULT: "07 Argus Tool Registry" - private component docs
 """Generic tool registry data structure.
 
 Note the sibling `app/tools/tool_registry.py` - same basename, different

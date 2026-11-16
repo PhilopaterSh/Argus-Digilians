@@ -1,3 +1,4 @@
+# VAULT: "36 Argus Safety Layer" - private component docs
 """
 Argus Safety Layer - Blocks destructive payloads, sanitizes inputs (port from momen).
 All scanning must be controlled, logged, and non-destructive.

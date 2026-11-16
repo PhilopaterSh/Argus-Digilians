@@ -1,3 +1,4 @@
+# VAULT: "23 Argus Project Evolution and Multi-Version Integration" - private component docs
 """
 Argus Evidence Verifier
 Every scanner finding passes through this gate before being stored in memory.

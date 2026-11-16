@@ -1,3 +1,4 @@
+# VAULT: "45 Argus Screenshot Evidence" - private component docs
 """Persistent Playwright-backed headless browser session for capturing
 visual proof-of-concept evidence of confirmed vulnerabilities
 (specs/029-vulnerability-screenshot-evidence).

@@ -1,3 +1,4 @@
+# VAULT: "06 ArgusMemory Blackboard" - private component docs
 import sqlite3
 import json
 import os

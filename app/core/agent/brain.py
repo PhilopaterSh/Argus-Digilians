@@ -1,3 +1,4 @@
+# VAULT: "04 ArgusBrain ReAct Engine" - private component docs
 from langchain_core.messages import HumanMessage
 from langchain_core.output_parsers import PydanticOutputParser
 from app.core.schemas import SecurityReport

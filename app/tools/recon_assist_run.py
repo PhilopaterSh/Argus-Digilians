@@ -1,3 +1,4 @@
+# VAULT: "37 Argus Deterministic Recon Pipeline" - private component docs
 """Recon-Assist differential-run launcher - the execution half of the
 Recon-Assist integration (spec 031 Phase 2).
 

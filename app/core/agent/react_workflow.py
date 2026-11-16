@@ -1,3 +1,4 @@
+# VAULT: "43 Argus ReAct Prompts and Observability" - private component docs
 """LangGraph workflow builder for Argus AI.
 
 Supports two modes:
