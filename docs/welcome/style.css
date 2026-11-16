@@ -1231,3 +1231,13 @@ code {
     .ticker-track { animation: none; }
     .reveal { opacity: 1; transform: none; }
 }
+
+/* ---- cinematic showcase: infographic artifacts ---- */
+.infographic-block { margin-top: 44px; }
+.inf-lead { font-size: 15px; color: #8b98a9; margin-bottom: 16px; }
+.infographic-shell { background: #0d1420; border: 1px solid #1e2a38; border-radius: 14px; padding: 10px; }
+.infographic-shell img { width: 100%; height: auto; display: block; border-radius: 8px; }
+.dl-row { display: flex; gap: 12px; margin-top: 16px; flex-wrap: wrap; }
+.dl-btn { font-size: 13px; font-weight: 600; color: #e6edf3; background: #101828; border: 1px solid #2a3a4f; border-radius: 8px; padding: 9px 16px; text-decoration: none; transition: border-color 0.2s ease, color 0.2s ease; }
+.dl-btn:hover { border-color: #58a6ff; color: #ffffff; }
+.nav-links a { white-space: nowrap; }
