@@ -23,3 +23,4 @@ graphify-out/graph.json merge=graphify
 *.mp4 filter=lfs diff=lfs merge=lfs -text
 # The cinematic cut must stay a regular blob (GitHub Pages serves LFS pointers)
 docs/welcome/assets/videos/Argus_Cinematic_Showcase.mp4 -filter=lfs -diff=lfs -merge=lfs -text
+docs/welcome/assets/videos/demo.mp4 -filter=lfs -diff=lfs -merge=lfs -text
