@@ -177,6 +177,44 @@ def poc_screenshot():
     print("closed:", not mgr.is_started)
 
 
+def poc_wsl_config():
+    print("=" * 8, "POC 8 - WSL Kali Bridge config (note 08)", "=" * 8)
+    from app.tools.wsl_bridge import WSLBridge, WSLConfig
+
+    cfg = WSLConfig(
+        host="127.0.0.1", user="kali", port=22, distro="kali-linux",
+        key_path="~/.ssh/argus_lab_key",                    # ARG-02: key auth first
+        host_key_sha256="SHA256:REPLACE_WITH_PINNED_HOST_KEY",  # ARG-07: pinned fingerprint
+    )
+    bridge = WSLBridge(cfg)
+    print("bridge constructed | host:", cfg.host, "| port:", cfg.port, "| distro:", cfg.distro)
+    print("hardening: key auth =", bool(cfg.key_path), "| fingerprint pinning =", bool(cfg.host_key_sha256))
+
+
+def poc_zero_apt():
+    print("=" * 8, "POC 9 - ZERO-APT closed-loop simulation (note 22)", "=" * 8)
+    from app.tools.simulation import ZEROAPTSimulation
+
+    runner = FakeRunner()
+    mem = ArgusMemory(str(Path(tempfile.mkdtemp(prefix="argus_poc_sim_")) / "blackboard.db"))
+    sim = ZEROAPTSimulation(runner, mem)
+    out = sim.run_simulation("http://lab.simulated.local", "L2")
+    print(str(out)[:600])
+
+
+def poc_owasp_report():
+    print("=" * 8, "POC 10 - OWASP report writer (note 17)", "=" * 8)
+    from app.tools.vuln_report_writer import VulnerabilityReportWriter
+
+    writer = VulnerabilityReportWriter()
+    evidence = [
+        "Encoded traversal payload returned a real /etc/passwd body (simulated fixture).",
+        "Reflective verification locked 3/3 consensus on the content signature.",
+    ]
+    out = writer.save_report("lab.enterprise.internal", "Path Traversal", evidence)
+    print("report artifact:", out)
+
+
 if __name__ == "__main__":
     poc_registry()
     poc_safety()
@@ -185,3 +223,6 @@ if __name__ == "__main__":
     poc_reflective()
     poc_path_traversal()
     poc_screenshot()
+    poc_wsl_config()
+    poc_zero_apt()
+    poc_owasp_report()
