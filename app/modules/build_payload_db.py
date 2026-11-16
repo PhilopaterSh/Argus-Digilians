@@ -1,3 +1,4 @@
+# VAULT: "23 Argus Project Evolution and Multi-Version Integration" - private component docs
 #!/usr/bin/env python3
 """
 build_payload_db.py - Ingest flat payload .txt files into a searchable SQLite DB.

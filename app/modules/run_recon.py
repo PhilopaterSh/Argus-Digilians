@@ -1,3 +1,4 @@
+# VAULT: "37 Argus Deterministic Recon Pipeline" - private component docs
 from app.tools.tool_registry import WSLBridgeTools
 import sys
 

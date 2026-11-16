@@ -1,3 +1,4 @@
+# VAULT: "04 ArgusBrain ReAct Engine" - private component docs
 from typing import Sequence
 from langchain_classic.agents import AgentExecutor, create_react_agent
 from langchain_core.language_models import BaseLanguageModel

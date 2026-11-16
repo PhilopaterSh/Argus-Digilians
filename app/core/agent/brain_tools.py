@@ -1,3 +1,4 @@
+# VAULT: "07 Argus Tool Registry" - private component docs
 """Canonical tool list for ArgusBrain's ReAct loop (specs/017-restore-react-agent).
 
 Previously this exact list was hand-copied into four separate deprecated GUI

@@ -1,3 +1,4 @@
+# VAULT: "09 Argus Studio GUI" - private component docs
 import streamlit as st
 import socket
 from app.core.config import ArgusConfig

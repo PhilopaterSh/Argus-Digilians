@@ -1,3 +1,4 @@
+# VAULT: "04 ArgusBrain ReAct Engine" - private component docs
 """State type for app/core/agent/graph.py's superseded LangGraph node graph.
 
 Superseded by `ArgusAgentState`/`ArgusPrebuiltState` in

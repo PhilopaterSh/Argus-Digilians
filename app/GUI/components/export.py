@@ -1,3 +1,4 @@
+# VAULT: "09 Argus Studio GUI" - private component docs
 import json
 import os
 import re

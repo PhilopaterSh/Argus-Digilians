@@ -1,3 +1,4 @@
+# VAULT: "09 Argus Studio GUI" - private component docs
 import sqlite3
 
 _DEFAULT_DB_PATH = "data/argus_intelligence.db"

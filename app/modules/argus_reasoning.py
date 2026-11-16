@@ -1,3 +1,4 @@
+# VAULT: "23 Argus Project Evolution and Multi-Version Integration" - private component docs
 from app.core.agent.brain import ArgusBrain
 from app.core.config import ArgusConfig
 from app.tools.tool_registry import WSLBridgeTools
